@@ -42,10 +42,10 @@ export function Toolbar() {
   const setSelectionScope = useStore((s) => s.setSelectionScope);
 
   const isGlyphMode = mode === 'glyph';
-  // Glyph mode has no marquee-select/move-copy-paste story yet (see the
-  // plan's Phase 3 scope) — hidden here rather than left reachable with a
-  // Draw-canvas-sized selection silently misapplied to the glyph editor.
-  const toolNames = isGlyphMode ? TOOL_NAMES.filter((name) => name !== 'marqueeSelect') : TOOL_NAMES;
+  // marqueeSelect works in both modes as of Phase 5 — the store's selection
+  // actions are mode-aware (read/write whichever document is active), so
+  // it's no longer Draw-mode-only.
+  const toolNames = TOOL_NAMES;
   const showsShapeToggle = activeTool === 'rectangle' || activeTool === 'ellipse';
 
   function handleTierChange(newTier) {

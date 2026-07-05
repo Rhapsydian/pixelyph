@@ -111,12 +111,9 @@ export function SvgPixelEditor() {
           evt.preventDefault();
           state.pasteClipboard();
         }
-      } else if (isSelectAll && state.mode !== 'glyph') {
-        // Selection/marquee has no glyph-mode equivalent yet (see the plan's
-        // Phase 3 scope) — guarded here rather than left to rely on
-        // marqueeSelect simply not being offered in glyph mode's Toolbar,
-        // since Ctrl+A would otherwise still stamp a Draw-canvas-sized
-        // selection into state while a glyph is being edited.
+      } else if (isSelectAll) {
+        // selectAll is mode-aware (Phase 5) — selects across whichever
+        // document is active, Canvas or the glyph pseudo-Canvas.
         evt.preventDefault();
         state.selectAll();
       }

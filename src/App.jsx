@@ -12,6 +12,7 @@ import { CharacterMapPanel } from './ui/glyph/CharacterMapPanel.jsx';
 import { GlyphSetPanel } from './ui/glyph/GlyphSetPanel.jsx';
 import { FontMetadataPanel } from './ui/glyph/FontMetadataPanel.jsx';
 import { SpecimenPreviewPanel } from './ui/glyph/SpecimenPreviewPanel.jsx';
+import { FontExportPanel } from './ui/glyph/FontExportPanel.jsx';
 import { CHARSET_PRESETS, CHARSET_PRESET_IDS } from './model/charsetPresets.js';
 
 const ANCHORS = ['top-left', 'top', 'top-right', 'left', 'center', 'right', 'bottom-left', 'bottom', 'bottom-right'];
@@ -108,6 +109,7 @@ function GlyphWorkspace() {
         {glyphSet.kind === 'characters' && <CharacterMapPanel />}
         <GlyphSetPanel />
         <FontMetadataPanel />
+        <FontExportPanel />
       </div>
     </div>
   );

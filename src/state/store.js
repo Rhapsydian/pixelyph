@@ -44,6 +44,11 @@ import { createGlyphSet, createGlyph, setGlyph as setGlyphModel, removeGlyph as 
 import { resize as resizeGrid } from '../model/Grid.js';
 import { glyphToSvg } from '../export/svg/glyphSvg.js';
 import { buildDrawDocument, buildGlyphDocument, DEFAULT_INITIAL_CHARSET_PRESET } from '../model/projectFactory.js';
+import { compileFont, fontToArrayBuffer } from '../export/font/compileFont.js';
+import { toWoff, toWoff2 } from '../export/font/woff.js';
+import { generateIconFontCss } from '../export/font/iconFontCss.js';
+import { generateDemoHtml } from '../export/font/demoHtml.js';
+import { slugify } from '../export/slugify.js';
 
 function contentSnapshot(canvas) {
   return { layers: canvas.layers, width: canvas.width, height: canvas.height, palette: canvas.palette, tier: canvas.tier };
@@ -365,11 +370,19 @@ export const useStore = create((set, get) => {
 
     // --- Glyph mode: GlyphSet operations ---
 
-    /** Makes `codepoint` the active glyph — a working-session pointer move, not a committed action. */
+    /**
+     * Makes `codepoint` the active glyph — a working-session pointer move,
+     * not a committed action. Clears any pending selection/floating
+     * selection: it was lifted against the *previous* glyph's pseudo-Canvas
+     * and would otherwise render/act against the wrong document once
+     * `glyphCanvas` is swapped out here (see the plan's cross-glyph
+     * copy-paste note — `clipboard`, not `floatingSelection`, is what's
+     * meant to survive a glyph switch).
+     */
     selectGlyph: (codepoint) => {
       const { glyphSet } = get();
       const glyph = glyphSet.glyphs.get(codepoint);
-      set({ activeCodepoint: codepoint, glyphCanvas: glyph ? glyphToCanvas(glyph) : null });
+      set({ activeCodepoint: codepoint, glyphCanvas: glyph ? glyphToCanvas(glyph) : null, selection: null, floatingSelection: null });
     },
     /** Creates a new blank glyph at `codepoint` (replacing any existing one). Callers confirm before replacing. */
     assignCodepoint: (codepoint, { name } = {}) => {
@@ -380,7 +393,7 @@ export const useStore = create((set, get) => {
       const glyph = createGlyph({ width, height: glyphSet.meta.pixelsPerEm, name: name ?? '' });
       setGlyphModel(glyphSet, codepoint, glyph);
       pushSnapshot(history, glyphContentSnapshot(glyphSet));
-      set({ glyphSet: { ...glyphSet }, history: { ...history }, activeCodepoint: codepoint, glyphCanvas: glyphToCanvas(glyph), canUndo: historyCanUndo(history), canRedo: historyCanRedo(history) });
+      set({ glyphSet: { ...glyphSet }, history: { ...history }, activeCodepoint: codepoint, glyphCanvas: glyphToCanvas(glyph), canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), selection: null, floatingSelection: null });
       autosaveScheduler(serializeGlyphSetProject(glyphSet));
     },
     /** Icon-kind sets: codepoint is auto-assigned (PUA); only the name is user-facing. */
@@ -393,7 +406,7 @@ export const useStore = create((set, get) => {
       const glyph = createGlyph({ width: size, height: glyphSet.meta.pixelsPerEm, name, unicode });
       setGlyphModel(glyphSet, codepoint, glyph);
       pushSnapshot(history, glyphContentSnapshot(glyphSet));
-      set({ glyphSet: { ...glyphSet }, history: { ...history }, activeCodepoint: codepoint, glyphCanvas: glyphToCanvas(glyph), canUndo: historyCanUndo(history), canRedo: historyCanRedo(history) });
+      set({ glyphSet: { ...glyphSet }, history: { ...history }, activeCodepoint: codepoint, glyphCanvas: glyphToCanvas(glyph), canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), selection: null, floatingSelection: null });
       autosaveScheduler(serializeGlyphSetProject(glyphSet));
     },
     removeGlyphAction: (codepoint) => {
@@ -460,32 +473,105 @@ export const useStore = create((set, get) => {
       await clearAutosave();
     },
 
-    // --- Selection: marquee move/cut/copy/paste (Draw mode only) ---
+    /**
+     * Compiles the current GlyphSet into whichever font file(s) are
+     * selected, compiling the font and deriving WOFF/WOFF2 buffers at most
+     * once regardless of how many formats are checked. `demoHtml` and
+     * `cssManifest` (icon-kind only) are separate boolean options rather
+     * than a `format` string, since FontExportPanel lets several be
+     * exported together in one click.
+     *
+     * WOFF2 (toWoff2, woff.js) can time out — see that file's KNOWN ISSUE
+     * comment — so it's caught here rather than left to abort the rest of
+     * the export; the demo HTML falls back to WOFF-only embedding in that
+     * case. The returned `woff2Failed` flag lets the caller (FontExportPanel)
+     * surface that to the user instead of silently producing a smaller set
+     * of files than requested.
+     *
+     * @param {{otf?: boolean, woff?: boolean, woff2?: boolean, demoHtml?: boolean, cssManifest?: boolean}} options
+     * @returns {Promise<{woff2Failed: boolean}>}
+     */
+    exportFont: async ({ otf = false, woff = false, woff2 = false, demoHtml: wantDemoHtml = false, cssManifest = false } = {}) => {
+      const { glyphSet } = get();
+      if (!glyphSet) return { woff2Failed: false };
+      const font = compileFont(glyphSet);
+      const otfBuffer = fontToArrayBuffer(font);
+      const baseName = slugify(glyphSet.meta.familyName) || 'font';
+
+      if (otf) await saveFile(`${baseName}.otf`, new Blob([otfBuffer], { type: 'font/otf' }));
+
+      let woffBytes = null;
+      let woff2Bytes = null;
+      let woff2Failed = false;
+      if (woff || wantDemoHtml) woffBytes = toWoff(otfBuffer);
+      if (woff2 || wantDemoHtml) {
+        try {
+          woff2Bytes = await toWoff2(otfBuffer);
+        } catch (err) {
+          console.error('WOFF2 export failed', err);
+          woff2Failed = true;
+        }
+      }
+
+      if (woff) await saveFile(`${baseName}.woff`, new Blob([woffBytes], { type: 'font/woff' }));
+      if (woff2 && woff2Bytes) await saveFile(`${baseName}.woff2`, new Blob([woff2Bytes], { type: 'font/woff2' }));
+      if (wantDemoHtml) {
+        const html = generateDemoHtml(glyphSet, woff2Bytes, woffBytes);
+        await saveFile(`${baseName}-demo.html`, new Blob([html], { type: 'text/html' }));
+      }
+      if (cssManifest && glyphSet.kind === 'icons') {
+        const { css, manifest } = generateIconFontCss(glyphSet);
+        await saveFile(`${baseName}.css`, new Blob([css], { type: 'text/css' }));
+        await saveFile(`${baseName}.json`, new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' }));
+      }
+      return { woff2Failed: woff2Failed && woff2 };
+    },
+
+    // --- Selection: marquee move/cut/copy/paste ---
+    // Mode-aware (Phase 5): reads/writes the active document — Draw mode's
+    // `canvas`, or Glyph mode's `glyphCanvas` pseudo-Canvas — via the same
+    // doc indirection paintCellLive/colorAt/undo/redo already use. Glyph
+    // mode's pseudo-Canvas is always 'simple' tier with at most one layer,
+    // so extractSelection/clearSelectionRect's advanced-tier branches never
+    // trigger for it — no new scope concept needed there. `clipboard` is a
+    // single app-level slot independent of which document is active, so
+    // copying part of one glyph and pasting into a different glyph (after
+    // switching via selectGlyph) falls out for free.
     startSelection: (x, y) => set({ selection: { x0: x, y0: y, x1: x, y1: y } }),
     updateSelection: (x, y) => set((s) => (s.selection ? { selection: { ...s.selection, x1: x, y1: y } } : {})),
     clearSelection: () => set({ selection: null, floatingSelection: null }),
     selectAll: () => {
-      const { canvas } = get();
-      set({ activeTool: 'marqueeSelect', selection: { x0: 0, y0: 0, x1: canvas.width - 1, y1: canvas.height - 1 }, floatingSelection: null });
+      const { mode, canvas, glyphCanvas } = get();
+      const doc = mode === 'glyph' ? glyphCanvas : canvas;
+      if (!doc) return;
+      set({ activeTool: 'marqueeSelect', selection: { x0: 0, y0: 0, x1: doc.width - 1, y1: doc.height - 1 }, floatingSelection: null });
     },
     liftSelection: (destructive) => {
-      const { canvas, selection, selectionScope } = get();
-      if (!selection) return;
+      const { mode, canvas, glyphCanvas, selection, selectionScope } = get();
+      const doc = mode === 'glyph' ? glyphCanvas : canvas;
+      if (!doc || !selection) return;
       const rect = normalizeRect(selection.x0, selection.y0, selection.x1, selection.y1);
-      const cells = extractSelection(canvas, selectionScope, rect);
-      if (destructive) clearSelectionRect(canvas, selectionScope, rect);
+      const cells = extractSelection(doc, selectionScope, rect);
+      if (destructive) clearSelectionRect(doc, selectionScope, rect);
       set({ floatingSelection: { x: rect.x0, y: rect.y0, width: rect.x1 - rect.x0 + 1, height: rect.y1 - rect.y0 + 1, cells } });
     },
     moveFloatingSelection: (x, y) => set((s) => (s.floatingSelection ? { floatingSelection: { ...s.floatingSelection, x, y } } : {})),
     dropFloatingSelection: () => {
-      const { canvas, floatingSelection } = get();
-      if (!floatingSelection) return;
-      pasteCells(canvas, floatingSelection.x, floatingSelection.y, floatingSelection.cells);
+      const { mode, canvas, glyphCanvas, floatingSelection } = get();
+      const doc = mode === 'glyph' ? glyphCanvas : canvas;
+      if (!doc || !floatingSelection) return;
+      pasteCells(doc, floatingSelection.x, floatingSelection.y, floatingSelection.cells);
       set({ selection: null, floatingSelection: null });
-      commit();
+      commit(); // mode-aware: syncs glyphCanvas back into the active Glyph's pixels in glyph mode
     },
     cancelFloatingSelection: () => {
-      const { canvas, history } = get();
+      const { mode, canvas, glyphSet, activeCodepoint, history } = get();
+      if (mode === 'glyph') {
+        applyGlyphContentSnapshot(glyphSet, history.stack[history.index]);
+        const activeGlyph = activeCodepoint != null ? glyphSet.glyphs.get(activeCodepoint) : null;
+        set({ glyphSet: { ...glyphSet }, glyphCanvas: activeGlyph ? glyphToCanvas(activeGlyph) : null, selection: null, floatingSelection: null });
+        return;
+      }
       applyContentSnapshot(canvas, history.stack[history.index]);
       set({ canvas: { ...canvas }, selection: null, floatingSelection: null });
     },
@@ -493,37 +579,40 @@ export const useStore = create((set, get) => {
     clipboard: null,
 
     copySelection: () => {
-      const { canvas, selection, floatingSelection, selectionScope } = get();
+      const { mode, canvas, glyphCanvas, selection, floatingSelection, selectionScope } = get();
+      const doc = mode === 'glyph' ? glyphCanvas : canvas;
       if (floatingSelection) {
         set({ clipboard: { width: floatingSelection.width, height: floatingSelection.height, cells: floatingSelection.cells } });
         return;
       }
-      if (!selection) return;
+      if (!doc || !selection) return;
       const rect = normalizeRect(selection.x0, selection.y0, selection.x1, selection.y1);
       const width = rect.x1 - rect.x0 + 1;
       const height = rect.y1 - rect.y0 + 1;
-      const cells = extractSelection(canvas, selectionScope, rect);
+      const cells = extractSelection(doc, selectionScope, rect);
       set({ clipboard: { width, height, cells }, selection: null, floatingSelection: { x: rect.x0, y: rect.y0, width, height, cells } });
     },
     cutSelection: () => {
-      const { canvas, selection, floatingSelection, selectionScope } = get();
+      const { mode, canvas, glyphCanvas, selection, floatingSelection, selectionScope } = get();
+      const doc = mode === 'glyph' ? glyphCanvas : canvas;
       if (floatingSelection) {
         set({ clipboard: { width: floatingSelection.width, height: floatingSelection.height, cells: floatingSelection.cells }, selection: null, floatingSelection: null });
         commit();
         return;
       }
-      if (!selection) return;
+      if (!doc || !selection) return;
       const rect = normalizeRect(selection.x0, selection.y0, selection.x1, selection.y1);
-      const cells = extractSelection(canvas, selectionScope, rect);
-      clearSelectionRect(canvas, selectionScope, rect);
+      const cells = extractSelection(doc, selectionScope, rect);
+      clearSelectionRect(doc, selectionScope, rect);
       set({ clipboard: { width: rect.x1 - rect.x0 + 1, height: rect.y1 - rect.y0 + 1, cells }, selection: null });
       commit();
     },
     pasteClipboard: () => {
-      const { clipboard, canvas } = get();
-      if (!clipboard) return;
-      const x = Math.max(0, Math.min(canvas.width - clipboard.width, Math.floor((canvas.width - clipboard.width) / 2)));
-      const y = Math.max(0, Math.min(canvas.height - clipboard.height, Math.floor((canvas.height - clipboard.height) / 2)));
+      const { mode, clipboard, canvas, glyphCanvas } = get();
+      const doc = mode === 'glyph' ? glyphCanvas : canvas;
+      if (!clipboard || !doc) return;
+      const x = Math.max(0, Math.min(doc.width - clipboard.width, Math.floor((doc.width - clipboard.width) / 2)));
+      const y = Math.max(0, Math.min(doc.height - clipboard.height, Math.floor((doc.height - clipboard.height) / 2)));
       set({ activeTool: 'marqueeSelect', selection: null, floatingSelection: { x, y, width: clipboard.width, height: clipboard.height, cells: clipboard.cells } });
     },
 

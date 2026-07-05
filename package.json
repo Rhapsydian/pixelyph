@@ -14,10 +14,14 @@
     "test": "node --test"
   },
   "dependencies": {
+    "buffer": "^6.0.3",
+    "opentype.js": "^2.0.0",
     "pixelloom": "^0.1.1",
     "quantize": "^1.0.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "ttf2woff": "^3.0.0",
+    "wawoff2": "^2.0.1",
     "zustand": "^4.5.4"
   },
   "devDependencies": {

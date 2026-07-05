@@ -9,7 +9,7 @@ A pixel-art and pixel-font editor that outputs scalable SVG (and real font files
 
 ## Status
 
-Early development. Draw mode (both tiers), Glyph mode, and project management (startup screen, new-project wizard, autosave recovery) are implemented — see "Features" below. Font compilation/export, the Electron desktop shell, animation, and a visual design pass are still ahead.
+Early development. Draw mode (both tiers), Glyph mode, project management (startup screen, new-project wizard, autosave recovery), and font compilation are implemented — see "Features" below. The Electron desktop shell, animation, and a visual design pass are still ahead.
 
 ## Features
 
@@ -44,7 +44,14 @@ Early development. Draw mode (both tiers), Glyph mode, and project management (s
 - Font metadata form (family/style name, units-per-em, ascender/descender, baseline row, icon tile padding), with a confirm-before-resize prompt when changing pixels-per-em, since that crops or pads every glyph's grid
 - Specimen preview: a live text-entry preview for character sets, or clickable icon swatches that insert into the same preview for icon sets
 - Per-glyph SVG export (via pixelloom's `gridToSvg` directly, no layering/style pipeline needed) and `.pixelyph` save/load for glyph-kind projects
-- Marquee-select/copy-paste is Draw-mode only for now, deferred to a later phase
+- Marquee-select/copy-paste works the same as Draw mode, including pasting a selection copied from one glyph into a different glyph after switching the active glyph — a shared app-level clipboard makes that fall out for free
+
+**Font compilation** — compiles the current GlyphSet into a real, installable font, via [opentype.js](https://github.com/opentypejs/opentype.js):
+
+- Exports **OTF** (CFF-flavored OpenType — the one binary format opentype.js can actually produce when building a font from scratch) plus derived **WOFF** and **WOFF2**
+- Icon-kind sets additionally export **CSS + a JSON manifest** (`@font-face` and one `.icon-{name}::before` rule per glyph, IcoMoon/Fontello-style), with an `iconTilePadding` option so equal-width icons tile edge-to-edge with zero gap (or a consistent gap at a positive value)
+- Every export also produces a self-contained, double-click-openable **demo HTML** file — a live text-entry specimen preview for character fonts, or clickable icon swatches plus a tiling test strip for icon fonts — with the font base64-embedded inline, no separate asset to keep track of
+- WOFF2 compilation (`wawoff2`, WASM-based) is wrapped with a timeout: if it doesn't complete in time in a given browser/Electron environment, the export continues with whichever other formats were requested (the demo HTML falls back to embedding WOFF only) rather than hanging indefinitely
 
 **Project management** — a startup screen on launch instead of silently booting into Draw mode:
 
