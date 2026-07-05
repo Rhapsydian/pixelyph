@@ -48,10 +48,10 @@ Early development. Draw mode (both tiers), Glyph mode, project management (start
 
 **Font compilation** — compiles the current GlyphSet into a real, installable font, via [opentype.js](https://github.com/opentypejs/opentype.js):
 
-- Exports **OTF** (CFF-flavored OpenType — the one binary format opentype.js can actually produce when building a font from scratch) plus derived **WOFF** and **WOFF2**
-- Icon-kind sets additionally export **CSS + a JSON manifest** (`@font-face` and one `.icon-{name}::before` rule per glyph, IcoMoon/Fontello-style), with an `iconTilePadding` option so equal-width icons tile edge-to-edge with zero gap (or a consistent gap at a positive value)
-- Every export also produces a self-contained, double-click-openable **demo HTML** file — a live text-entry specimen preview for character fonts, or clickable icon swatches plus a tiling test strip for icon fonts — with the font base64-embedded inline, no separate asset to keep track of
-- WOFF2 compilation (`wawoff2`, WASM-based) is wrapped with a timeout: if it doesn't complete in time in a given browser/Electron environment, the export continues with whichever other formats were requested (the demo HTML falls back to embedding WOFF only) rather than hanging indefinitely
+- Exports **OTF** (CFF-flavored OpenType — the one binary format opentype.js can actually produce when building a font from scratch) plus derived **WOFF**
+- Icon-kind sets additionally export **CSS + a JSON manifest** (`@font-face` and one `.icon-{name}::before` rule per glyph, IcoMoon/Fontello-style — referencing only whichever font file(s) were actually included in that export), with an `iconTilePadding` option so equal-width icons tile edge-to-edge with zero gap (or a consistent gap at a positive value)
+- Every export also produces a self-contained, double-click-openable **demo HTML** file — a live text-entry specimen preview for character fonts, or clickable icon swatches plus a tiling test strip for icon fonts — with the font base64-embedded inline and a small "Made with Pixelyph" footer linking back to the live demo, no separate asset to keep track of
+- WOFF2 export is currently disabled — it reliably hangs in a real browser/Electron environment rather than compiling — see `BACKLOG.md`
 - Checking more than one export option bundles the results into a single `.zip` (a small dependency-free writer, `export/zip.js`) instead of triggering one save dialog per file; a single selected format still saves directly
 
 **Project management** — a startup screen on launch instead of silently booting into Draw mode:
@@ -70,6 +70,10 @@ npm install
 npm run dev    # start the dev server
 npm test       # run node --test
 ```
+
+## Backlog
+
+[`BACKLOG.md`](./BACKLOG.md) tracks features that were built and then deliberately hidden or disabled behind a known issue (rather than shipped half-broken or removed outright — the underlying logic is left intact so restoring them later is a small, targeted change), plus open ideas flagged for future discussion rather than acted on immediately.
 
 ## Session logs
 
