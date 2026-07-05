@@ -9,7 +9,7 @@ A pixel-art and pixel-font editor that outputs scalable SVG (and real font files
 
 ## Status
 
-Early development. Draw mode (both the simple and advanced tiers) is implemented — see "Features" below. Glyph mode, font export, the Electron desktop shell, animation, and a visual design pass are still ahead.
+Early development. Draw mode (both the simple and advanced tiers) and Glyph mode are implemented — see "Features" below. Font compilation/export, project management (a proper new/open/resume startup flow), the Electron desktop shell, animation, and a visual design pass are still ahead.
 
 ## Features
 
@@ -36,7 +36,17 @@ Early development. Draw mode (both the simple and advanced tiers) is implemented
 - Per-layer effects: drop-shadow, blur, and a glow preset (a zero-offset, brightened drop-shadow)
 - Tier toggle: simple → advanced is always safe; advanced → simple asks for confirmation, since it collapses every layer to its topmost visible color per cell (gradients and free-floating positions don't survive the trip)
 
-Behind the UI, `src/model`, `src/export`, and `src/io/projectFile.js` are pure data/functions with no DOM dependency — the same style as pixelloom's own `trace.js`/`index.js` — and are covered by `node --test`.
+**Glyph mode** — one plain grid per glyph rather than layered artwork. Reuses the exact same live-SVG pixel editor as Draw mode (same tools, undo/redo, zoom/pan, grid overlay) via a single-color pseudo-canvas adapter, so there's no separate glyph-painting implementation:
+
+- `GlyphSet`/`Glyph` model in two kinds: **character** sets (one Unicode codepoint per glyph, assigned by typing the character itself or `U+00E9`) and **icon** sets (named glyphs with auto-assigned Private Use Area codepoints the user never has to type)
+- Character-map grid with starter charset presets (Basic Latin, Latin-1 Supplement, digits) showing a thumbnail or empty placeholder per codepoint; reassigning an already-used codepoint asks for confirmation before replacing it
+- Shared thumbnail browser for both kinds — sorted by codepoint or by name, with search/filter — click a thumbnail to make it the active glyph
+- Font metadata form (family/style name, units-per-em, ascender/descender, baseline row, icon tile padding), with a confirm-before-resize prompt when changing pixels-per-em, since that crops or pads every glyph's grid
+- Specimen preview: a live text-entry preview for character sets, or clickable icon swatches that insert into the same preview for icon sets
+- Per-glyph SVG export (via pixelloom's `gridToSvg` directly, no layering/style pipeline needed) and `.pixelyph` save/load for glyph-kind projects
+- A Draw/Glyph mode switch in the header — marquee-select/copy-paste is Draw-mode only for now, deferred to a later phase
+
+Behind the UI, `src/model`, `src/export`, and `src/io/projectFile.js` (including `GlyphSet.js` and `charsetPresets.js`) are pure data/functions with no DOM dependency — the same style as pixelloom's own `trace.js`/`index.js` — and are covered by `node --test`.
 
 ## Development
 
