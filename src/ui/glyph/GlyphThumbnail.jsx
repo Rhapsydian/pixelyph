@@ -8,9 +8,23 @@ import { gridToPath } from 'pixelloom';
 
 const DEFAULT_SIZE = 32;
 
-export function GlyphThumbnail({ glyph, size = DEFAULT_SIZE }) {
+export function GlyphThumbnail({ glyph, size = DEFAULT_SIZE, codepoint }) {
   if (!glyph) {
-    return <div style={{ width: size, height: size, border: '1px dashed #555', borderRadius: 2, flexShrink: 0 }} />;
+    let char = null;
+    if (codepoint != null) {
+      try { char = String.fromCodePoint(codepoint); } catch { /* skip unrepresentable codepoints */ }
+    }
+    return (
+      <div style={{
+        width: size, height: size,
+        border: '1px dashed #555', borderRadius: 2, flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: '#666', fontSize: Math.floor(size * 0.6), fontFamily: 'sans-serif',
+        userSelect: 'none', overflow: 'hidden',
+      }}>
+        {char}
+      </div>
+    );
   }
   const d = gridToPath(glyph.pixels, glyph.width, glyph.height);
   return (

@@ -115,7 +115,7 @@ export function CharacterMapPanel() {
                 background: activeCodepoint === codepoint ? '#2d4a6b' : 'transparent',
               }}
             >
-              <GlyphThumbnail glyph={glyph} />
+              <GlyphThumbnail glyph={glyph} codepoint={codepoint} />
             </div>
           );
         })}
