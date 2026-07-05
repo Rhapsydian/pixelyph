@@ -69,6 +69,8 @@ export function CharacterMapPanel() {
   }
 
   const parsedPreview = parseCodepointInput(input);
+  const inputGlyphExists = parsedPreview != null && glyphSet.glyphs.has(parsedPreview);
+  const buttonLabel = inputGlyphExists ? 'Edit' : 'Create';
 
   return (
     <div style={{ padding: '0.5rem', background: '#1e1e1e', color: '#eee', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 260 }}>
@@ -96,9 +98,12 @@ export function CharacterMapPanel() {
       <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 4 }}>
         <input placeholder="Type a character, or U+00E9" value={input} onChange={(e) => setInput(e.target.value)} style={{ flex: 1 }} />
         <button type="submit" disabled={parsedPreview == null}>
-          Assign
+          {buttonLabel}
         </button>
       </form>
+      <p style={{ margin: 0, fontSize: '0.8em', color: '#888' }}>
+        Type a character or click a placeholder, then click Create to start drawing it.
+      </p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxHeight: 320, overflow: 'auto' }}>
         {codepoints.map((codepoint) => {
           const glyph = glyphSet.glyphs.get(codepoint);

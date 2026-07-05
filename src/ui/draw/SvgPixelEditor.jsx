@@ -255,7 +255,7 @@ export function SvgPixelEditor() {
           color: '#888',
         }}
       >
-        No glyph selected — pick or create one from the glyph panel.
+        No glyph selected — type a character or click a placeholder in the character map, then click Create.
       </div>
     );
   }
