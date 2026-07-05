@@ -90,3 +90,15 @@ export function createAutosaveScheduler() {
     }, DEBOUNCE_MS);
   };
 }
+
+/**
+ * True when a recoverable autosave snapshot exists. Accepts an injected
+ * read function for testing without IndexedDB.
+ *
+ * @param {() => Promise<object|null>} [readFn]
+ * @returns {Promise<boolean>}
+ */
+export async function hasAutosaveSnapshot(readFn = readAutosave) {
+  const snapshot = await readFn();
+  return snapshot !== null && snapshot !== undefined;
+}

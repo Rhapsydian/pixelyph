@@ -34,7 +34,11 @@ export function CharacterMapPanel() {
   // A font commonly wants more than one preset at once (e.g. Basic Latin
   // *and* Card Suits), so this is a multi-select — the grid shows the
   // deduplicated union of every checked preset's codepoints, not just one.
-  const [presetIds, setPresetIds] = useState(() => new Set(['basic-latin']));
+  // Seeded from the wizard's initial preset choice; falls back to 'basic-latin'.
+  const [presetIds, setPresetIds] = useState(() => {
+    const initial = useStore.getState().initialCharsetPreset ?? 'basic-latin';
+    return new Set([initial]);
+  });
   const [input, setInput] = useState('');
 
   function togglePreset(id) {

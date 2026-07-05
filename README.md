@@ -9,7 +9,7 @@ A pixel-art and pixel-font editor that outputs scalable SVG (and real font files
 
 ## Status
 
-Early development. Draw mode (both the simple and advanced tiers) and Glyph mode are implemented — see "Features" below. Font compilation/export, project management (a proper new/open/resume startup flow), the Electron desktop shell, animation, and a visual design pass are still ahead.
+Early development. Draw mode (both tiers), Glyph mode, and project management (startup screen, new-project wizard, autosave recovery) are implemented — see "Features" below. Font compilation/export, the Electron desktop shell, animation, and a visual design pass are still ahead.
 
 ## Features
 
@@ -44,7 +44,14 @@ Early development. Draw mode (both the simple and advanced tiers) and Glyph mode
 - Font metadata form (family/style name, units-per-em, ascender/descender, baseline row, icon tile padding), with a confirm-before-resize prompt when changing pixels-per-em, since that crops or pads every glyph's grid
 - Specimen preview: a live text-entry preview for character sets, or clickable icon swatches that insert into the same preview for icon sets
 - Per-glyph SVG export (via pixelloom's `gridToSvg` directly, no layering/style pipeline needed) and `.pixelyph` save/load for glyph-kind projects
-- A Draw/Glyph mode switch in the header — marquee-select/copy-paste is Draw-mode only for now, deferred to a later phase
+- Marquee-select/copy-paste is Draw-mode only for now, deferred to a later phase
+
+**Project management** — a startup screen on launch instead of silently booting into Draw mode:
+
+- Three choices: **New Project** (opens a wizard), **Existing Project** (file picker, kind-dispatching — opens the matching mode automatically), and **Continue Last Session** (only shown when IndexedDB has an autosave snapshot)
+- New Project wizard: Draw (mode choice only, uses standard defaults) or Glyph (mode + kind: characters/icons, family name, and initial charset preset for character sets)
+- Mode is chosen once at project creation — not toggled mid-session; opening a new project while one is open asks for confirmation first
+- **New Project** and **Save Project** buttons in the header replace the old mode-switcher toggle
 
 Behind the UI, `src/model`, `src/export`, and `src/io/projectFile.js` (including `GlyphSet.js` and `charsetPresets.js`) are pure data/functions with no DOM dependency — the same style as pixelloom's own `trace.js`/`index.js` — and are covered by `node --test`.
 
