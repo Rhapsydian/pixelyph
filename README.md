@@ -52,6 +52,7 @@ Early development. Draw mode (both tiers), Glyph mode, project management (start
 - Icon-kind sets additionally export **CSS + a JSON manifest** (`@font-face` and one `.icon-{name}::before` rule per glyph, IcoMoon/Fontello-style), with an `iconTilePadding` option so equal-width icons tile edge-to-edge with zero gap (or a consistent gap at a positive value)
 - Every export also produces a self-contained, double-click-openable **demo HTML** file — a live text-entry specimen preview for character fonts, or clickable icon swatches plus a tiling test strip for icon fonts — with the font base64-embedded inline, no separate asset to keep track of
 - WOFF2 compilation (`wawoff2`, WASM-based) is wrapped with a timeout: if it doesn't complete in time in a given browser/Electron environment, the export continues with whichever other formats were requested (the demo HTML falls back to embedding WOFF only) rather than hanging indefinitely
+- Checking more than one export option bundles the results into a single `.zip` (a small dependency-free writer, `export/zip.js`) instead of triggering one save dialog per file; a single selected format still saves directly
 
 **Project management** — a startup screen on launch instead of silently booting into Draw mode:
 

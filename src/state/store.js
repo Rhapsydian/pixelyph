@@ -49,6 +49,7 @@ import { toWoff, toWoff2 } from '../export/font/woff.js';
 import { generateIconFontCss } from '../export/font/iconFontCss.js';
 import { generateDemoHtml } from '../export/font/demoHtml.js';
 import { slugify } from '../export/slugify.js';
+import { createZip } from '../export/zip.js';
 
 function contentSnapshot(canvas) {
   return { layers: canvas.layers, width: canvas.width, height: canvas.height, palette: canvas.palette, tier: canvas.tier };
@@ -488,6 +489,10 @@ export const useStore = create((set, get) => {
      * surface that to the user instead of silently producing a smaller set
      * of files than requested.
      *
+     * More than one resulting file is bundled into a single .zip (createZip,
+     * export/zip.js) rather than triggering one save dialog/download per
+     * file — a single selected format still saves directly, unzipped.
+     *
      * @param {{otf?: boolean, woff?: boolean, woff2?: boolean, demoHtml?: boolean, cssManifest?: boolean}} options
      * @returns {Promise<{woff2Failed: boolean}>}
      */
@@ -497,8 +502,7 @@ export const useStore = create((set, get) => {
       const font = compileFont(glyphSet);
       const otfBuffer = fontToArrayBuffer(font);
       const baseName = slugify(glyphSet.meta.familyName) || 'font';
-
-      if (otf) await saveFile(`${baseName}.otf`, new Blob([otfBuffer], { type: 'font/otf' }));
+      const textEncoder = new TextEncoder();
 
       let woffBytes = null;
       let woff2Bytes = null;
@@ -513,17 +517,28 @@ export const useStore = create((set, get) => {
         }
       }
 
-      if (woff) await saveFile(`${baseName}.woff`, new Blob([woffBytes], { type: 'font/woff' }));
-      if (woff2 && woff2Bytes) await saveFile(`${baseName}.woff2`, new Blob([woff2Bytes], { type: 'font/woff2' }));
+      const files = [];
+      if (otf) files.push({ name: `${baseName}.otf`, data: new Uint8Array(otfBuffer), type: 'font/otf' });
+      if (woff) files.push({ name: `${baseName}.woff`, data: woffBytes, type: 'font/woff' });
+      if (woff2 && woff2Bytes) files.push({ name: `${baseName}.woff2`, data: woff2Bytes, type: 'font/woff2' });
       if (wantDemoHtml) {
         const html = generateDemoHtml(glyphSet, woff2Bytes, woffBytes);
-        await saveFile(`${baseName}-demo.html`, new Blob([html], { type: 'text/html' }));
+        files.push({ name: `${baseName}-demo.html`, data: textEncoder.encode(html), type: 'text/html' });
       }
       if (cssManifest && glyphSet.kind === 'icons') {
         const { css, manifest } = generateIconFontCss(glyphSet);
-        await saveFile(`${baseName}.css`, new Blob([css], { type: 'text/css' }));
-        await saveFile(`${baseName}.json`, new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' }));
+        files.push({ name: `${baseName}.css`, data: textEncoder.encode(css), type: 'text/css' });
+        files.push({ name: `${baseName}.json`, data: textEncoder.encode(JSON.stringify(manifest, null, 2)), type: 'application/json' });
       }
+
+      if (files.length > 1) {
+        const zipBytes = createZip(files.map(({ name, data }) => ({ name, data })));
+        await saveFile(`${baseName}.zip`, new Blob([zipBytes], { type: 'application/zip' }));
+      } else if (files.length === 1) {
+        const [{ name, data, type }] = files;
+        await saveFile(name, new Blob([data], { type }));
+      }
+
       return { woff2Failed: woff2Failed && woff2 };
     },
 
