@@ -483,11 +483,12 @@ export const useStore = create((set, get) => {
      * exported together in one click.
      *
      * WOFF2 (toWoff2, woff.js) can time out — see that file's KNOWN ISSUE
-     * comment — so it's caught here rather than left to abort the rest of
-     * the export; the demo HTML falls back to WOFF-only embedding in that
-     * case. The returned `woff2Failed` flag lets the caller (FontExportPanel)
-     * surface that to the user instead of silently producing a smaller set
-     * of files than requested.
+     * comment and BACKLOG.md — so it's disabled entirely for now
+     * (WOFF2_EXPORT_ENABLED below) rather than left to eat an 8s timeout on
+     * every export that includes a demo HTML. The `woff2Failed` return flag
+     * and its fallback handling are left in place (dormant, `woff2` is
+     * never true while disabled) so re-enabling later is just flipping this
+     * one constant back to `true` and restoring FontExportPanel's checkbox.
      *
      * More than one resulting file is bundled into a single .zip (createZip,
      * export/zip.js) rather than triggering one save dialog/download per
@@ -497,6 +498,7 @@ export const useStore = create((set, get) => {
      * @returns {Promise<{woff2Failed: boolean}>}
      */
     exportFont: async ({ otf = false, woff = false, woff2 = false, demoHtml: wantDemoHtml = false, cssManifest = false } = {}) => {
+      const WOFF2_EXPORT_ENABLED = false; // see BACKLOG.md
       const { glyphSet } = get();
       if (!glyphSet) return { woff2Failed: false };
       const font = compileFont(glyphSet);
@@ -508,7 +510,7 @@ export const useStore = create((set, get) => {
       let woff2Bytes = null;
       let woff2Failed = false;
       if (woff || wantDemoHtml) woffBytes = toWoff(otfBuffer);
-      if (woff2 || wantDemoHtml) {
+      if (WOFF2_EXPORT_ENABLED && (woff2 || wantDemoHtml)) {
         try {
           woff2Bytes = await toWoff2(otfBuffer);
         } catch (err) {

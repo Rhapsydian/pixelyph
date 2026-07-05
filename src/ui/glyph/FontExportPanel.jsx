@@ -1,10 +1,15 @@
 // Export options branch on GlyphSet.kind (per the plan's "Icon fonts as a
-// second Glyph-mode target" note): character fonts get OTF/WOFF/WOFF2 +
-// demo HTML; icon fonts get those plus CSS + JSON manifest. There's no real
+// second Glyph-mode target" note): character fonts get OTF/WOFF + demo
+// HTML; icon fonts get those plus CSS + JSON manifest. There's no real
 // "TTF" option — opentype.js only ever produces CFF-flavored OpenType
 // output when building a font from scratch (see compileFont.js), so OTF is
 // the one binary format offered rather than presenting a second button that
 // would just save the identical bytes under a misleading .ttf name.
+//
+// WOFF2 is hidden for now — see BACKLOG.md and state/store.js's
+// WOFF2_EXPORT_ENABLED — it reliably times out rather than compiling in a
+// real browser/Electron environment. Restore this row (and flip that flag)
+// once that's fixed.
 
 import { useState } from 'react';
 import { useStore } from '../../state/store.js';
@@ -12,14 +17,13 @@ import { useStore } from '../../state/store.js';
 const CHECKBOX_ROWS = [
   { key: 'otf', label: 'OTF font file' },
   { key: 'woff', label: 'WOFF' },
-  { key: 'woff2', label: 'WOFF2' },
   { key: 'demoHtml', label: 'Demo HTML (specimen preview)' },
 ];
 
 export function FontExportPanel() {
   const glyphSet = useStore((s) => s.glyphSet);
   const exportFont = useStore((s) => s.exportFont);
-  const [selected, setSelected] = useState({ otf: true, woff: false, woff2: true, demoHtml: true, cssManifest: false });
+  const [selected, setSelected] = useState({ otf: true, woff: false, demoHtml: true, cssManifest: false });
   const [exporting, setExporting] = useState(false);
   const [woff2Warning, setWoff2Warning] = useState(false);
 

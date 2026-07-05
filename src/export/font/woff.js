@@ -9,17 +9,20 @@
 // export shape, so — like opentype.js (opentypeCompat.js) — a namespace
 // import with a fallback normalizes that.
 //
-// KNOWN ISSUE: wawoff2's compress() has been observed to hang indefinitely
-// (never resolves or rejects) in at least one real Chromium/Electron
-// environment, in both `vite dev` and a production `vite build` — verified
-// directly, not a dev-only pre-bundling artifact, and not reproducible
-// under plain `node --test` (where it works correctly). Root cause wasn't
-// pinned down (WebAssembly itself works fine in that environment; the
-// hang is specific to wawoff2's emscripten runtime-init handoff). toWoff2
-// below wraps the call with a timeout so a WOFF2 export can never hang the
-// UI forever; callers (state/store.js's exportFont) should treat a
-// rejection here as "WOFF2 unavailable this session" and continue with
-// whichever other formats were requested, not as a fatal export failure.
+// KNOWN ISSUE (see BACKLOG.md): wawoff2's compress() has been observed to
+// hang indefinitely (never resolves or rejects) in at least one real
+// Chromium/Electron environment, in both `vite dev` and a production `vite
+// build` — verified directly, not a dev-only pre-bundling artifact, and not
+// reproducible under plain `node --test` (where it works correctly). Root
+// cause wasn't pinned down (WebAssembly itself works fine in that
+// environment; the hang is specific to wawoff2's emscripten runtime-init
+// handoff). toWoff2 below wraps the call with a timeout so a WOFF2 export
+// can never hang the UI forever, but WOFF2 export is currently disabled
+// entirely (state/store.js's WOFF2_EXPORT_ENABLED, FontExportPanel's
+// hidden checkbox) rather than have every export reliably eat that
+// timeout. Callers that do invoke this should treat a rejection as "WOFF2
+// unavailable this session" and continue with whichever other formats were
+// requested, not as a fatal export failure.
 
 import * as ttf2woffNamespace from 'ttf2woff';
 import * as wawoff2Namespace from 'wawoff2';
