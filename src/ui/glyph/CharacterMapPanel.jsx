@@ -125,7 +125,7 @@ export function CharacterMapPanel() {
           return (
             <div
               key={codepoint}
-              onClick={() => (glyph ? selectGlyph(codepoint) : setInput(String.fromCodePoint(codepoint)))}
+              onClick={() => { setInput(String.fromCodePoint(codepoint)); if (glyph) selectGlyph(codepoint); }}
               onMouseEnter={() => setHoveredCodepoint(codepoint)}
               onMouseLeave={() => setHoveredCodepoint(null)}
               title={`${String.fromCodePoint(codepoint)} (U+${codepoint.toString(16).toUpperCase()})`}

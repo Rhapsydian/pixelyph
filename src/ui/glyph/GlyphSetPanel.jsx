@@ -30,6 +30,7 @@ export function GlyphSetPanel() {
   const addIconGlyph = useStore((s) => s.addIconGlyph);
   const [query, setQuery] = useState('');
   const [newIconName, setNewIconName] = useState('');
+  const [hoveredCodepoint, setHoveredCodepoint] = useState(null);
 
   const entries = useMemo(() => {
     if (!glyphSet) return [];
@@ -70,27 +71,41 @@ export function GlyphSetPanel() {
           <div
             key={codepoint}
             onClick={() => selectGlyph(codepoint)}
+            onMouseEnter={() => setHoveredCodepoint(codepoint)}
+            onMouseLeave={() => setHoveredCodepoint(null)}
             title={glyphLabel(codepoint, glyph, glyphSet.kind)}
             style={{
               position: 'relative',
               cursor: 'pointer',
               padding: 2,
               borderRadius: 4,
-              border: activeCodepoint === codepoint ? '1px solid #4da3ff' : '1px solid transparent',
+              border: activeCodepoint === codepoint ? '1px solid #4da3ff' : '1px solid #666',
               background: activeCodepoint === codepoint ? '#2d4a6b' : 'transparent',
             }}
           >
             <GlyphThumbnail glyph={glyph} />
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                removeGlyphAction(codepoint);
-              }}
-              title="Delete glyph"
-              style={{ position: 'absolute', top: -4, right: -4, width: 14, height: 14, lineHeight: '12px', padding: 0, fontSize: 10 }}
-            >
-              &times;
-            </button>
+            {hoveredCodepoint === codepoint && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (window.confirm(`Remove glyph ${glyphLabel(codepoint, glyph, glyphSet.kind)}?`)) {
+                    removeGlyphAction(codepoint);
+                  }
+                }}
+                title="Remove glyph"
+                style={{
+                  position: 'absolute', top: 1, right: 1,
+                  width: 14, height: 14,
+                  padding: 0, lineHeight: '14px', fontSize: 10,
+                  background: '#c0392b', color: '#fff',
+                  border: 'none', borderRadius: 2,
+                  cursor: 'pointer', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                ×
+              </button>
+            )}
           </div>
         ))}
         {entries.length === 0 && <span style={{ color: '#888', fontSize: '0.85em' }}>No glyphs yet.</span>}
