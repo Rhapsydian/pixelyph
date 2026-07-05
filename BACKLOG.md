@@ -1,11 +1,13 @@
 # Backlog
 
-Features that were built, then deliberately hidden or disabled behind a
-known issue, rather than shipped half-broken or removed outright. The
-underlying model/logic is left intact in each case — only the
-UI surface (or, for WOFF2, the automatic invocation) is switched off — so
-restoring them is a small, targeted change once the blocking issue is
-fixed. Review this list once all currently-planned phases are complete.
+Two kinds of deferred items live here: features that were built, then
+deliberately hidden or disabled behind a known issue, rather than shipped
+half-broken or removed outright (the underlying model/logic is left intact
+in each case — only the UI surface, or for WOFF2 the automatic invocation,
+is switched off — so restoring them is a small, targeted change once the
+blocking issue is fixed); and open ideas flagged for later discussion
+rather than acted on immediately. Review this list once all
+currently-planned phases are complete.
 
 ## WOFF2 font export — disabled, times out in real browsers
 
@@ -66,3 +68,22 @@ values the rest of the pipeline doesn't fully agree on.
 2. Restore the X/Y `<input type="number">` pair in `LayersPanel.jsx`'s
    `LayerRow` (removed in `1851d64` — that diff is a small, direct
    reference for what to add back).
+
+## Explore: making Pixelyph's capabilities more leverageable by AI agents
+
+**Not scoped — a discussion topic, not a planned feature.** `src/model`
+and `src/export` are already pure, DOM-free functions (canvas/glyph
+mutation, SVG composition, font compilation), which raises the question of
+whether it's worth exposing them through a scriptable interface — a small
+CLI, or an MCP server — rather than only through the React UI, so an agent
+could drive Pixelyph's capabilities via structured calls instead of GUI
+automation.
+
+**Main tradeoff to weigh whenever this gets picked up:** a first-class
+scriptable interface is a second surface to design and keep stable
+(versioning, docs, what counts as a breaking change) alongside the UI,
+versus the much lighter option of just documenting the existing pure
+functions as an importable library and leaving any driver code to whoever
+wants it.
+
+**To resolve:** discuss and scope properly before building anything.
