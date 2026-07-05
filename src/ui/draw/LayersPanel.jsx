@@ -1,5 +1,5 @@
 // Advanced tier only: add/remove/reorder/select layers, and per-layer
-// visible/locked/opacity/offset. Rendered top-to-bottom in the panel
+// visible/locked/opacity. Rendered top-to-bottom in the panel
 // (canvas.layers is back-to-front, so the panel reverses it for display —
 // same convention most layer-panel tools use).
 
@@ -9,7 +9,6 @@ import { useStore } from '../../state/store.js';
 function LayerRow({ layer, isActive, isBottom }) {
   const setActiveLayerId = useStore((s) => s.setActiveLayerId);
   const setLayerProps = useStore((s) => s.setLayerProps);
-  const setLayerOffset = useStore((s) => s.setLayerOffset);
   const removeLayer = useStore((s) => s.removeLayer);
   const reorderLayer = useStore((s) => s.reorderLayer);
   const duplicateLayer = useStore((s) => s.duplicateLayer);
@@ -17,8 +16,6 @@ function LayerRow({ layer, isActive, isBottom }) {
 
   const [name, setName] = useState(layer.name);
   const [opacity, setOpacity] = useState(layer.opacity);
-  const [offsetX, setOffsetX] = useState(layer.offset.x);
-  const [offsetY, setOffsetY] = useState(layer.offset.y);
 
   return (
     <div
@@ -57,10 +54,6 @@ function LayerRow({ layer, isActive, isBottom }) {
           style={{ width: 60 }}
         />
       </label>
-      <span onClick={(e) => e.stopPropagation()} style={{ display: 'inline-flex', gap: 2, alignItems: 'center' }} title="Offset (x, y)">
-        <input type="number" value={offsetX} onChange={(e) => setOffsetX(Number(e.target.value))} onBlur={() => setLayerOffset(layer.id, offsetX, offsetY)} style={{ width: 44 }} />
-        <input type="number" value={offsetY} onChange={(e) => setOffsetY(Number(e.target.value))} onBlur={() => setLayerOffset(layer.id, offsetX, offsetY)} style={{ width: 44 }} />
-      </span>
       <span onClick={(e) => e.stopPropagation()} style={{ display: 'inline-flex', gap: 2 }}>
         <button onClick={() => reorderLayer(layer.id, 1)} title="Move up">
           ▲
