@@ -1,16 +1,19 @@
 // Character-kind sets only (see GlyphSetPanel for the shared thumbnail
 // browser both kinds use, and for icon-kind's separate "add by name" flow).
-// One cell per codepoint in the chosen preset, showing an existing glyph's
-// thumbnail or an empty placeholder — progress through a charset visible at
-// a glance. Assignment is direct: type the character itself, or U+00E9 for
-// anything awkward to type, into the input below; either creates the glyph
-// (if new) and opens it. Reusing an already-assigned codepoint prompts to
-// confirm replacing it (GlyphSet.wouldCollide), the same confirm-before-
-// destructive pattern as Draw mode's tier toggle.
+// One cell per codepoint across every checked preset (presets are a
+// multi-select — a font commonly wants Basic Latin *and* Card Suits, not
+// just one), showing an existing glyph's thumbnail or an empty placeholder —
+// progress through a charset visible at a glance. Assignment is direct: type
+// the character itself, or U+00E9 for anything awkward to type, into the
+// input below; either creates the glyph (if new) and opens it — this works
+// for any codepoint regardless of which presets are checked, since presets
+// are only a browsing convenience, not a whitelist. Reusing an already-
+// assigned codepoint prompts to confirm replacing it (GlyphSet.wouldCollide),
+// the same confirm-before-destructive pattern as Draw mode's tier toggle.
 
 import { useMemo, useState } from 'react';
 import { useStore } from '../../state/store.js';
-import { CHARSET_PRESETS, CHARSET_PRESET_IDS, presetCodepoints } from '../../model/charsetPresets.js';
+import { CHARSET_PRESETS, CHARSET_PRESET_IDS, mergedPresetCodepoints } from '../../model/charsetPresets.js';
 import { wouldCollide } from '../../model/GlyphSet.js';
 import { GlyphThumbnail } from './GlyphThumbnail.jsx';
 
@@ -28,10 +31,22 @@ export function CharacterMapPanel() {
   const activeCodepoint = useStore((s) => s.activeCodepoint);
   const selectGlyph = useStore((s) => s.selectGlyph);
   const assignCodepoint = useStore((s) => s.assignCodepoint);
-  const [presetId, setPresetId] = useState('basic-latin');
+  // A font commonly wants more than one preset at once (e.g. Basic Latin
+  // *and* Card Suits), so this is a multi-select — the grid shows the
+  // deduplicated union of every checked preset's codepoints, not just one.
+  const [presetIds, setPresetIds] = useState(() => new Set(['basic-latin']));
   const [input, setInput] = useState('');
 
-  const codepoints = useMemo(() => (presetId === 'custom' ? [] : presetCodepoints(presetId)), [presetId]);
+  function togglePreset(id) {
+    setPresetIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const codepoints = useMemo(() => mergedPresetCodepoints(Array.from(presetIds)), [presetIds]);
 
   if (!glyphSet || glyphSet.kind !== 'characters') return null;
 
@@ -54,17 +69,26 @@ export function CharacterMapPanel() {
   return (
     <div style={{ padding: '0.5rem', background: '#1e1e1e', color: '#eee', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 260 }}>
       <strong>Character Map</strong>
-      <label>
-        Preset:{' '}
-        <select value={presetId} onChange={(e) => setPresetId(e.target.value)}>
-          {CHARSET_PRESET_IDS.map((id) => (
-            <option key={id} value={id}>
-              {CHARSET_PRESETS[id].label}
-            </option>
-          ))}
-          <option value="custom">Custom (already-assigned only)</option>
-        </select>
-      </label>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        {CHARSET_PRESET_IDS.map((id) => (
+          <label
+            key={id}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              background: presetIds.has(id) ? '#2d4a6b' : '#333',
+              border: presetIds.has(id) ? '1px solid #4da3ff' : '1px solid transparent',
+              padding: '0.25rem 0.5rem',
+              borderRadius: 4,
+              cursor: 'pointer',
+            }}
+          >
+            <input type="checkbox" checked={presetIds.has(id)} onChange={() => togglePreset(id)} />
+            {CHARSET_PRESETS[id].label}
+          </label>
+        ))}
+      </div>
       <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 4 }}>
         <input placeholder="Type a character, or U+00E9" value={input} onChange={(e) => setInput(e.target.value)} style={{ flex: 1 }} />
         <button type="submit" disabled={parsedPreview == null}>
@@ -91,7 +115,9 @@ export function CharacterMapPanel() {
             </div>
           );
         })}
-        {codepoints.length === 0 && presetId === 'custom' && <span style={{ color: '#888', fontSize: '0.85em' }}>Custom preset shows nothing here — use GlyphSetPanel to browse already-assigned glyphs.</span>}
+        {codepoints.length === 0 && (
+          <span style={{ color: '#888', fontSize: '0.85em' }}>No preset selected — check one or more above, or use GlyphSetPanel to browse already-assigned glyphs.</span>
+        )}
       </div>
     </div>
   );
