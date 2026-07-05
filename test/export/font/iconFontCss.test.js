@@ -14,7 +14,7 @@ test('generateIconFontCss emits a @font-face and one rule + manifest entry per g
   setGlyph(glyphSet, 0xe000, iconGlyph('Star'));
   setGlyph(glyphSet, 0xe001, iconGlyph('Heart'));
 
-  const { css, manifest } = generateIconFontCss(glyphSet);
+  const { css, manifest } = generateIconFontCss(glyphSet, { formats: { woff2: true, woff: true } });
 
   assert.ok(css.includes('@font-face'));
   assert.ok(css.includes('font-family: "My Icons"'));
@@ -32,4 +32,33 @@ test('generateIconFontCss slugifies names and de-duplicates collisions', () => {
 
   const { manifest } = generateIconFontCss(glyphSet);
   assert.deepEqual(manifest, { 'my-star': 'e000', 'my-star-2': 'e001', icon: 'e002' });
+});
+
+test('generateIconFontCss only references formats actually passed in — never a file that will not exist', () => {
+  const glyphSet = createGlyphSet({ kind: 'icons', meta: { familyName: 'Icons' } });
+  setGlyph(glyphSet, 0xe000, iconGlyph('Star'));
+
+  const otfOnly = generateIconFontCss(glyphSet, { formats: { otf: true } });
+  assert.ok(otfOnly.css.includes('url("icons.otf") format("opentype")'));
+  assert.ok(!otfOnly.css.includes('.woff2'));
+  assert.ok(!otfOnly.css.includes('"icons.woff"'));
+
+  const woffOnly = generateIconFontCss(glyphSet, { formats: { woff: true } });
+  assert.ok(woffOnly.css.includes('url("icons.woff") format("woff")'));
+  assert.ok(!woffOnly.css.includes('.otf'));
+});
+
+test('generateIconFontCss defaults to referencing OTF when no formats option is given', () => {
+  const glyphSet = createGlyphSet({ kind: 'icons', meta: { familyName: 'Icons' } });
+  setGlyph(glyphSet, 0xe000, iconGlyph('Star'));
+  const { css } = generateIconFontCss(glyphSet);
+  assert.ok(css.includes('url("icons.otf") format("opentype")'));
+});
+
+test('generateIconFontCss omits the src list rather than referencing a nonexistent file when no format is selected', () => {
+  const glyphSet = createGlyphSet({ kind: 'icons', meta: { familyName: 'Icons' } });
+  setGlyph(glyphSet, 0xe000, iconGlyph('Star'));
+  const { css } = generateIconFontCss(glyphSet, { formats: {} });
+  assert.ok(!css.includes('src:'));
+  assert.ok(css.includes('@font-face'));
 });

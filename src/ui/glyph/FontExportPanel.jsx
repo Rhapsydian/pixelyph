@@ -32,6 +32,10 @@ export function FontExportPanel() {
   const isIconFont = glyphSet.kind === 'icons';
   const rows = isIconFont ? [...CHECKBOX_ROWS, { key: 'cssManifest', label: 'CSS + JSON manifest' }] : CHECKBOX_ROWS;
   const anySelected = Object.values(selected).some(Boolean);
+  // The generated CSS's @font-face only references formats actually
+  // included in the export (see iconFontCss.js) — without OTF or WOFF
+  // alongside it, that CSS has nothing to point at.
+  const cssManifestNeedsAFontFile = selected.cssManifest && !selected.otf && !selected.woff;
 
   function toggle(key) {
     setSelected((s) => ({ ...s, [key]: !s[key] }));
@@ -60,7 +64,12 @@ export function FontExportPanel() {
           </label>
         ))}
       </div>
-      <button onClick={handleExport} disabled={!anySelected || exporting || glyphSet.glyphs.size === 0}>
+      {cssManifestNeedsAFontFile && (
+        <span style={{ color: '#e0b04d', fontSize: '0.8em' }}>
+          Check OTF or WOFF too — the generated CSS needs a font file to actually point at.
+        </span>
+      )}
+      <button onClick={handleExport} disabled={!anySelected || cssManifestNeedsAFontFile || exporting || glyphSet.glyphs.size === 0}>
         {exporting ? 'Exporting…' : 'Export'}
       </button>
       {woff2Warning && (

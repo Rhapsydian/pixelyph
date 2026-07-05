@@ -528,7 +528,11 @@ export const useStore = create((set, get) => {
         files.push({ name: `${baseName}-demo.html`, data: textEncoder.encode(html), type: 'text/html' });
       }
       if (cssManifest && glyphSet.kind === 'icons') {
-        const { css, manifest } = generateIconFontCss(glyphSet);
+        // Reference only the format(s) actually being exported alongside
+        // this CSS (woff2 excluded — see WOFF2_EXPORT_ENABLED above), so
+        // the generated @font-face src never points at a file that isn't
+        // in the export bundle.
+        const { css, manifest } = generateIconFontCss(glyphSet, { formats: { otf, woff } });
         files.push({ name: `${baseName}.css`, data: textEncoder.encode(css), type: 'text/css' });
         files.push({ name: `${baseName}.json`, data: textEncoder.encode(JSON.stringify(manifest, null, 2)), type: 'application/json' });
       }
