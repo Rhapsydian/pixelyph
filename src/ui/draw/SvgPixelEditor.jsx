@@ -324,7 +324,14 @@ export function SvgPixelEditor() {
             strokeDasharray="0.3,0.2"
           />
         )}
-        {showGrid && <GridOverlay width={doc.width} height={doc.height} />}
+        {showGrid && (
+          <GridOverlay
+            width={doc.width}
+            height={doc.height}
+            offsetX={activeLayer?.offset.x ?? 0}
+            offsetY={activeLayer?.offset.y ?? 0}
+          />
+        )}
         {cursorCell && <BrushCursor x={cursorCell.x} y={cursorCell.y} />}
       </svg>
     </div>
