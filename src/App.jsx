@@ -126,7 +126,7 @@ function NewProjectWizard({ onBack }) {
   const [step, setStep] = useState('mode'); // 'mode' | 'glyph-options'
   const [glyphKind, setGlyphKind] = useState('characters');
   const [familyName, setFamilyName] = useState('Untitled');
-  const [initialPreset, setInitialPreset] = useState('basic-latin');
+  const [initialPreset, setInitialPreset] = useState('none');
   const [pixelsPerEm, setPixelsPerEm] = useState(16);
   const [defaultGlyphWidth, setDefaultGlyphWidth] = useState(12); // 75% of 16
 
@@ -221,6 +221,7 @@ function NewProjectWizard({ onBack }) {
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             Initial charset
             <select value={initialPreset} onChange={(e) => setInitialPreset(e.target.value)} style={inputStyle}>
+              <option value="none">None</option>
               {CHARSET_PRESET_IDS.map((id) => (
                 <option key={id} value={id}>
                   {CHARSET_PRESETS[id].label}

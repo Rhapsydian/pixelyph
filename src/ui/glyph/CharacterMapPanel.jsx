@@ -37,7 +37,7 @@ export function CharacterMapPanel() {
   // Seeded from the wizard's initial preset choice; falls back to 'basic-latin'.
   const [presetIds, setPresetIds] = useState(() => {
     const initial = useStore.getState().initialCharsetPreset ?? 'basic-latin';
-    return new Set([initial]);
+    return initial === 'none' ? new Set() : new Set([initial]);
   });
   const [input, setInput] = useState('');
 
