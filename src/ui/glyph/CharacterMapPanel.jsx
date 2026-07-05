@@ -17,6 +17,13 @@ import { CHARSET_PRESETS, CHARSET_PRESET_IDS, mergedPresetCodepoints } from '../
 import { wouldCollide } from '../../model/GlyphSet.js';
 import { GlyphThumbnail } from './GlyphThumbnail.jsx';
 
+const CELL_BORDER = {
+  active:      { border: '1px solid #4da3ff', background: '#2d4a6b' },
+  hasGlyph:    { border: '1px solid #666',    background: 'transparent' },
+  pendingCreate: { border: '1px solid #c87820', background: '#2e1c00' },
+  empty:       { border: '1px solid transparent', background: 'transparent' },
+};
+
 function parseCodepointInput(text) {
   const trimmed = text.trim();
   const match = /^u\+([0-9a-f]+)$/i.exec(trimmed);
@@ -31,6 +38,8 @@ export function CharacterMapPanel() {
   const activeCodepoint = useStore((s) => s.activeCodepoint);
   const selectGlyph = useStore((s) => s.selectGlyph);
   const assignCodepoint = useStore((s) => s.assignCodepoint);
+  const removeGlyphAction = useStore((s) => s.removeGlyphAction);
+  const [hoveredCodepoint, setHoveredCodepoint] = useState(null);
   // A font commonly wants more than one preset at once (e.g. Basic Latin
   // *and* Card Suits), so this is a multi-select — the grid shows the
   // deduplicated union of every checked preset's codepoints, not just one.
@@ -106,20 +115,51 @@ export function CharacterMapPanel() {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxHeight: 320, overflow: 'auto' }}>
         {codepoints.map((codepoint) => {
           const glyph = glyphSet.glyphs.get(codepoint);
+          const isActive = activeCodepoint === codepoint;
+          const isPendingCreate = !glyph && parsedPreview === codepoint;
+          const cellStyle = isActive ? CELL_BORDER.active
+            : glyph ? CELL_BORDER.hasGlyph
+            : isPendingCreate ? CELL_BORDER.pendingCreate
+            : CELL_BORDER.empty;
+          const isHovered = hoveredCodepoint === codepoint;
           return (
             <div
               key={codepoint}
               onClick={() => (glyph ? selectGlyph(codepoint) : setInput(String.fromCodePoint(codepoint)))}
+              onMouseEnter={() => setHoveredCodepoint(codepoint)}
+              onMouseLeave={() => setHoveredCodepoint(null)}
               title={`${String.fromCodePoint(codepoint)} (U+${codepoint.toString(16).toUpperCase()})`}
               style={{
+                position: 'relative',
                 cursor: 'pointer',
                 padding: 2,
                 borderRadius: 4,
-                border: activeCodepoint === codepoint ? '1px solid #4da3ff' : '1px solid transparent',
-                background: activeCodepoint === codepoint ? '#2d4a6b' : 'transparent',
+                ...cellStyle,
               }}
             >
               <GlyphThumbnail glyph={glyph} codepoint={codepoint} />
+              {glyph && isHovered && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (window.confirm(`Remove glyph for ${String.fromCodePoint(codepoint)} (U+${codepoint.toString(16).toUpperCase()})?`)) {
+                      removeGlyphAction(codepoint);
+                    }
+                  }}
+                  title="Remove glyph"
+                  style={{
+                    position: 'absolute', top: 1, right: 1,
+                    width: 14, height: 14,
+                    padding: 0, lineHeight: '14px', fontSize: 10,
+                    background: '#c0392b', color: '#fff',
+                    border: 'none', borderRadius: 2,
+                    cursor: 'pointer', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  ×
+                </button>
+              )}
             </div>
           );
         })}
