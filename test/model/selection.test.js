@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createCanvas, paintCell, colorAt } from '../../src/model/Canvas.js';
-import { normalizeRect, extractRectColors, clearRect, pasteCells } from '../../src/model/selection.js';
+import { createCanvas, paintCell, colorAt, addLayer } from '../../src/model/Canvas.js';
+import { normalizeRect, extractRectColors, extractRectFromActiveLayer, clearRect, clearRectAllLayers, pasteCells } from '../../src/model/selection.js';
 
 test('normalizeRect handles corners given in any order', () => {
   assert.deepEqual(normalizeRect(3, 3, 0, 0), { x0: 0, y0: 0, x1: 3, y1: 3 });
@@ -53,4 +53,52 @@ test('extractRectColors omits empty cells rather than recording them as null', (
   paintCell(canvas, 0, 0, '#ff0000');
   const cells = extractRectColors(canvas, { x0: 0, y0: 0, x1: 1, y1: 0 });
   assert.deepEqual(cells, [{ dx: 0, dy: 0, color: '#ff0000' }]);
+});
+
+// --- Advanced tier: per-layer selection scoping ---
+
+test('extractRectFromActiveLayer only reads the active layer, ignoring a non-active layer stacked on top of it', () => {
+  const canvas = createCanvas({ width: 2, height: 1 });
+  canvas.tier = 'advanced';
+  const bottom = addLayer(canvas, { name: 'bottom', fill: '#0000ff' });
+  canvas.activeLayerId = bottom.id;
+  paintCell(canvas, 0, 0, 'x');
+  addLayer(canvas, { name: 'top', fill: '#ff0000' }); // becomes active, covers (1,0)
+  paintCell(canvas, 1, 0, 'x');
+  canvas.activeLayerId = bottom.id; // scope back to the bottom layer
+
+  const cells = extractRectFromActiveLayer(canvas, { x0: 0, y0: 0, x1: 1, y1: 0 });
+  assert.deepEqual(cells, [{ dx: 0, dy: 0, color: '#0000ff' }]); // only the active (bottom) layer's own cell
+});
+
+test('extractRectFromActiveLayer falls back to a placeholder color for a non-solid (gradient) fill', () => {
+  const canvas = createCanvas({ width: 1, height: 1 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas, { name: 'grad' });
+  layer.style.fill = { type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] };
+  paintCell(canvas, 0, 0, 'x');
+  const cells = extractRectFromActiveLayer(canvas, { x0: 0, y0: 0, x1: 0, y1: 0 });
+  assert.equal(cells.length, 1);
+  assert.equal(typeof cells[0].color, 'string');
+});
+
+test('extractRectFromActiveLayer returns nothing when there is no active layer', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  assert.deepEqual(extractRectFromActiveLayer(canvas, { x0: 0, y0: 0, x1: 1, y1: 1 }), []);
+});
+
+test('clearRectAllLayers clears each cell from whichever layer actually owns it, not just the active layer', () => {
+  const canvas = createCanvas({ width: 2, height: 1 });
+  canvas.tier = 'advanced';
+  const bottom = addLayer(canvas, { name: 'bottom' });
+  canvas.activeLayerId = bottom.id;
+  paintCell(canvas, 0, 0, 'x');
+  const top = addLayer(canvas, { name: 'top' }); // becomes active
+  paintCell(canvas, 1, 0, 'x');
+  canvas.activeLayerId = top.id; // active layer only covers (1,0); (0,0) belongs to `bottom`
+
+  clearRectAllLayers(canvas, { x0: 0, y0: 0, x1: 1, y1: 0 });
+  assert.equal(colorAt(canvas, 0, 0), null); // bottom's cell cleared too, despite not being active
+  assert.equal(colorAt(canvas, 1, 0), null);
 });

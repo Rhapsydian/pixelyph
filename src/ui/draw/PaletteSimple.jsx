@@ -2,12 +2,25 @@ import { useRef } from 'react';
 import { useStore } from '../../state/store.js';
 
 export function PaletteSimple() {
+  const tier = useStore((s) => s.canvas.tier);
   const palette = useStore((s) => s.canvas.palette);
   const activeColor = useStore((s) => s.activeColor);
   const setActiveColor = useStore((s) => s.setActiveColor);
   const setPalette = useStore((s) => s.setPalette);
   const importLospecPalette = useStore((s) => s.importLospecPalette);
   const fileInputRef = useRef(null);
+
+  // The swatch-picker sets `activeColor`, but advanced-tier painting doesn't
+  // route through it at all (a layer's own Fill governs its color) — showing
+  // live, clickable swatches here would be actively misleading about what
+  // they do, so swap in a pointer to the real control instead.
+  if (tier === 'advanced') {
+    return (
+      <div style={{ padding: '0.5rem', background: '#1e1e1e', color: '#888', fontStyle: 'italic' }}>
+        Color is per-layer in advanced tier — use the Fill section in the layer style panel below.
+      </div>
+    );
+  }
 
   function addColor(color) {
     if (palette.includes(color)) return;

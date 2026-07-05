@@ -69,6 +69,7 @@ export function serializeProject(canvas) {
       palette: canvas.palette,
       symmetryMode: canvas.symmetryMode,
       referenceImage: canvas.referenceImage ?? null,
+      activeLayerId: canvas.activeLayerId ?? null,
       simpleTier: { colorToLayerId: Array.from(canvas.simpleTier.colorToLayerId.entries()) },
       layers: canvas.layers.map(serializeLayer),
     },
@@ -90,6 +91,7 @@ export function deserializeProject(doc) {
     palette: c.palette,
     symmetryMode: c.symmetryMode,
     referenceImage: c.referenceImage ?? undefined,
+    activeLayerId: c.activeLayerId ?? null,
     simpleTier: { colorToLayerId: new Map(c.simpleTier.colorToLayerId) },
     layers: c.layers.map(deserializeLayer),
   };

@@ -1,9 +1,8 @@
 // A Layer owns its own local grid (not full-canvas) — `offset` places it in
-// shared canvas space. Phase 1 (simple tier) only ever creates full-canvas,
-// solid-fill auto-managed layers (see autoLayerSync.js); growToInclude and
-// arbitrary offsets are exercised for real once advanced-tier free painting
-// lands in Phase 2, but the primitive is generic from the start so both
-// tiers share it.
+// shared canvas space. Simple tier only ever creates full-canvas, solid-fill
+// auto-managed layers (see autoLayerSync.js); advanced tier's free-floating
+// layers (arbitrary offset, gradient/stroke/effects style) are what
+// growToInclude and non-full-canvas offsets are really for.
 
 import { resizeAt } from './Grid.js';
 

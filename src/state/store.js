@@ -8,10 +8,23 @@
 // the DOM via a ref instead, and `commit()` only runs once, on pointer-up.
 
 import { create } from 'zustand';
-import { createCanvas, paintCell as paintCanvasCell, resizeCanvas as resizeCanvasModel, colorAt } from '../model/Canvas.js';
+import {
+  createCanvas,
+  paintCell as paintCanvasCell,
+  resizeCanvas as resizeCanvasModel,
+  colorAt,
+  addLayer as addLayerModel,
+  removeLayer as removeLayerModel,
+  reorderLayer as reorderLayerModel,
+  duplicateLayer as duplicateLayerModel,
+  mergeLayerDown as mergeLayerDownModel,
+  clampActiveLayer,
+  topVisibleLayerAt,
+  convertTier as convertTierModel,
+} from '../model/Canvas.js';
 import { mirrorPoints } from '../model/mirror.js';
 import { createHistory, pushSnapshot, undo as historyUndo, redo as historyRedo, canUndo as historyCanUndo, canRedo as historyCanRedo } from '../model/history.js';
-import { normalizeRect, extractRectColors, clearRect, pasteCells } from '../model/selection.js';
+import { normalizeRect, extractRectColors, extractRectFromActiveLayer, clearRect, clearRectAllLayers, pasteCells } from '../model/selection.js';
 import { parseLospecPalette } from '../model/paletteImport.js';
 import { importRasterToGrid } from '../model/importRaster.js';
 import { decodeImageFile } from '../io/imageDecode.js';
@@ -39,6 +52,24 @@ function applyContentSnapshot(canvas, snapshot) {
   // simpleTier.colorToLayerId is bookkeeping, not artwork — rebuild it from
   // the restored layers so it can't fall out of sync with what undo/redo just restored.
   canvas.simpleTier.colorToLayerId = new Map(canvas.layers.filter((l) => l.autoManaged).map((l) => [l.autoColor, l.id]));
+  // activeLayerId is excluded from snapshots (a working-session concern,
+  // not artwork), so a restored `layers` array might no longer contain it.
+  clampActiveLayer(canvas);
+}
+
+/** Read side of a selection, honoring `selectionScope` in advanced tier (simple tier only ever has one meaningful reading). */
+function extractSelection(canvas, selectionScope, rect) {
+  if (canvas.tier === 'advanced' && selectionScope === 'activeLayer') return extractRectFromActiveLayer(canvas, rect);
+  return extractRectColors(canvas, rect);
+}
+
+/** Clear side of a selection — has to match whichever scope did the reading, so a multi-layer selection doesn't leave orphaned content on layers extractSelection pulled from but this left untouched. */
+function clearSelectionRect(canvas, selectionScope, rect) {
+  if (canvas.tier === 'advanced' && selectionScope === 'allVisible') {
+    clearRectAllLayers(canvas, rect);
+    return;
+  }
+  clearRect(canvas, rect);
 }
 
 const autosaveScheduler = createAutosaveScheduler();
@@ -75,6 +106,13 @@ export const useStore = create((set, get) => {
 
     selection: null, // { x0, y0, x1, y1 } canvas-space, normalized
     floatingSelection: null, // { x, y, width, height, cells: [{dx,dy,color}] }
+    // Advanced tier only (simple tier has no "other layers" to be ambiguous
+    // about): whether copy/cut read from just the active layer, or from
+    // whichever visible layer is topmost at each cell. 'activeLayer' is the
+    // safer default — it can't silently pull in content from a layer you
+    // didn't mean to touch. See selection.js's file header for how this
+    // affects both the read and the matching clear step.
+    selectionScope: 'activeLayer',
 
     setActiveTool: (tool) => set({ activeTool: tool }),
     setActiveColor: (color) => set({ activeColor: color }),
@@ -83,6 +121,7 @@ export const useStore = create((set, get) => {
     setPan: (pan) => set({ pan }),
     toggleGrid: () => set((s) => ({ showGrid: !s.showGrid })),
     toggleTilePreview: () => set((s) => ({ tilePreviewOpen: !s.tilePreviewOpen })),
+    setSelectionScope: (scope) => set({ selectionScope: scope }),
 
     // Working-session conveniences (Canvas.symmetryMode, Canvas.referenceImage):
     // persisted with the project, but deliberately excluded from undo — touch
@@ -116,6 +155,70 @@ export const useStore = create((set, get) => {
     commitStroke: () => commit(),
 
     colorAt: (x, y) => colorAt(get().canvas, x, y),
+
+    // --- Advanced tier: layers panel + per-layer style ---
+    // activeLayerId is a working-session pointer like symmetryMode/referenceImage
+    // above: touched (not committed) when just switching which layer is
+    // selected, but committed as part of the same action for anything that
+    // actually changes document content (add/remove/reorder/style/offset).
+    setActiveLayerId: (layerId) => {
+      get().canvas.activeLayerId = layerId;
+      touchCanvas();
+    },
+    /** Advanced-tier eyedropper: activates the topmost layer at (x, y) rather than sampling a color (ambiguous once gradients exist). */
+    selectTopLayerAt: (x, y) => {
+      const { canvas } = get();
+      const layer = topVisibleLayerAt(canvas, x, y);
+      if (!layer) return;
+      canvas.activeLayerId = layer.id;
+      touchCanvas();
+    },
+    addLayer: () => {
+      addLayerModel(get().canvas, {});
+      commit();
+    },
+    removeLayer: (layerId) => {
+      removeLayerModel(get().canvas, layerId);
+      commit();
+    },
+    reorderLayer: (layerId, direction) => {
+      reorderLayerModel(get().canvas, layerId, direction);
+      commit();
+    },
+    duplicateLayer: (layerId) => {
+      duplicateLayerModel(get().canvas, layerId);
+      commit();
+    },
+    /** Merges `layerId` into the layer below it; no-ops if it's already the bottom-most layer. */
+    mergeLayerDown: (layerId) => {
+      mergeLayerDownModel(get().canvas, layerId);
+      commit();
+    },
+    setLayerOffset: (layerId, x, y) => {
+      const layer = get().canvas.layers.find((l) => l.id === layerId);
+      if (!layer) return;
+      layer.offset = { x, y };
+      commit();
+    },
+    /** Patches any of visible/locked/opacity/name — one committed action per call, matching the "a style change" granularity history.js already documents. */
+    setLayerProps: (layerId, patch) => {
+      const layer = get().canvas.layers.find((l) => l.id === layerId);
+      if (!layer) return;
+      Object.assign(layer, patch);
+      commit();
+    },
+    /** Patches `layer.style` (fill/stroke/effects) — see LayerStylePanel. */
+    updateLayerStyle: (layerId, patch) => {
+      const layer = get().canvas.layers.find((l) => l.id === layerId);
+      if (!layer) return;
+      layer.style = { ...layer.style, ...patch };
+      commit();
+    },
+    /** Simple -> advanced is always safe; advanced -> simple is potentially lossy — callers should confirm first (see convertTier). */
+    setTier: (newTier) => {
+      convertTierModel(get().canvas, newTier);
+      commit();
+    },
 
     undo: () => {
       const { canvas, history } = get();
@@ -154,14 +257,19 @@ export const useStore = create((set, get) => {
     startSelection: (x, y) => set({ selection: { x0: x, y0: y, x1: x, y1: y } }),
     updateSelection: (x, y) => set((s) => (s.selection ? { selection: { ...s.selection, x1: x, y1: y } } : {})),
     clearSelection: () => set({ selection: null, floatingSelection: null }),
+    /** Ctrl+A: selects the whole canvas. Switches to the select tool so the result is immediately visible/actionable. */
+    selectAll: () => {
+      const { canvas } = get();
+      set({ activeTool: 'marqueeSelect', selection: { x0: 0, y0: 0, x1: canvas.width - 1, y1: canvas.height - 1 }, floatingSelection: null });
+    },
 
     /** Lifts the current selection into a floating buffer. `destructive: true` (move) clears the source; false (copy) leaves it. */
     liftSelection: (destructive) => {
-      const { canvas, selection } = get();
+      const { canvas, selection, selectionScope } = get();
       if (!selection) return;
       const rect = normalizeRect(selection.x0, selection.y0, selection.x1, selection.y1);
-      const cells = extractRectColors(canvas, rect);
-      if (destructive) clearRect(canvas, rect);
+      const cells = extractSelection(canvas, selectionScope, rect);
+      if (destructive) clearSelectionRect(canvas, selectionScope, rect);
       set({
         floatingSelection: { x: rect.x0, y: rect.y0, width: rect.x1 - rect.x0 + 1, height: rect.y1 - rect.y0 + 1, cells },
       });
@@ -180,6 +288,64 @@ export const useStore = create((set, get) => {
       const { canvas, history } = get();
       applyContentSnapshot(canvas, history.stack[history.index]);
       set({ canvas: { ...canvas }, selection: null, floatingSelection: null });
+    },
+
+    clipboard: null, // { width, height, cells } — app-internal, not the system clipboard; Ctrl+C/X/V below
+
+    /**
+     * Copies the current selection's cells to the clipboard and, for a
+     * plain (not-yet-lifted) selection, immediately turns it into a
+     * floating copy sitting exactly where the selection was — the same
+     * non-destructive lift a shift+drag already does, just without
+     * requiring the drag. That copy is then draggable/committable like any
+     * other floating selection (Enter/Escape/click-outside). If a floating
+     * selection is already in progress, copying just refreshes the
+     * clipboard from its current cells — there's no separate "selection"
+     * left to drop in that case.
+     */
+    copySelection: () => {
+      const { canvas, selection, floatingSelection, selectionScope } = get();
+      if (floatingSelection) {
+        set({ clipboard: { width: floatingSelection.width, height: floatingSelection.height, cells: floatingSelection.cells } });
+        return;
+      }
+      if (!selection) return;
+      const rect = normalizeRect(selection.x0, selection.y0, selection.x1, selection.y1);
+      const width = rect.x1 - rect.x0 + 1;
+      const height = rect.y1 - rect.y0 + 1;
+      const cells = extractSelection(canvas, selectionScope, rect);
+      set({
+        clipboard: { width, height, cells },
+        selection: null,
+        floatingSelection: { x: rect.x0, y: rect.y0, width, height, cells },
+      });
+    },
+    /** Copies then clears the selection. If a floating move is already in progress, this just finalizes it in place without pasting the buffer back (abandoning the move) — the earlier lift already cleared the source if it was destructive. */
+    cutSelection: () => {
+      const { canvas, selection, floatingSelection, selectionScope } = get();
+      if (floatingSelection) {
+        set({ clipboard: { width: floatingSelection.width, height: floatingSelection.height, cells: floatingSelection.cells }, selection: null, floatingSelection: null });
+        commit();
+        return;
+      }
+      if (!selection) return;
+      const rect = normalizeRect(selection.x0, selection.y0, selection.x1, selection.y1);
+      const cells = extractSelection(canvas, selectionScope, rect);
+      clearSelectionRect(canvas, selectionScope, rect);
+      set({ clipboard: { width: rect.x1 - rect.x0 + 1, height: rect.y1 - rect.y0 + 1, cells }, selection: null });
+      commit();
+    },
+    /** Drops the clipboard's contents back in as a new floating selection, positioned where it was lifted from, ready to move like any other lift. Switches to the select tool so it's immediately draggable. */
+    pasteClipboard: () => {
+      const { clipboard, canvas } = get();
+      if (!clipboard) return;
+      const x = Math.max(0, Math.min(canvas.width - clipboard.width, Math.floor((canvas.width - clipboard.width) / 2)));
+      const y = Math.max(0, Math.min(canvas.height - clipboard.height, Math.floor((canvas.height - clipboard.height) / 2)));
+      set({
+        activeTool: 'marqueeSelect',
+        selection: null,
+        floatingSelection: { x, y, width: clipboard.width, height: clipboard.height, cells: clipboard.cells },
+      });
     },
 
     // --- Raster import: file -> RGBA -> downsample/quantize -> paintCell per cell ---

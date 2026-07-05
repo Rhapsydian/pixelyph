@@ -3,9 +3,24 @@
 // is transient UI state that lives in state/store.js, not here — this file
 // only touches Canvas data, via the same colorAt/paintCell every other
 // tool uses, so a multi-color move re-runs autoLayerSync bookkeeping
-// exactly like a normal stroke would.
+// exactly like a normal stroke would (simple tier).
+//
+// Advanced tier has two selection scopes (state/store.js's `selectionScope`
+// picks between them): "all visible layers" (extractRectColors, same
+// topmost-wins read as colorAt/the eyedropper) or "active layer only"
+// (extractRectFromActiveLayer, ignoring everything else regardless of
+// what's on top). Clearing has to match whichever scope did the reading —
+// clearRect only ever erases the active layer (fine for the active-layer
+// scope, and for simple tier's auto-layer-aware erase), but a multi-layer
+// selection needs clearRectAllLayers so each cell's *own* source layer gets
+// cleared, not just whatever happens to be active. Either way, paste always
+// lands on the active layer (see pasteCells) — a multi-layer selection
+// flattens onto it on drop, it doesn't reconstruct the original layers.
 
-import { colorAt, paintCell } from './Canvas.js';
+import { colorAt, paintCell, topVisibleLayerAt, eraseFromLayer } from './Canvas.js';
+
+/** Used as a floating-selection preview color when a cell's source layer has a non-solid (gradient) fill, which can't be represented per-cell. */
+const NON_SOLID_FILL_PREVIEW_COLOR = '#888888';
 
 /** @returns {{x0:number,y0:number,x1:number,y1:number}} */
 export function normalizeRect(x0, y0, x1, y1) {
@@ -33,10 +48,56 @@ export function extractRectColors(canvas, rect) {
   return cells;
 }
 
-/** Clears every cell in `rect` — the destructive half of a "move" lift. */
+/**
+ * Reads only `canvas.activeLayerId`'s own cells in `rect`, ignoring every
+ * other layer — even one stacked visibly on top. The advanced-tier
+ * "active layer" selection scope, for isolating one layer's shape when
+ * others happen to overlap it.
+ *
+ * @param {object} canvas
+ * @param {{x0:number,y0:number,x1:number,y1:number}} rect
+ * @returns {{dx:number,dy:number,color:string}[]}
+ */
+export function extractRectFromActiveLayer(canvas, rect) {
+  const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
+  if (!layer) return [];
+  const previewColor = typeof layer.style.fill === 'string' ? layer.style.fill : NON_SOLID_FILL_PREVIEW_COLOR;
+  const cells = [];
+  for (let y = rect.y0; y <= rect.y1; y++) {
+    const ly = y - layer.offset.y;
+    if (ly < 0 || ly >= layer.height) continue;
+    for (let x = rect.x0; x <= rect.x1; x++) {
+      const lx = x - layer.offset.x;
+      if (lx < 0 || lx >= layer.width) continue;
+      if (layer.frames[0].pixels[ly * layer.width + lx]) cells.push({ dx: x - rect.x0, dy: y - rect.y0, color: previewColor });
+    }
+  }
+  return cells;
+}
+
+/** Clears every cell in `rect` from the active layer only — the destructive half of a "move" lift. */
 export function clearRect(canvas, rect) {
   for (let y = rect.y0; y <= rect.y1; y++) {
     for (let x = rect.x0; x <= rect.x1; x++) paintCell(canvas, x, y, null);
+  }
+}
+
+/**
+ * Clears every cell in `rect` from *whichever layer actually owns it*
+ * (topmost visible, same as extractRectColors's read) rather than only the
+ * active layer — the destructive half of an "all visible layers" scoped
+ * move/cut, so a multi-layer selection doesn't leave orphaned content
+ * behind on the layers it didn't happen to be active on.
+ *
+ * @param {object} canvas
+ * @param {{x0:number,y0:number,x1:number,y1:number}} rect
+ */
+export function clearRectAllLayers(canvas, rect) {
+  for (let y = rect.y0; y <= rect.y1; y++) {
+    for (let x = rect.x0; x <= rect.x1; x++) {
+      const layer = topVisibleLayerAt(canvas, x, y);
+      if (layer) eraseFromLayer(layer, x, y);
+    }
   }
 }
 

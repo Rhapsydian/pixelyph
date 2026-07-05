@@ -28,9 +28,16 @@ export function rasterizeRect(grid, x0, y0, x1, y1, { filled = false } = {}) {
 
 /**
  * Midpoint ellipse algorithm (two-region, integer-only) — the standard
- * approach for pixel-grid circles/ellipses. Collects, per scanline, the
- * min/max x the boundary touches; outline plots just those two points per
- * row, filled additionally spans between them.
+ * approach for pixel-grid circles/ellipses. Filled mode collects, per
+ * scanline, the min/max x the boundary touches and spans between them.
+ * Outline mode plots every point the algorithm actually traces — not just
+ * each row's two x-extremes, which loses points and breaks continuity: near
+ * the flat top/bottom of a wide ellipse, the algorithm legitimately plots
+ * several x's for the same row before y next decrements (that's exactly
+ * what "flat" means here), and collapsing those down to only the row's
+ * leftmost/rightmost point can leave the two surviving points several
+ * pixels apart with nothing drawn between them, and no guarantee the row
+ * below reconnects to either one — a visible gap in the outline.
  *
  * @param {import('./Grid.js').Grid} grid
  * @param {number} cx
@@ -51,6 +58,8 @@ export function rasterizeEllipse(grid, cx, cy, rx, ry, { filled = false } = {}) 
 
   /** @type {Map<number, {minX:number,maxX:number}>} */
   const rows = new Map();
+  /** @type {[number, number][]} every point the algorithm actually plots, for outline mode */
+  const points = [];
   const record = (px, py) => {
     const row = rows.get(py);
     if (!row) rows.set(py, { minX: px, maxX: px });
@@ -58,6 +67,7 @@ export function rasterizeEllipse(grid, cx, cy, rx, ry, { filled = false } = {}) 
       row.minX = Math.min(row.minX, px);
       row.maxX = Math.max(row.maxX, px);
     }
+    points.push([px, py]);
   };
   const plot = (x, y) => {
     record(cx + x, cy + y);
@@ -103,12 +113,11 @@ export function rasterizeEllipse(grid, cx, cy, rx, ry, { filled = false } = {}) 
     }
   }
 
-  for (const [py, { minX, maxX }] of rows) {
-    if (filled) {
+  if (filled) {
+    for (const [py, { minX, maxX }] of rows) {
       for (let px = minX; px <= maxX; px++) set(grid, px, py, 1);
-    } else {
-      set(grid, minX, py, 1);
-      set(grid, maxX, py, 1);
     }
+  } else {
+    for (const [px, py] of points) set(grid, px, py, 1);
   }
 }

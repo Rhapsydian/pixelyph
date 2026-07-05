@@ -78,3 +78,49 @@ test('rasterizeEllipse with zero radius plots a single pixel', () => {
     [0, 0, 0],
   ]);
 });
+
+/** @returns {boolean} whether every 'on' pixel in `grid` is reachable from the first one via 8-connected neighbors — i.e. the outline is one unbroken loop, not scattered points with gaps. */
+function isFullyConnected(grid) {
+  const on = [];
+  for (let i = 0; i < grid.pixels.length; i++) if (grid.pixels[i]) on.push(i);
+  if (on.length === 0) return true;
+  const visited = new Set([on[0]]);
+  const stack = [on[0]];
+  while (stack.length > 0) {
+    const idx = stack.pop();
+    const x = idx % grid.width;
+    const y = Math.floor(idx / grid.width);
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= grid.width || ny >= grid.height) continue;
+        const nIdx = ny * grid.width + nx;
+        if (grid.pixels[nIdx] && !visited.has(nIdx)) {
+          visited.add(nIdx);
+          stack.push(nIdx);
+        }
+      }
+    }
+  }
+  return visited.size === on.length;
+}
+
+test('rasterizeEllipse outline has no gaps for a wide, flat ellipse (regression: per-row min/max used to drop the flat cap)', () => {
+  const grid = createGrid(21, 11);
+  rasterizeEllipse(grid, 10, 5, 9, 4, { filled: false });
+  assert.ok(isFullyConnected(grid), 'outline should be one unbroken 8-connected loop');
+});
+
+test('rasterizeEllipse outline has no gaps for a tall, narrow ellipse', () => {
+  const grid = createGrid(11, 21);
+  rasterizeEllipse(grid, 5, 10, 3, 9, { filled: false });
+  assert.ok(isFullyConnected(grid), 'outline should be one unbroken 8-connected loop');
+});
+
+test('rasterizeEllipse outline has no gaps for a circle', () => {
+  const grid = createGrid(15, 15);
+  rasterizeEllipse(grid, 7, 7, 6, 6, { filled: false });
+  assert.ok(isFullyConnected(grid), 'outline should be one unbroken 8-connected loop');
+});

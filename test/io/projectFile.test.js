@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createCanvas, paintCell, resizeCanvas } from '../../src/model/Canvas.js';
+import { createCanvas, paintCell, resizeCanvas, addLayer } from '../../src/model/Canvas.js';
 import { serializeProject, deserializeProject, saveProjectToString, loadProjectFromString, PIXELYPH_VERSION } from '../../src/io/projectFile.js';
 
 test('serializeProject stamps the current pixelyphVersion and kind: draw', () => {
@@ -48,4 +48,19 @@ test('an empty canvas (no layers) round-trips too', () => {
 
 test('deserializeProject rejects a non-draw document', () => {
   assert.throws(() => deserializeProject({ pixelyphVersion: 1, kind: 'glyph', glyphSet: {} }), /expected kind 'draw'/);
+});
+
+test('round-trips an advanced-tier canvas with gradient fill, stroke, effects, and activeLayerId exactly', () => {
+  const canvas = createCanvas({ width: 3, height: 3 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas, { name: 'styled' });
+  paintCell(canvas, 0, 0, 'x');
+  layer.style.fill = { type: 'linear-gradient', angle: 45, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] };
+  layer.style.stroke = { color: '#00ff00', width: 0.2, linecap: 'round', linejoin: 'round', dashArray: [0.5, 0.25] };
+  layer.style.effects = [{ type: 'drop-shadow', dx: 0.2, dy: 0.2, blur: 0.1, color: '#000', opacity: 0.5 }];
+  layer.offset = { x: -2, y: 3 };
+  canvas.activeLayerId = layer.id;
+
+  const restored = loadProjectFromString(saveProjectToString(canvas));
+  assert.deepStrictEqual(restored, canvas);
 });

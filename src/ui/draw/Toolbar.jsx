@@ -35,8 +35,25 @@ export function Toolbar() {
   const undo = useStore((s) => s.undo);
   const redo = useStore((s) => s.redo);
   const toggleTilePreview = useStore((s) => s.toggleTilePreview);
+  const tier = useStore((s) => s.canvas.tier);
+  const setTier = useStore((s) => s.setTier);
+  const selectionScope = useStore((s) => s.selectionScope);
+  const setSelectionScope = useStore((s) => s.setSelectionScope);
 
   const showsShapeToggle = activeTool === 'rectangle' || activeTool === 'ellipse';
+
+  function handleTierChange(newTier) {
+    if (newTier === tier) return;
+    if (
+      newTier === 'simple' &&
+      !window.confirm(
+        'Switching to simple tier collapses every layer to its topmost visible color per cell — gradients, stroke, effects, and free-floating layer positions are lost, and overlapping same-color layers merge. This cannot be undone by switching back. Continue?',
+      )
+    ) {
+      return;
+    }
+    setTier(newTier);
+  }
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', padding: '0.5rem', background: '#1e1e1e', color: '#eee' }}>
@@ -52,9 +69,31 @@ export function Toolbar() {
         ))}
       </div>
 
+      <div style={{ display: 'flex', gap: '0.25rem' }} title="Simple tier hides layer management; advanced tier exposes it">
+        {['simple', 'advanced'].map((t) => (
+          <button
+            key={t}
+            onClick={() => handleTierChange(t)}
+            style={{ fontWeight: tier === t ? 'bold' : 'normal', background: tier === t ? '#4da3ff' : '#333', color: '#fff', border: 'none', padding: '0.35rem 0.6rem', borderRadius: 4, cursor: 'pointer', textTransform: 'capitalize' }}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
       {showsShapeToggle && (
         <label>
           <input type="checkbox" checked={shapeFilled} onChange={(e) => setShapeFilled(e.target.checked)} /> Filled
+        </label>
+      )}
+
+      {tier === 'advanced' && (
+        <label title="Whether Select/Copy/Cut read only the active layer, or whichever visible layer is topmost at each cell">
+          Select from:{' '}
+          <select value={selectionScope} onChange={(e) => setSelectionScope(e.target.value)}>
+            <option value="activeLayer">Active layer</option>
+            <option value="allVisible">All visible layers</option>
+          </select>
         </label>
       )}
 

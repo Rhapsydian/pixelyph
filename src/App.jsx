@@ -5,6 +5,8 @@ import { PaletteSimple } from './ui/draw/PaletteSimple.jsx';
 import { ImportImagePanel } from './ui/draw/ImportImagePanel.jsx';
 import { SvgPixelEditor } from './ui/draw/SvgPixelEditor.jsx';
 import { TilePreviewPanel } from './ui/draw/TilePreviewPanel.jsx';
+import { LayersPanel } from './ui/draw/LayersPanel.jsx';
+import { LayerStylePanel } from './ui/draw/LayerStylePanel.jsx';
 
 const ANCHORS = ['top-left', 'top', 'top-right', 'left', 'center', 'right', 'bottom-left', 'bottom', 'bottom-right'];
 
@@ -97,8 +99,12 @@ export default function App() {
       <Toolbar />
       <PaletteSimple />
       <ImportImagePanel />
-      <div style={{ padding: '1rem' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', padding: '1rem', alignItems: 'flex-start' }}>
         <SvgPixelEditor />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <LayersPanel />
+          <LayerStylePanel />
+        </div>
       </div>
       <TilePreviewPanel />
     </main>
