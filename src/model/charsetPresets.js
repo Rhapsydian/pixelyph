@@ -8,11 +8,58 @@ function range(start, end) {
   return codepoints;
 }
 
+// A curated, not exhaustive, list of commonly-used symbols spanning several
+// Unicode blocks (General Punctuation, Currency Symbols, Arrows,
+// Miscellaneous Symbols, Dingbats) — typographic marks, arrows, weather/
+// smiley/star glyphs, the four card suits, music notes, and check/ballot
+// marks. Deliberately not the full contents of any one block (e.g.
+// Miscellaneous Symbols alone is 256 codepoints, most of them obscure);
+// this is "what a general-purpose pixel font commonly wants," not a
+// systematic block dump.
+const SYMBOLS_CODEPOINTS = [
+  0x2013, // – en dash
+  0x2014, // — em dash
+  0x2018, // ' left single quotation mark
+  0x2019, // ' right single quotation mark
+  0x201c, // " left double quotation mark
+  0x201d, // " right double quotation mark
+  0x2020, // † dagger
+  0x2022, // • bullet
+  0x2026, // … horizontal ellipsis
+  0x20ac, // € euro sign
+  0x2190, // ← leftwards arrow
+  0x2191, // ↑ upwards arrow
+  0x2192, // → rightwards arrow
+  0x2193, // ↓ downwards arrow
+  0x2600, // ☀ black sun with rays
+  0x2601, // ☁ cloud
+  0x2602, // ☂ umbrella
+  0x2605, // ★ black star
+  0x2606, // ☆ white star
+  0x260e, // ☎ black telephone
+  0x2614, // ☔ umbrella with rain drops
+  0x2639, // ☹ white frowning face
+  0x263a, // ☺ white smiling face
+  0x2660, // ♠ black spade suit
+  0x2663, // ♣ black club suit
+  0x2665, // ♥ black heart suit
+  0x2666, // ♦ black diamond suit
+  0x266a, // ♪ eighth note
+  0x266b, // ♫ beamed eighth notes
+  0x2708, // ✈ airplane
+  0x2709, // ✉ envelope
+  0x2713, // ✓ check mark
+  0x2714, // ✔ heavy check mark
+  0x2717, // ✗ ballot x
+  0x2718, // ✘ heavy ballot x
+  0x2764, // ❤ heavy black heart
+];
+
 export const CHARSET_PRESETS = {
   'basic-latin': { label: 'Basic Latin (ASCII printable)', codepoints: () => range(0x20, 0x7e) },
   'latin-1-supplement': { label: 'Latin-1 Supplement', codepoints: () => range(0xa0, 0xff) },
   digits: { label: 'Digits (0-9)', codepoints: () => range(0x30, 0x39) },
-  'card-suits': { label: 'Card Suits (♠ ♣ ♥ ♦)', codepoints: () => [0x2660, 0x2663, 0x2665, 0x2666] },
+  symbols: { label: 'Symbols (♠ ★ ✓ →)', codepoints: () => SYMBOLS_CODEPOINTS.slice() },
 };
 
 export const CHARSET_PRESET_IDS = Object.keys(CHARSET_PRESETS);

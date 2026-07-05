@@ -31,13 +31,20 @@ test('every preset in the registry is reachable through presetCodepoints', () =>
   }
 });
 
-test('card-suits preset yields exactly the four suit codepoints', () => {
-  assert.deepEqual(presetCodepoints('card-suits'), [0x2660, 0x2663, 0x2665, 0x2666]);
+test('symbols preset includes the four card suits, deduplicated and sorted ascending', () => {
+  const codepoints = presetCodepoints('symbols');
+  assert.ok(codepoints.includes(0x2660), 'spade');
+  assert.ok(codepoints.includes(0x2663), 'club');
+  assert.ok(codepoints.includes(0x2665), 'heart');
+  assert.ok(codepoints.includes(0x2666), 'diamond');
+  assert.deepEqual(codepoints, [...new Set(codepoints)].sort((a, b) => a - b)); // no dupes, ascending
 });
 
 test('mergedPresetCodepoints unions non-overlapping presets in sorted order', () => {
-  const merged = mergedPresetCodepoints(['digits', 'card-suits']);
-  assert.deepEqual(merged, [0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x2660, 0x2663, 0x2665, 0x2666]);
+  const merged = mergedPresetCodepoints(['digits', 'symbols']);
+  // digits (0x30-0x39) are numerically below every symbols codepoint, so a
+  // sorted union is exactly digits-then-symbols here.
+  assert.deepEqual(merged, [...presetCodepoints('digits'), ...presetCodepoints('symbols')]);
 });
 
 test('mergedPresetCodepoints deduplicates an overlap (Digits sits entirely inside Basic Latin)', () => {
