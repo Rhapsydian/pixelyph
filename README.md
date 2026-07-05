@@ -39,7 +39,7 @@ Early development. Draw mode (both tiers), Glyph mode, and project management (s
 **Glyph mode** — one plain grid per glyph rather than layered artwork. Reuses the exact same live-SVG pixel editor as Draw mode (same tools, undo/redo, zoom/pan, grid overlay) via a single-color pseudo-canvas adapter, so there's no separate glyph-painting implementation:
 
 - `GlyphSet`/`Glyph` model in two kinds: **character** sets (one Unicode codepoint per glyph, assigned by typing the character itself or `U+00E9`) and **icon** sets (named glyphs with auto-assigned Private Use Area codepoints the user never has to type)
-- Character-map grid with starter charset presets (Basic Latin, Latin-1 Supplement, digits) showing a thumbnail or empty placeholder per codepoint; reassigning an already-used codepoint asks for confirmation before replacing it
+- Character-map grid with starter charset presets (Basic Latin, Latin-1 Supplement, Symbols) showing a thumbnail or empty placeholder per codepoint; reassigning an already-used codepoint asks for confirmation before replacing it
 - Shared thumbnail browser for both kinds — sorted by codepoint or by name, with search/filter — click a thumbnail to make it the active glyph
 - Font metadata form (family/style name, units-per-em, ascender/descender, baseline row, icon tile padding), with a confirm-before-resize prompt when changing pixels-per-em, since that crops or pads every glyph's grid
 - Specimen preview: a live text-entry preview for character sets, or clickable icon swatches that insert into the same preview for icon sets

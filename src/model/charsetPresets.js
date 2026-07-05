@@ -58,7 +58,6 @@ const SYMBOLS_CODEPOINTS = [
 export const CHARSET_PRESETS = {
   'basic-latin': { label: 'Basic Latin (ASCII printable)', codepoints: () => range(0x20, 0x7e) },
   'latin-1-supplement': { label: 'Latin-1 Supplement', codepoints: () => range(0xa0, 0xff) },
-  digits: { label: 'Digits (0-9)', codepoints: () => range(0x30, 0x39) },
   symbols: { label: 'Symbols (♠ ★ ✓ →)', codepoints: () => SYMBOLS_CODEPOINTS.slice() },
 };
 

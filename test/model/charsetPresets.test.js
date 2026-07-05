@@ -9,10 +9,6 @@ test('basic-latin preset yields the ASCII printable range', () => {
   assert.equal(codepoints.length, 0x7e - 0x20 + 1);
 });
 
-test('digits preset yields exactly 0-9', () => {
-  const codepoints = presetCodepoints('digits');
-  assert.deepEqual(codepoints, [0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39]);
-});
 
 test('latin-1-supplement preset yields the expected range', () => {
   const codepoints = presetCodepoints('latin-1-supplement');
@@ -41,19 +37,19 @@ test('symbols preset includes the four card suits, deduplicated and sorted ascen
 });
 
 test('mergedPresetCodepoints unions non-overlapping presets in sorted order', () => {
-  const merged = mergedPresetCodepoints(['digits', 'symbols']);
-  // digits (0x30-0x39) are numerically below every symbols codepoint, so a
-  // sorted union is exactly digits-then-symbols here.
-  assert.deepEqual(merged, [...presetCodepoints('digits'), ...presetCodepoints('symbols')]);
+  const merged = mergedPresetCodepoints(['latin-1-supplement', 'symbols']);
+  // latin-1-supplement (0xa0-0xff) sits entirely below every symbols codepoint
+  // (0x2013+), so the sorted union is supplement-then-symbols.
+  assert.deepEqual(merged, [...presetCodepoints('latin-1-supplement'), ...presetCodepoints('symbols')]);
 });
 
-test('mergedPresetCodepoints deduplicates an overlap (Digits sits entirely inside Basic Latin)', () => {
-  const merged = mergedPresetCodepoints(['basic-latin', 'digits']);
-  assert.deepEqual(merged, presetCodepoints('basic-latin')); // digits contribute nothing new
+test('mergedPresetCodepoints deduplicates when the same preset appears twice', () => {
+  const merged = mergedPresetCodepoints(['basic-latin', 'basic-latin']);
+  assert.deepEqual(merged, presetCodepoints('basic-latin'));
 });
 
 test('mergedPresetCodepoints returns [] for an empty selection and ignores unknown ids', () => {
   assert.deepEqual(mergedPresetCodepoints([]), []);
   assert.deepEqual(mergedPresetCodepoints(['not-a-real-preset']), []);
-  assert.deepEqual(mergedPresetCodepoints(['digits', 'not-a-real-preset']), presetCodepoints('digits'));
+  assert.deepEqual(mergedPresetCodepoints(['symbols', 'not-a-real-preset']), presetCodepoints('symbols'));
 });

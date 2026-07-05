@@ -52,8 +52,8 @@ test('buildGlyphDocument defaults familyName to Untitled', () => {
 });
 
 test('buildGlyphDocument captures initialPreset in the returned object', () => {
-  const { initialPreset } = buildGlyphDocument({ initialPreset: 'digits' });
-  assert.equal(initialPreset, 'digits');
+  const { initialPreset } = buildGlyphDocument({ initialPreset: 'symbols' });
+  assert.equal(initialPreset, 'symbols');
 });
 
 test('buildGlyphDocument defaults initialPreset to basic-latin', () => {
