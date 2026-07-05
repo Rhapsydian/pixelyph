@@ -63,6 +63,10 @@ npm run dev    # start the dev server
 npm test       # run node --test
 ```
 
+## Session logs
+
+The [`session-logs/`](./session-logs/) directory contains a markdown log for each Claude Code session used to build Pixelyph, written from the actual session transcripts. Each log covers the goal, key decisions (with rationale), work completed, and what was deferred. They are intended as a transparent record of how the project was conceived and built, and as a demonstration of AI-assisted development as a practical workflow.
+
 ## License
 
 MIT
