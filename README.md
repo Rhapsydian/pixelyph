@@ -5,6 +5,8 @@
 
 A pixel-art and pixel-font editor that outputs scalable SVG (and real font files) via [pixelloom](https://github.com/Rhapsydian/pixelloom), instead of raster images.
 
+**Live demo:** [rhapsydian.github.io/pixelyph](https://rhapsydian.github.io/pixelyph/)
+
 ## Status
 
 Early development. Draw mode's simple tier is implemented — see "Features" below. Advanced-tier layers, Glyph mode, font export, the Electron desktop shell, animation, and a visual design pass are still ahead.
