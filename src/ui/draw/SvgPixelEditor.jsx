@@ -182,9 +182,12 @@ export function SvgPixelEditor() {
     const rect = svgRef.current.getBoundingClientRect();
     const px = ((evt.clientX - rect.left) / rect.width) * live.width;
     const py = ((evt.clientY - rect.top) / rect.height) * live.height;
+    const activeL = live.tier === 'advanced' ? live.layers?.find((l) => l.id === live.activeLayerId) : null;
+    const ox = activeL?.offset.x ?? 0;
+    const oy = activeL?.offset.y ?? 0;
     return {
-      x: Math.min(live.width - 1, Math.max(0, Math.floor(px))),
-      y: Math.min(live.height - 1, Math.max(0, Math.floor(py))),
+      x: Math.min(live.width - 1, Math.max(0, Math.floor(px - ox) + ox)),
+      y: Math.min(live.height - 1, Math.max(0, Math.floor(py - oy) + oy)),
     };
   }
 
