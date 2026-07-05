@@ -8,7 +8,11 @@
     "checkJs": true,
     "strict": false,
     "noEmit": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "quantize": ["src/types/quantize.d.ts"]
+    }
   },
   "include": ["src/**/*", "test/**/*"]
 }
