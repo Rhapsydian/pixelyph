@@ -20,6 +20,7 @@ const SYMMETRY_OPTIONS = [
 ];
 
 export function Toolbar() {
+  const mode = useStore((s) => s.mode);
   const activeTool = useStore((s) => s.activeTool);
   const setActiveTool = useStore((s) => s.setActiveTool);
   const shapeFilled = useStore((s) => s.shapeFilled);
@@ -40,6 +41,11 @@ export function Toolbar() {
   const selectionScope = useStore((s) => s.selectionScope);
   const setSelectionScope = useStore((s) => s.setSelectionScope);
 
+  const isGlyphMode = mode === 'glyph';
+  // Glyph mode has no marquee-select/move-copy-paste story yet (see the
+  // plan's Phase 3 scope) — hidden here rather than left reachable with a
+  // Draw-canvas-sized selection silently misapplied to the glyph editor.
+  const toolNames = isGlyphMode ? TOOL_NAMES.filter((name) => name !== 'marqueeSelect') : TOOL_NAMES;
   const showsShapeToggle = activeTool === 'rectangle' || activeTool === 'ellipse';
 
   function handleTierChange(newTier) {
@@ -58,7 +64,7 @@ export function Toolbar() {
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', padding: '0.5rem', background: '#1e1e1e', color: '#eee' }}>
       <div style={{ display: 'flex', gap: '0.25rem' }}>
-        {TOOL_NAMES.map((name) => (
+        {toolNames.map((name) => (
           <button
             key={name}
             onClick={() => setActiveTool(name)}
@@ -69,17 +75,19 @@ export function Toolbar() {
         ))}
       </div>
 
-      <div style={{ display: 'flex', gap: '0.25rem' }} title="Simple tier hides layer management; advanced tier exposes it">
-        {['simple', 'advanced'].map((t) => (
-          <button
-            key={t}
-            onClick={() => handleTierChange(t)}
-            style={{ fontWeight: tier === t ? 'bold' : 'normal', background: tier === t ? '#4da3ff' : '#333', color: '#fff', border: 'none', padding: '0.35rem 0.6rem', borderRadius: 4, cursor: 'pointer', textTransform: 'capitalize' }}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      {!isGlyphMode && (
+        <div style={{ display: 'flex', gap: '0.25rem' }} title="Simple tier hides layer management; advanced tier exposes it">
+          {['simple', 'advanced'].map((t) => (
+            <button
+              key={t}
+              onClick={() => handleTierChange(t)}
+              style={{ fontWeight: tier === t ? 'bold' : 'normal', background: tier === t ? '#4da3ff' : '#333', color: '#fff', border: 'none', padding: '0.35rem 0.6rem', borderRadius: 4, cursor: 'pointer', textTransform: 'capitalize' }}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
 
       {showsShapeToggle && (
         <label>
@@ -87,7 +95,7 @@ export function Toolbar() {
         </label>
       )}
 
-      {tier === 'advanced' && (
+      {!isGlyphMode && tier === 'advanced' && (
         <label title="Whether Select/Copy/Cut read only the active layer, or whichever visible layer is topmost at each cell">
           Select from:{' '}
           <select value={selectionScope} onChange={(e) => setSelectionScope(e.target.value)}>
@@ -97,16 +105,18 @@ export function Toolbar() {
         </label>
       )}
 
-      <label>
-        Symmetry:{' '}
-        <select value={symmetryMode} onChange={(e) => setSymmetryMode(e.target.value)}>
-          {SYMMETRY_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      {!isGlyphMode && (
+        <label>
+          Symmetry:{' '}
+          <select value={symmetryMode} onChange={(e) => setSymmetryMode(e.target.value)}>
+            {SYMMETRY_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <label>
         Zoom:{' '}
@@ -127,7 +137,7 @@ export function Toolbar() {
         </button>
       </div>
 
-      <button onClick={toggleTilePreview}>Tile Preview</button>
+      {!isGlyphMode && <button onClick={toggleTilePreview}>Tile Preview</button>}
     </div>
   );
 }

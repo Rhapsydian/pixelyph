@@ -22,13 +22,30 @@ import { ReferenceImageLayer } from './ReferenceImageLayer.jsx';
 import { TransparencyBackground } from './TransparencyBackground.jsx';
 import { composeLayersBody } from '../../export/svg/composeLayersSvg.js';
 
+/**
+ * The Canvas-shaped document this editor is currently painting: Draw mode's
+ * real `canvas`, or — in glyph mode — the active glyph re-wrapped as a
+ * single-color pseudo-Canvas (GlyphSet.glyphToCanvas, built by the store).
+ * Null in glyph mode until a glyph is selected. This one indirection is
+ * what lets GlyphGridEditor reuse this component verbatim rather than
+ * needing its own copy of the painting/rendering logic (see the plan's
+ * "GlyphGridEditor reuses SvgPixelEditor" note).
+ */
+function getActiveDocument() {
+  const s = useStore.getState();
+  return s.mode === 'glyph' ? s.glyphCanvas : s.canvas;
+}
+
 export function SvgPixelEditor() {
+  const mode = useStore((s) => s.mode);
   const canvas = useStore((s) => s.canvas);
+  const glyphCanvas = useStore((s) => s.glyphCanvas);
   const activeTool = useStore((s) => s.activeTool);
   const zoom = useStore((s) => s.zoom);
   const showGrid = useStore((s) => s.showGrid);
   const selection = useStore((s) => s.selection);
   const floatingSelection = useStore((s) => s.floatingSelection);
+  const doc = mode === 'glyph' ? glyphCanvas : canvas;
 
   const svgRef = useRef(null);
   const dragRef = useRef({ mode: null, start: null, origin: null });
@@ -94,7 +111,12 @@ export function SvgPixelEditor() {
           evt.preventDefault();
           state.pasteClipboard();
         }
-      } else if (isSelectAll) {
+      } else if (isSelectAll && state.mode !== 'glyph') {
+        // Selection/marquee has no glyph-mode equivalent yet (see the plan's
+        // Phase 3 scope) — guarded here rather than left to rely on
+        // marqueeSelect simply not being offered in glyph mode's Toolbar,
+        // since Ctrl+A would otherwise still stamp a Draw-canvas-sized
+        // selection into state while a glyph is being edited.
         evt.preventDefault();
         state.selectAll();
       }
@@ -114,13 +136,13 @@ export function SvgPixelEditor() {
         return useStore.getState().shapeFilled;
       },
       get canvasWidth() {
-        return useStore.getState().canvas.width;
+        return getActiveDocument()?.width ?? 0;
       },
       get canvasHeight() {
-        return useStore.getState().canvas.height;
+        return getActiveDocument()?.height ?? 0;
       },
       get tier() {
-        return useStore.getState().canvas.tier;
+        return getActiveDocument()?.tier ?? 'simple';
       },
       selectTopLayerAt: (x, y) => {
         useStore.getState().selectTopLayerAt(x, y);
@@ -156,7 +178,7 @@ export function SvgPixelEditor() {
   );
 
   function clientToCell(evt) {
-    const live = useStore.getState().canvas;
+    const live = getActiveDocument();
     const rect = svgRef.current.getBoundingClientRect();
     const px = ((evt.clientX - rect.left) / rect.width) * live.width;
     const py = ((evt.clientY - rect.top) / rect.height) * live.height;
@@ -187,32 +209,31 @@ export function SvgPixelEditor() {
     tools[activeTool].onPointerUp(ctx, x, y);
   }
 
-  const live = useStore.getState().canvas;
-  const pixelWidth = live.width * zoom;
-  const pixelHeight = live.height * zoom;
+  const pixelWidth = (doc?.width ?? 0) * zoom;
+  const pixelHeight = (doc?.height ?? 0) * zoom;
 
   // Same composeLayersBody used for export, injected verbatim — so the
   // editing surface can't drift from what actually gets exported (gradients,
   // stroke, filters included) without also failing here.
   //
   // `tickCount` has to be a dependency here even though composeLayersBody
-  // never reads it: paintCellLive mutates `live`/`canvas` in place (see the
-  // file header) rather than swapping in a new reference, so during a
-  // pencil/eraser drag those two objects stay reference-equal render over
+  // never reads it: paintCellLive mutates `doc` in place (see the file
+  // header) rather than swapping in a new reference, so during a
+  // pencil/eraser drag that object stays reference-equal render over
   // render. Without `tickCount` in the deps, useMemo would see "nothing
   // changed" and keep returning the pre-stroke markup until pointer-up's
-  // commitStroke() finally produces a new canvas reference — i.e. every
-  // cell painted mid-drag would be invisible until mouse-up. `tickCount` is
-  // the one thing that reliably changes on every paintCellLive call, so
+  // commitStroke() finally produces a new reference — i.e. every cell
+  // painted mid-drag would be invisible until mouse-up. `tickCount` is the
+  // one thing that reliably changes on every paintCellLive call, so
   // including it forces a recompute each time.
   const { body, defs } = useMemo(
-    () => composeLayersBody(live),
+    () => (doc ? composeLayersBody(doc) : { body: '', defs: [] }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [live, canvas, tickCount],
+    [doc, canvas, glyphCanvas, tickCount],
   );
   const defsHtml = defs.length ? `<defs>${defs.join('')}</defs>` : '';
 
-  const activeLayer = live.tier === 'advanced' ? live.layers.find((l) => l.id === live.activeLayerId) : null;
+  const activeLayer = doc && doc.tier === 'advanced' ? doc.layers.find((l) => l.id === doc.activeLayerId) : null;
 
   const normalizedSelection = selection && {
     x0: Math.min(selection.x0, selection.x1),
@@ -221,21 +242,39 @@ export function SvgPixelEditor() {
     y1: Math.max(selection.y0, selection.y1),
   };
 
+  if (!doc) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: 200,
+          border: '1px solid #444',
+          background: '#2a2a2a',
+          color: '#888',
+        }}
+      >
+        No glyph selected — pick or create one from the glyph panel.
+      </div>
+    );
+  }
+
   return (
     <div style={{ overflow: 'auto', border: '1px solid #444', background: '#2a2a2a', maxWidth: '100%', maxHeight: '70vh' }}>
       <svg
         ref={svgRef}
         width={pixelWidth}
         height={pixelHeight}
-        viewBox={`0 0 ${live.width} ${live.height}`}
+        viewBox={`0 0 ${doc.width} ${doc.height}`}
         style={{ display: 'block', touchAction: 'none', cursor: 'crosshair' }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
       >
-        <TransparencyBackground width={live.width} height={live.height} />
+        <TransparencyBackground width={doc.width} height={doc.height} />
         {defsHtml && <g dangerouslySetInnerHTML={{ __html: defsHtml }} />}
-        {live.referenceImage && <ReferenceImageLayer referenceImage={live.referenceImage} width={live.width} height={live.height} />}
+        {doc.referenceImage && <ReferenceImageLayer referenceImage={doc.referenceImage} width={doc.width} height={doc.height} />}
         <g dangerouslySetInnerHTML={{ __html: body }} />
         {activeLayer && (
           <rect
@@ -285,7 +324,7 @@ export function SvgPixelEditor() {
             strokeDasharray="0.3,0.2"
           />
         )}
-        {showGrid && <GridOverlay width={live.width} height={live.height} />}
+        {showGrid && <GridOverlay width={doc.width} height={doc.height} />}
         {cursorCell && <BrushCursor x={cursorCell.x} y={cursorCell.y} />}
       </svg>
     </div>

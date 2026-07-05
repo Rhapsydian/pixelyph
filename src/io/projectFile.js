@@ -106,3 +106,67 @@ export function saveProjectToString(canvas) {
 export function loadProjectFromString(text) {
   return deserializeProject(JSON.parse(text));
 }
+
+function serializeGlyph(glyph) {
+  return {
+    width: glyph.width,
+    height: glyph.height,
+    pixels: bytesToBase64(glyph.pixels),
+    advanceWidth: glyph.advanceWidth,
+    leftSideBearing: glyph.leftSideBearing,
+    name: glyph.name,
+  };
+}
+
+function deserializeGlyph(glyph) {
+  return {
+    width: glyph.width,
+    height: glyph.height,
+    pixels: base64ToBytes(glyph.pixels),
+    advanceWidth: glyph.advanceWidth,
+    leftSideBearing: glyph.leftSideBearing,
+    name: glyph.name,
+  };
+}
+
+/**
+ * @param {object} glyphSet GlyphSet
+ * @returns {object} a JSON-safe `.pixelyph` document (kind: 'glyph')
+ */
+export function serializeGlyphSetProject(glyphSet) {
+  return {
+    pixelyphVersion: PIXELYPH_VERSION,
+    kind: 'glyph',
+    glyphSet: {
+      id: glyphSet.id,
+      kind: glyphSet.kind,
+      meta: glyphSet.meta,
+      glyphs: Array.from(glyphSet.glyphs.entries()).map(([codepoint, glyph]) => [codepoint, serializeGlyph(glyph)]),
+    },
+  };
+}
+
+/**
+ * @param {object} doc a parsed `.pixelyph` document
+ * @returns {object} GlyphSet
+ */
+export function deserializeGlyphSetProject(doc) {
+  if (doc.kind !== 'glyph') throw new Error(`deserializeGlyphSetProject: expected kind 'glyph', got '${doc.kind}'`);
+  const gs = doc.glyphSet;
+  return {
+    id: gs.id,
+    kind: gs.kind,
+    meta: gs.meta,
+    glyphs: new Map(gs.glyphs.map(([codepoint, glyph]) => [codepoint, deserializeGlyph(glyph)])),
+  };
+}
+
+/** @returns {string} pretty-printed JSON, ready to write to a `.pixelyph` file */
+export function saveGlyphProjectToString(glyphSet) {
+  return JSON.stringify(serializeGlyphSetProject(glyphSet), null, 2);
+}
+
+/** @returns {object} GlyphSet, reconstructed from a `.pixelyph` file's contents */
+export function loadGlyphProjectFromString(text) {
+  return deserializeGlyphSetProject(JSON.parse(text));
+}

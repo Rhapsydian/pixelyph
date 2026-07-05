@@ -31,9 +31,12 @@ import { decodeImageFile } from '../io/imageDecode.js';
 import { composeLayersSvg } from '../export/svg/composeLayersSvg.js';
 import { rasterizeFrame } from '../export/raster/rasterizeFrame.js';
 import { copySvgToClipboard } from '../export/clipboard.js';
-import { serializeProject, deserializeProject, saveProjectToString, loadProjectFromString } from '../io/projectFile.js';
+import { serializeProject, deserializeProject, saveProjectToString, loadProjectFromString, serializeGlyphSetProject, deserializeGlyphSetProject, saveGlyphProjectToString, loadGlyphProjectFromString } from '../io/projectFile.js';
 import { saveFile, openFile } from '../io/platform.js';
 import { readAutosave, clearAutosave, createAutosaveScheduler } from '../io/autosave.js';
+import { createGlyphSet, createGlyph, setGlyph as setGlyphModel, removeGlyph as removeGlyphModel, nextIconCodepoint, resizeGlyphSet as resizeGlyphSetModel, glyphToCanvas, canvasToGlyphPixels } from '../model/GlyphSet.js';
+import { resize as resizeGrid } from '../model/Grid.js';
+import { glyphToSvg } from '../export/svg/glyphSvg.js';
 
 const DEFAULT_WIDTH = 16;
 const DEFAULT_HEIGHT = 16;
@@ -55,6 +58,25 @@ function applyContentSnapshot(canvas, snapshot) {
   // activeLayerId is excluded from snapshots (a working-session concern,
   // not artwork), so a restored `layers` array might no longer contain it.
   clampActiveLayer(canvas);
+}
+
+/**
+ * The undoable content of a GlyphSet — everything except `id` (stable
+ * document identity, not artwork) and the working-session `activeCodepoint`
+ * pointer (kept in the store, like Canvas.activeLayerId, not the snapshot).
+ * `glyphs` is snapshotted as an array of entries rather than the live Map so
+ * it matches the plain-data shape history.js's own generic test documents,
+ * though structuredClone (which pushSnapshot/undo/redo use) would clone a
+ * Map just as well.
+ */
+function glyphContentSnapshot(glyphSet) {
+  return { kind: glyphSet.kind, meta: glyphSet.meta, glyphs: Array.from(glyphSet.glyphs.entries()) };
+}
+
+function applyGlyphContentSnapshot(glyphSet, snapshot) {
+  glyphSet.kind = snapshot.kind;
+  glyphSet.meta = snapshot.meta;
+  glyphSet.glyphs = new Map(snapshot.glyphs);
 }
 
 /** Read side of a selection, honoring `selectionScope` in advanced tier (simple tier only ever has one meaningful reading). */
@@ -90,11 +112,51 @@ export const useStore = create((set, get) => {
     autosaveScheduler(serializeProject(canvas));
   }
 
+  /**
+   * Glyph mode's equivalent of commit(): reads the active glyph's pixels
+   * back out of `glyphCanvas` (see GlyphSet.canvasToGlyphPixels — the
+   * pseudo-canvas's auto layer may have been recreated with a fresh
+   * Uint8Array mid-stroke, so this can't rely on reference identity),
+   * pushes one snapshot of the *whole* GlyphSet onto glyphHistory (matching
+   * how Draw mode's history snapshots the whole multi-layer Canvas, not
+   * just the one layer being painted), and schedules the same debounced
+   * autosave Draw mode uses.
+   */
+  function commitGlyph() {
+    const { glyphSet, glyphCanvas, activeCodepoint, glyphHistory } = get();
+    if (!glyphCanvas || activeCodepoint == null) return;
+    const glyph = glyphSet.glyphs.get(activeCodepoint);
+    if (!glyph) return;
+    glyph.pixels = canvasToGlyphPixels(glyphCanvas);
+    pushSnapshot(glyphHistory, glyphContentSnapshot(glyphSet));
+    set({ glyphSet: { ...glyphSet }, glyphHistory: { ...glyphHistory }, canUndo: historyCanUndo(glyphHistory), canRedo: historyCanRedo(glyphHistory) });
+    autosaveScheduler(serializeGlyphSetProject(glyphSet));
+  }
+
+  /** Re-derives canUndo/canRedo from whichever mode's history is currently active — needed on every mode switch, since Toolbar's undo/redo buttons read these two shared fields regardless of mode. */
+  function refreshUndoRedoFlags() {
+    const { mode, history, glyphHistory } = get();
+    const active = mode === 'glyph' ? glyphHistory : history;
+    set({ canUndo: active ? historyCanUndo(active) : false, canRedo: active ? historyCanRedo(active) : false });
+  }
+
   return {
     canvas: initialCanvas,
     history: createHistory(contentSnapshot(initialCanvas)),
     canUndo: false,
     canRedo: false,
+
+    // --- Glyph mode: a separate document from Draw mode's canvas, kept
+    // alongside it (not replacing `canvas`) so switching modes never loses
+    // work in either. `glyphCanvas` is the active glyph re-wrapped as a
+    // single-color 'simple'-tier pseudo-Canvas (GlyphSet.glyphToCanvas) so
+    // SvgPixelEditor/tools/paintCell need no glyph-specific logic at all —
+    // see GlyphSet.js's file header.
+    mode: 'draw', // 'draw' | 'glyph'
+    glyphSet: null,
+    glyphHistory: null,
+    glyphCanvas: null,
+    activeCodepoint: null, // working-session pointer, like activeLayerId — not part of glyphHistory snapshots
 
     activeTool: 'pencil',
     activeColor: DEFAULT_PALETTE[0],
@@ -144,17 +206,26 @@ export const useStore = create((set, get) => {
       touchCanvas();
     },
 
-    /** Mirror-aware per-cell paint, mutating in place with no React render — the hot pointer-drag path. */
+    /** Mirror-aware per-cell paint, mutating in place with no React render — the hot pointer-drag path. Glyph mode has no symmetry concept, so it paints straight into `glyphCanvas` with no mirroring. */
     paintCellLive: (x, y, color) => {
+      const { mode, glyphCanvas } = get();
+      if (mode === 'glyph') {
+        if (glyphCanvas) paintCanvasCell(glyphCanvas, x, y, color);
+        return;
+      }
       const { canvas } = get();
       for (const p of mirrorPoints(canvas.width, canvas.height, x, y, canvas.symmetryMode)) {
         paintCanvasCell(canvas, p.x, p.y, color);
       }
     },
     /** Call once per finished stroke/fill/paste (pointer-up), not per cell. */
-    commitStroke: () => commit(),
+    commitStroke: () => (get().mode === 'glyph' ? commitGlyph() : commit()),
 
-    colorAt: (x, y) => colorAt(get().canvas, x, y),
+    colorAt: (x, y) => {
+      const { mode, glyphCanvas, canvas } = get();
+      if (mode === 'glyph') return glyphCanvas ? colorAt(glyphCanvas, x, y) : null;
+      return colorAt(canvas, x, y);
+    },
 
     // --- Advanced tier: layers panel + per-layer style ---
     // activeLayerId is a working-session pointer like symmetryMode/referenceImage
@@ -221,6 +292,22 @@ export const useStore = create((set, get) => {
     },
 
     undo: () => {
+      if (get().mode === 'glyph') {
+        const { glyphSet, glyphHistory, activeCodepoint } = get();
+        const snapshot = historyUndo(glyphHistory);
+        if (!snapshot) return;
+        applyGlyphContentSnapshot(glyphSet, snapshot);
+        const activeGlyph = activeCodepoint != null ? glyphSet.glyphs.get(activeCodepoint) : null;
+        set({
+          glyphSet: { ...glyphSet },
+          glyphHistory: { ...glyphHistory },
+          glyphCanvas: activeGlyph ? glyphToCanvas(activeGlyph) : null,
+          canUndo: historyCanUndo(glyphHistory),
+          canRedo: historyCanRedo(glyphHistory),
+        });
+        autosaveScheduler(serializeGlyphSetProject(glyphSet));
+        return;
+      }
       const { canvas, history } = get();
       const snapshot = historyUndo(history);
       if (!snapshot) return;
@@ -229,6 +316,22 @@ export const useStore = create((set, get) => {
       autosaveScheduler(serializeProject(canvas));
     },
     redo: () => {
+      if (get().mode === 'glyph') {
+        const { glyphSet, glyphHistory, activeCodepoint } = get();
+        const snapshot = historyRedo(glyphHistory);
+        if (!snapshot) return;
+        applyGlyphContentSnapshot(glyphSet, snapshot);
+        const activeGlyph = activeCodepoint != null ? glyphSet.glyphs.get(activeCodepoint) : null;
+        set({
+          glyphSet: { ...glyphSet },
+          glyphHistory: { ...glyphHistory },
+          glyphCanvas: activeGlyph ? glyphToCanvas(activeGlyph) : null,
+          canUndo: historyCanUndo(glyphHistory),
+          canRedo: historyCanRedo(glyphHistory),
+        });
+        autosaveScheduler(serializeGlyphSetProject(glyphSet));
+        return;
+      }
       const { canvas, history } = get();
       const snapshot = historyRedo(history);
       if (!snapshot) return;
@@ -251,6 +354,140 @@ export const useStore = create((set, get) => {
       if (colors.length === 0) return;
       get().canvas.palette = colors;
       commit();
+    },
+
+    // --- Glyph mode: GlyphSet document, separate from Draw mode's `canvas`
+    // (both are kept in memory at once so switching modes never loses
+    // work). Content-mutating actions here mirror Draw mode's granularity:
+    // one commit (history snapshot + autosave) per finished user action —
+    // create/replace a glyph, remove one, edit font metadata, resize.
+    /** Switches which document SvgPixelEditor/Toolbar operate on. Lazily starts a blank characters GlyphSet the first time glyph mode is entered. */
+    setMode: (mode) => {
+      if (mode === get().mode) return;
+      if (mode === 'glyph' && !get().glyphSet) {
+        get().newGlyphProject('characters');
+        return; // newGlyphProject already sets mode and refreshes undo/redo flags
+      }
+      set({ mode });
+      refreshUndoRedoFlags();
+    },
+    /** Starts a fresh GlyphSet of `kind`, discarding any glyph work in progress — callers should confirm first if one already exists (same destructive-action pattern as the Draw-mode tier toggle). */
+    newGlyphProject: (kind = 'characters') => {
+      const glyphSet = createGlyphSet({ kind });
+      set({ mode: 'glyph', glyphSet, glyphHistory: createHistory(glyphContentSnapshot(glyphSet)), activeCodepoint: null, glyphCanvas: null });
+      refreshUndoRedoFlags();
+    },
+    /** Makes `codepoint` the active glyph (or clears the editor if it has no glyph yet) — a working-session pointer move, not a committed action. */
+    selectGlyph: (codepoint) => {
+      const { glyphSet } = get();
+      const glyph = glyphSet.glyphs.get(codepoint);
+      set({ activeCodepoint: codepoint, glyphCanvas: glyph ? glyphToCanvas(glyph) : null });
+    },
+    /**
+     * Creates a new blank glyph at `codepoint` (replacing any existing one)
+     * and makes it active — the character-map "type a character/U+XXXX to
+     * assign" flow. Whether replacing an existing glyph needs confirming is
+     * the caller's job (see GlyphSet.wouldCollide), same division of labor
+     * as Draw mode's tier-toggle confirm living in Toolbar, not the store.
+     */
+    assignCodepoint: (codepoint, { name } = {}) => {
+      const { glyphSet, glyphHistory } = get();
+      const width = Math.max(1, Math.round(glyphSet.meta.pixelsPerEm * 0.75));
+      const glyph = createGlyph({ width, height: glyphSet.meta.pixelsPerEm, name: name ?? '' });
+      setGlyphModel(glyphSet, codepoint, glyph);
+      pushSnapshot(glyphHistory, glyphContentSnapshot(glyphSet));
+      set({ glyphSet: { ...glyphSet }, glyphHistory: { ...glyphHistory }, activeCodepoint: codepoint, glyphCanvas: glyphToCanvas(glyph) });
+      refreshUndoRedoFlags();
+      autosaveScheduler(serializeGlyphSetProject(glyphSet));
+    },
+    /** Icon-kind sets skip codepoint typing entirely — the codepoint is an internal PUA slot the user never sees (GlyphSet.nextIconCodepoint); only the name is user-facing. */
+    addIconGlyph: (name) => {
+      const { glyphSet, glyphHistory } = get();
+      const codepoint = nextIconCodepoint(glyphSet);
+      const size = Math.max(1, Math.round(glyphSet.meta.pixelsPerEm));
+      const glyph = createGlyph({ width: size, height: glyphSet.meta.pixelsPerEm, name });
+      setGlyphModel(glyphSet, codepoint, glyph);
+      pushSnapshot(glyphHistory, glyphContentSnapshot(glyphSet));
+      set({ glyphSet: { ...glyphSet }, glyphHistory: { ...glyphHistory }, activeCodepoint: codepoint, glyphCanvas: glyphToCanvas(glyph) });
+      refreshUndoRedoFlags();
+      autosaveScheduler(serializeGlyphSetProject(glyphSet));
+    },
+    removeGlyphAction: (codepoint) => {
+      const { glyphSet, glyphHistory, activeCodepoint } = get();
+      removeGlyphModel(glyphSet, codepoint);
+      pushSnapshot(glyphHistory, glyphContentSnapshot(glyphSet));
+      set({
+        glyphSet: { ...glyphSet },
+        glyphHistory: { ...glyphHistory },
+        ...(activeCodepoint === codepoint ? { activeCodepoint: null, glyphCanvas: null } : {}),
+      });
+      refreshUndoRedoFlags();
+      autosaveScheduler(serializeGlyphSetProject(glyphSet));
+    },
+    /** Icon-kind glyphs are identified by name, not codepoint — see CharacterMapPanel vs GlyphSetPanel's icon-add affordance. */
+    renameGlyph: (codepoint, name) => {
+      const { glyphSet, glyphHistory } = get();
+      const glyph = glyphSet.glyphs.get(codepoint);
+      if (!glyph) return;
+      glyph.name = name;
+      pushSnapshot(glyphHistory, glyphContentSnapshot(glyphSet));
+      set({ glyphSet: { ...glyphSet }, glyphHistory: { ...glyphHistory } });
+      refreshUndoRedoFlags();
+      autosaveScheduler(serializeGlyphSetProject(glyphSet));
+    },
+    /** Patches any FontMeta field (familyName/styleName/unitsPerEm/ascender/descender/baselineRow/iconTilePadding). `pixelsPerEm` is the one exception — see resizeFontPixelsPerEm, which also touches every glyph's grid. */
+    updateFontMeta: (patch) => {
+      const { glyphSet, glyphHistory } = get();
+      glyphSet.meta = { ...glyphSet.meta, ...patch };
+      pushSnapshot(glyphHistory, glyphContentSnapshot(glyphSet));
+      set({ glyphSet: { ...glyphSet }, glyphHistory: { ...glyphHistory } });
+      refreshUndoRedoFlags();
+      autosaveScheduler(serializeGlyphSetProject(glyphSet));
+    },
+    /** Crops/pads every glyph's grid to a new uniform height (GlyphSet.resizeGlyphSet) — potentially lossy, callers should confirm first (see FontMetadataPanel). */
+    resizeFontPixelsPerEm: (newPixelsPerEm, anchor = 'top-left') => {
+      const { glyphSet, glyphHistory, activeCodepoint } = get();
+      resizeGlyphSetModel(glyphSet, newPixelsPerEm, anchor);
+      pushSnapshot(glyphHistory, glyphContentSnapshot(glyphSet));
+      const activeGlyph = activeCodepoint != null ? glyphSet.glyphs.get(activeCodepoint) : null;
+      set({ glyphSet: { ...glyphSet }, glyphHistory: { ...glyphHistory }, glyphCanvas: activeGlyph ? glyphToCanvas(activeGlyph) : null });
+      refreshUndoRedoFlags();
+      autosaveScheduler(serializeGlyphSetProject(glyphSet));
+    },
+    /** Resizes just the active glyph's width (height stays font-wide via pixelsPerEm) — the per-glyph analogue of Draw mode's CanvasSizeControl. */
+    resizeActiveGlyph: (newWidth, anchor = 'top-left') => {
+      const { glyphSet, glyphHistory, activeCodepoint } = get();
+      if (activeCodepoint == null) return;
+      const glyph = glyphSet.glyphs.get(activeCodepoint);
+      if (!glyph) return;
+      glyph.pixels = resizeGrid(glyph, newWidth, glyph.height, anchor).pixels;
+      glyph.width = newWidth;
+      glyph.advanceWidth = newWidth;
+      pushSnapshot(glyphHistory, glyphContentSnapshot(glyphSet));
+      set({ glyphSet: { ...glyphSet }, glyphHistory: { ...glyphHistory }, glyphCanvas: glyphToCanvas(glyph) });
+      refreshUndoRedoFlags();
+      autosaveScheduler(serializeGlyphSetProject(glyphSet));
+    },
+
+    exportGlyphSvg: async () => {
+      const { glyphSet, activeCodepoint } = get();
+      const glyph = activeCodepoint != null ? glyphSet.glyphs.get(activeCodepoint) : null;
+      if (!glyph) return;
+      const svg = glyphToSvg(glyph);
+      await saveFile(`glyph-u${activeCodepoint.toString(16)}.svg`, new Blob([svg], { type: 'image/svg+xml' }));
+    },
+    saveGlyphProject: async () => {
+      const text = saveGlyphProjectToString(get().glyphSet);
+      await saveFile('untitled-font.pixelyph', new Blob([text], { type: 'application/json' }));
+      await clearAutosave();
+    },
+    openGlyphProject: async () => {
+      const result = await openFile('.pixelyph');
+      if (!result) return;
+      const text = await result.blob.text();
+      const restored = loadGlyphProjectFromString(text);
+      set({ mode: 'glyph', glyphSet: restored, glyphHistory: createHistory(glyphContentSnapshot(restored)), activeCodepoint: null, glyphCanvas: null });
+      refreshUndoRedoFlags();
     },
 
     // --- Selection: marquee move/cut/copy/paste ---
@@ -397,7 +634,24 @@ export const useStore = create((set, get) => {
       if (!result) return;
       const text = await result.blob.text();
       const restored = loadProjectFromString(text);
-      set({ canvas: restored, history: createHistory(contentSnapshot(restored)), canUndo: false, canRedo: false, selection: null, floatingSelection: null });
+      set({ mode: 'draw', canvas: restored, history: createHistory(contentSnapshot(restored)), canUndo: false, canRedo: false, selection: null, floatingSelection: null });
+    },
+    /** Saves whichever document is currently active — the header's single Save button works regardless of mode. */
+    saveAnyProject: () => (get().mode === 'glyph' ? get().saveGlyphProject() : get().saveProject()),
+    /** Opens a `.pixelyph` file and switches to whichever mode its `kind` implies, regardless of which mode was active before — so "Open" always works no matter what's currently on screen. */
+    openAnyProject: async () => {
+      const result = await openFile('.pixelyph');
+      if (!result) return;
+      const text = await result.blob.text();
+      const doc = JSON.parse(text);
+      if (doc.kind === 'glyph') {
+        const restored = deserializeGlyphSetProject(doc);
+        set({ mode: 'glyph', glyphSet: restored, glyphHistory: createHistory(glyphContentSnapshot(restored)), activeCodepoint: null, glyphCanvas: null, selection: null, floatingSelection: null });
+        refreshUndoRedoFlags();
+        return;
+      }
+      const restored = deserializeProject(doc);
+      set({ mode: 'draw', canvas: restored, history: createHistory(contentSnapshot(restored)), canUndo: false, canRedo: false, selection: null, floatingSelection: null });
     },
 
     // --- Autosave recovery prompt (single active project, v1 scope) ---
@@ -406,8 +660,13 @@ export const useStore = create((set, get) => {
       return snapshot ?? null;
     },
     resumeAutosave: (doc) => {
+      if (doc.kind === 'glyph') {
+        const restored = deserializeGlyphSetProject(doc);
+        set({ mode: 'glyph', glyphSet: restored, glyphHistory: createHistory(glyphContentSnapshot(restored)), activeCodepoint: null, glyphCanvas: null, canUndo: false, canRedo: false });
+        return;
+      }
       const restored = deserializeProject(doc);
-      set({ canvas: restored, history: createHistory(contentSnapshot(restored)), canUndo: false, canRedo: false });
+      set({ mode: 'draw', canvas: restored, history: createHistory(contentSnapshot(restored)), canUndo: false, canRedo: false });
     },
     discardAutosave: async () => {
       await clearAutosave();

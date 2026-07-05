@@ -1,7 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createCanvas, paintCell, resizeCanvas, addLayer } from '../../src/model/Canvas.js';
-import { serializeProject, deserializeProject, saveProjectToString, loadProjectFromString, PIXELYPH_VERSION } from '../../src/io/projectFile.js';
+import { createGlyphSet, createGlyph, setGlyph } from '../../src/model/GlyphSet.js';
+import {
+  serializeProject,
+  deserializeProject,
+  saveProjectToString,
+  loadProjectFromString,
+  serializeGlyphSetProject,
+  deserializeGlyphSetProject,
+  saveGlyphProjectToString,
+  loadGlyphProjectFromString,
+  PIXELYPH_VERSION,
+} from '../../src/io/projectFile.js';
 
 test('serializeProject stamps the current pixelyphVersion and kind: draw', () => {
   const canvas = createCanvas({ width: 2, height: 2 });
@@ -63,4 +74,51 @@ test('round-trips an advanced-tier canvas with gradient fill, stroke, effects, a
 
   const restored = loadProjectFromString(saveProjectToString(canvas));
   assert.deepStrictEqual(restored, canvas);
+});
+
+test('serializeGlyphSetProject stamps the current pixelyphVersion and kind: glyph', () => {
+  const glyphSet = createGlyphSet({ kind: 'characters' });
+  const doc = serializeGlyphSetProject(glyphSet);
+  assert.equal(doc.pixelyphVersion, PIXELYPH_VERSION);
+  assert.equal(doc.kind, 'glyph');
+});
+
+test('glyph pixel data is base64-encoded, not a raw JSON array', () => {
+  const glyphSet = createGlyphSet({});
+  const glyph = createGlyph({ width: 2, height: 2 });
+  glyph.pixels.set([1, 0, 0, 1]);
+  setGlyph(glyphSet, 65, glyph);
+  const doc = serializeGlyphSetProject(glyphSet);
+  const encoded = doc.glyphSet.glyphs[0][1].pixels;
+  assert.equal(typeof encoded, 'string');
+  assert.doesNotMatch(encoded, /^\[/);
+});
+
+test('round-trips a multi-glyph character GlyphSet exactly', () => {
+  const glyphSet = createGlyphSet({ kind: 'characters', meta: { familyName: 'Test Font' } });
+  const a = createGlyph({ width: 5, height: 16, name: 'A' });
+  a.pixels.set(new Uint8Array(80).fill(1));
+  setGlyph(glyphSet, 65, a);
+  setGlyph(glyphSet, 66, createGlyph({ width: 4, height: 16, name: 'B' }));
+
+  const restored = loadGlyphProjectFromString(saveGlyphProjectToString(glyphSet));
+  assert.deepStrictEqual(restored, glyphSet);
+});
+
+test('round-trips an icon GlyphSet with PUA codepoints', () => {
+  const glyphSet = createGlyphSet({ kind: 'icons' });
+  setGlyph(glyphSet, 0xe000, createGlyph({ width: 16, height: 16, name: 'star' }));
+
+  const restored = deserializeGlyphSetProject(serializeGlyphSetProject(glyphSet));
+  assert.deepStrictEqual(restored, glyphSet);
+});
+
+test('an empty GlyphSet (no glyphs) round-trips too', () => {
+  const glyphSet = createGlyphSet({});
+  const restored = deserializeGlyphSetProject(serializeGlyphSetProject(glyphSet));
+  assert.deepStrictEqual(restored, glyphSet);
+});
+
+test('deserializeGlyphSetProject rejects a non-glyph document', () => {
+  assert.throws(() => deserializeGlyphSetProject({ pixelyphVersion: 1, kind: 'draw', canvas: {} }), /expected kind 'glyph'/);
 });
