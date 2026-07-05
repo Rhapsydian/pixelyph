@@ -8,7 +8,7 @@ import { useStore } from '../../state/store.js';
 
 const DEFAULT_LINEAR_GRADIENT = { type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#ffffff' }, { offset: 1, color: '#000000' }] };
 const DEFAULT_RADIAL_GRADIENT = { type: 'radial-gradient', cx: 0.5, cy: 0.5, r: 0.5, stops: [{ offset: 0, color: '#ffffff' }, { offset: 1, color: '#000000' }] };
-const DEFAULT_STROKE = { color: '#000000', width: 0.15, linecap: 'round', linejoin: 'round' };
+const DEFAULT_STROKE = { color: '#000000', width: 0.15, linejoin: 'round' };
 const DEFAULT_DROP_SHADOW = { type: 'drop-shadow', dx: 0.3, dy: 0.3, blur: 0.2, color: '#000000', opacity: 0.6 };
 const GLOW_PRESET = { type: 'drop-shadow', dx: 0, dy: 0, blur: 0.4, color: '#ffee88', opacity: 0.9 };
 const DEFAULT_BLUR = { type: 'blur', stdDeviation: 0.3 };
@@ -119,14 +119,6 @@ function StrokeEditor({ layer, updateLayerStyle }) {
           <input type="color" value={stroke.color} onChange={(e) => patchStroke({ color: e.target.value })} />
           <label>
             Width: <input type="number" min={0} step={0.05} value={stroke.width} onChange={(e) => patchStroke({ width: Number(e.target.value) })} style={{ width: 50 }} />
-          </label>
-          <label>
-            Cap:{' '}
-            <select value={stroke.linecap} onChange={(e) => patchStroke({ linecap: e.target.value })}>
-              <option value="butt">Butt</option>
-              <option value="round">Round</option>
-              <option value="square">Square</option>
-            </select>
           </label>
           <label>
             Join:{' '}
