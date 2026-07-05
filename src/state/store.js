@@ -374,7 +374,9 @@ export const useStore = create((set, get) => {
     /** Creates a new blank glyph at `codepoint` (replacing any existing one). Callers confirm before replacing. */
     assignCodepoint: (codepoint, { name } = {}) => {
       const { glyphSet, history } = get();
-      const width = Math.max(1, Math.round(glyphSet.meta.pixelsPerEm * 0.75));
+      const width = glyphSet.meta.defaultGlyphWidth != null
+        ? glyphSet.meta.defaultGlyphWidth
+        : Math.max(1, Math.round(glyphSet.meta.pixelsPerEm * 0.75));
       const glyph = createGlyph({ width, height: glyphSet.meta.pixelsPerEm, name: name ?? '' });
       setGlyphModel(glyphSet, codepoint, glyph);
       pushSnapshot(history, glyphContentSnapshot(glyphSet));
@@ -385,7 +387,9 @@ export const useStore = create((set, get) => {
     addIconGlyph: (name) => {
       const { glyphSet, history } = get();
       const codepoint = nextIconCodepoint(glyphSet);
-      const size = Math.max(1, Math.round(glyphSet.meta.pixelsPerEm));
+      const size = glyphSet.meta.defaultGlyphWidth != null
+        ? glyphSet.meta.defaultGlyphWidth
+        : Math.max(1, Math.round(glyphSet.meta.pixelsPerEm));
       const glyph = createGlyph({ width: size, height: glyphSet.meta.pixelsPerEm, name });
       setGlyphModel(glyphSet, codepoint, glyph);
       pushSnapshot(history, glyphContentSnapshot(glyphSet));

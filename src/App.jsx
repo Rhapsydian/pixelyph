@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from './state/store.js';
 import { Toolbar } from './ui/draw/Toolbar.jsx';
 import { PaletteSimple } from './ui/draw/PaletteSimple.jsx';
@@ -115,12 +115,32 @@ function GlyphWorkspace() {
 
 // --- New Project wizard ---
 
+function deriveDefaultWidth(pixelsPerEm, kind) {
+  return kind === 'icons'
+    ? Math.max(1, Math.round(pixelsPerEm))
+    : Math.max(1, Math.round(pixelsPerEm * 0.75));
+}
+
 function NewProjectWizard({ onBack }) {
   const newProject = useStore((s) => s.newProject);
   const [step, setStep] = useState('mode'); // 'mode' | 'glyph-options'
   const [glyphKind, setGlyphKind] = useState('characters');
   const [familyName, setFamilyName] = useState('Untitled');
   const [initialPreset, setInitialPreset] = useState('basic-latin');
+  const [pixelsPerEm, setPixelsPerEm] = useState(16);
+  const [defaultGlyphWidth, setDefaultGlyphWidth] = useState(12); // 75% of 16
+
+  // Keep defaultGlyphWidth in sync with pixelsPerEm/kind unless the user
+  // edited it manually. We track the "auto" value; if the current input matches
+  // the previous auto value, auto-update continues. If the user changed it to
+  // something else, we leave it alone.
+  const prevAutoRef = useRef(12);
+  useEffect(() => {
+    const auto = deriveDefaultWidth(pixelsPerEm, glyphKind);
+    // Only auto-update if the field still holds the last auto-computed value
+    setDefaultGlyphWidth((prev) => (prev === prevAutoRef.current ? auto : prev));
+    prevAutoRef.current = auto;
+  }, [pixelsPerEm, glyphKind]);
 
   function handleDraw() {
     newProject('draw');
@@ -132,11 +152,12 @@ function NewProjectWizard({ onBack }) {
 
   function handleCreateGlyph(e) {
     e.preventDefault();
-    newProject('glyph', { kind: glyphKind, familyName, initialPreset });
+    newProject('glyph', { kind: glyphKind, familyName, initialPreset, pixelsPerEm, defaultGlyphWidth });
   }
 
   const buttonStyle = { background: '#4da3ff', color: '#fff', border: 'none', padding: '0.6rem 1.2rem', borderRadius: 6, cursor: 'pointer', fontSize: '1rem' };
   const secondaryStyle = { background: '#333', color: '#eee', border: '1px solid #555', padding: '0.5rem 1rem', borderRadius: 6, cursor: 'pointer' };
+  const inputStyle = { padding: '0.4rem', borderRadius: 4 };
 
   if (step === 'mode') {
     return (
@@ -165,19 +186,41 @@ function NewProjectWizard({ onBack }) {
       <form onSubmit={handleCreateGlyph} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: 300 }}>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           Kind
-          <select value={glyphKind} onChange={(e) => setGlyphKind(e.target.value)} style={{ padding: '0.4rem', borderRadius: 4 }}>
+          <select value={glyphKind} onChange={(e) => setGlyphKind(e.target.value)} style={inputStyle}>
             <option value="characters">Character font</option>
             <option value="icons">Icon font (PUA codepoints)</option>
           </select>
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           Family name
-          <input value={familyName} onChange={(e) => setFamilyName(e.target.value)} style={{ padding: '0.4rem', borderRadius: 4 }} required />
+          <input value={familyName} onChange={(e) => setFamilyName(e.target.value)} style={inputStyle} required />
         </label>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
+            Height (px per em)
+            <input
+              type="number" min={4} max={128} value={pixelsPerEm}
+              onChange={(e) => setPixelsPerEm(Math.max(4, Math.min(128, Number(e.target.value))))}
+              style={inputStyle} required
+            />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
+            Default glyph width
+            <input
+              type="number" min={1} max={256} value={defaultGlyphWidth}
+              onChange={(e) => {
+                const v = Math.max(1, Math.min(256, Number(e.target.value)));
+                prevAutoRef.current = v; // user override — stop auto-sync
+                setDefaultGlyphWidth(v);
+              }}
+              style={inputStyle} required
+            />
+          </label>
+        </div>
         {glyphKind === 'characters' && (
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             Initial charset
-            <select value={initialPreset} onChange={(e) => setInitialPreset(e.target.value)} style={{ padding: '0.4rem', borderRadius: 4 }}>
+            <select value={initialPreset} onChange={(e) => setInitialPreset(e.target.value)} style={inputStyle}>
               {CHARSET_PRESET_IDS.map((id) => (
                 <option key={id} value={id}>
                   {CHARSET_PRESETS[id].label}

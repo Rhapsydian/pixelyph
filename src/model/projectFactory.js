@@ -16,12 +16,23 @@ export function buildDrawDocument() {
 }
 
 /**
- * @param {{ kind?: 'characters'|'icons', familyName?: string, initialPreset?: string }} [options]
+ * @param {{ kind?: 'characters'|'icons', familyName?: string, initialPreset?: string,
+ *           pixelsPerEm?: number, defaultGlyphWidth?: number|null }} [options]
  * @returns {{ glyphSet: object, initialPreset: string }}
  */
-export function buildGlyphDocument({ kind = 'characters', familyName = 'Untitled', initialPreset = DEFAULT_INITIAL_CHARSET_PRESET } = {}) {
+export function buildGlyphDocument({
+  kind = 'characters',
+  familyName = 'Untitled',
+  initialPreset = DEFAULT_INITIAL_CHARSET_PRESET,
+  pixelsPerEm = 16,
+  defaultGlyphWidth = null,
+} = {}) {
+  // baselineRow tracks the 75%-of-height convention so it stays correct
+  // when pixelsPerEm is set upfront in the wizard rather than left at the
+  // createFontMeta default (which assumes pixelsPerEm === 16).
+  const baselineRow = Math.max(1, Math.round(pixelsPerEm * 0.75));
   return {
-    glyphSet: createGlyphSet({ kind, meta: { familyName } }),
+    glyphSet: createGlyphSet({ kind, meta: { familyName, pixelsPerEm, baselineRow, defaultGlyphWidth } }),
     initialPreset,
   };
 }

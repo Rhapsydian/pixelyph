@@ -38,6 +38,9 @@ export function createFontMeta(overrides = {}) {
     pixelsPerEm: 16,
     baselineRow: 12,
     iconTilePadding: 0,
+    // null = derive from pixelsPerEm at glyph-creation time (see store.js's
+    // assignCodepoint/addIconGlyph). Non-null overrides that derivation.
+    defaultGlyphWidth: null,
     ...overrides,
   };
 }

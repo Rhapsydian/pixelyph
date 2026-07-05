@@ -72,3 +72,30 @@ test('buildGlyphDocument preserves default FontMeta fields not in options', () =
   assert.equal(glyphSet.meta.pixelsPerEm, 16); // default from createFontMeta
   assert.equal(glyphSet.meta.styleName, 'Regular');
 });
+
+// --- pixelsPerEm and defaultGlyphWidth ---
+
+test('buildGlyphDocument threads pixelsPerEm through to FontMeta', () => {
+  const { glyphSet } = buildGlyphDocument({ pixelsPerEm: 24 });
+  assert.equal(glyphSet.meta.pixelsPerEm, 24);
+});
+
+test('buildGlyphDocument auto-computes baselineRow as 75% of pixelsPerEm', () => {
+  const { glyphSet } = buildGlyphDocument({ pixelsPerEm: 24 });
+  assert.equal(glyphSet.meta.baselineRow, 18); // Math.round(24 * 0.75) = 18
+});
+
+test('buildGlyphDocument baselineRow at default pixelsPerEm matches createFontMeta default', () => {
+  const { glyphSet } = buildGlyphDocument({ pixelsPerEm: 16 });
+  assert.equal(glyphSet.meta.baselineRow, 12); // Math.round(16 * 0.75) = 12
+});
+
+test('buildGlyphDocument threads explicit defaultGlyphWidth through to FontMeta', () => {
+  const { glyphSet } = buildGlyphDocument({ defaultGlyphWidth: 10 });
+  assert.equal(glyphSet.meta.defaultGlyphWidth, 10);
+});
+
+test('buildGlyphDocument defaults defaultGlyphWidth to null (derive at glyph-creation time)', () => {
+  const { glyphSet } = buildGlyphDocument();
+  assert.equal(glyphSet.meta.defaultGlyphWidth, null);
+});
