@@ -55,3 +55,14 @@ test('generateDemoHtml for an icon-kind set renders one clickable swatch per ico
   assert.ok(html.includes('Heart'));
   assert.ok(!html.includes('class="specimen-entry"'));
 });
+
+test('generateDemoHtml includes a Pixelyph branding footer linking to the GitHub Pages demo', () => {
+  const glyphSet = createGlyphSet({ kind: 'characters' });
+  setGlyph(glyphSet, 65, glyph());
+  const html = generateDemoHtml(glyphSet, new Uint8Array([1]));
+
+  assert.ok(html.includes('<footer'));
+  assert.ok(html.includes('Made with'));
+  assert.ok(html.includes('href="https://rhapsydian.github.io/pixelyph/"'));
+  assert.ok(html.includes('>Pixelyph<'));
+});

@@ -509,6 +509,12 @@ export const useStore = create((set, get) => {
       let woffBytes = null;
       let woff2Bytes = null;
       let woff2Failed = false;
+      // `wantDemoHtml` computes woffBytes unconditionally (independent of
+      // the `woff` checkbox) because the demo HTML always embeds WOFF —
+      // never the OTF — regardless of which standalone files the user
+      // separately checked; see demoHtml.js's file header for why that's
+      // the right choice (WOFF is a lossless, smaller repackaging of the
+      // same compiled font, and the standard @font-face embedding format).
       if (woff || wantDemoHtml) woffBytes = toWoff(otfBuffer);
       if (WOFF2_EXPORT_ENABLED && (woff2 || wantDemoHtml)) {
         try {

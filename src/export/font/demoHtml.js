@@ -6,6 +6,26 @@
 // Pure string generation (no DOM, no build step) — the inline <script> is
 // plain vanilla JS since this file ships as pre-built static output.
 //
+// Only WOFF2/WOFF are ever embedded here — there's no OTF fallback, and
+// that's deliberate, not a gap: `state/store.js`'s exportFont computes
+// `woffBytes` unconditionally whenever a demo HTML is requested
+// (`if (woff || wantDemoHtml) woffBytes = toWoff(otfBuffer)`), so the demo
+// always has a WOFF to embed regardless of whether the user separately
+// checked "OTF font file" or "WOFF" for the standalone export files — those
+// checkboxes only control which extra files land in the export bundle, not
+// what the demo embeds. WOFF (or WOFF2) is strictly the right choice for
+// that embed anyway: `woff.js`'s toWoff is a lossless repackaging of the
+// exact same SFNT tables `compileFont.js` produced (no outline/hinting/
+// metric changes), just with per-table DEFLATE compression, so embedding it
+// instead of the OTF costs nothing in rendering fidelity while making the
+// resulting .html file's base64 payload smaller — and WOFF is the standard,
+// universally-supported `@font-face` embedding format anyway, so there's no
+// browser-compatibility reason to prefer a raw OTF source (`format('opentype')`)
+// here either. (WOFF2 embedding is currently unreachable in practice since
+// `WOFF2_EXPORT_ENABLED` is off — see BACKLOG.md — so `woff2Bytes` passed in
+// below is always null for now; the WOFF2-preferred fallback chain in
+// fontFaceRule is left in place for when that's re-enabled.)
+//
 // Character fonts get a live <textarea> preview (defaulted to a sample
 // string covering every designed glyph) plus a full specimen grid below.
 // Icon fonts get a grid of clickable swatches that insert into the same
@@ -17,6 +37,22 @@
 // under `node --test`, and in the browser/Electron renderer via the
 // src/polyfills.js shim loaded at app startup (see woff.js, which has the
 // same dependency).
+//
+// Every demo carries a small "Made with Pixelyph" footer linking back to
+// the live GitHub Pages demo (PIXELYPH_URL below) — this file is what
+// someone downstream actually opens and looks at, so it's the one export
+// artifact that benefits from carrying attribution/a way back to the tool
+// that made it. The footer's styling is intentionally minimal, matching
+// this file's plain functional look everywhere else — Phase 8's visual
+// design pass (see the plan's phased roadmap) is scoped to cover this demo
+// output too when it reskins the rest of the app, not just leave it as
+// today's placeholder styling forever.
+
+// The one hardcoded URL in this file — update it if Pixelyph ever gets an
+// official domain name, in place of the GitHub Pages project site.
+const PIXELYPH_URL = 'https://rhapsydian.github.io/pixelyph/';
+
+const BRANDING_FOOTER = `<footer style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #333; font-size: 0.8rem; color: #888; text-align: center;">Made with <a href="${PIXELYPH_URL}" style="color: #4da3ff;">Pixelyph</a></footer>`;
 
 function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -128,6 +164,7 @@ ${body}
 <script>
 ${DEMO_SCRIPT}
 </script>
+${BRANDING_FOOTER}
 </body>
 </html>`;
 }
