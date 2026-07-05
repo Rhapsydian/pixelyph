@@ -384,13 +384,13 @@ export const useStore = create((set, get) => {
       autosaveScheduler(serializeGlyphSetProject(glyphSet));
     },
     /** Icon-kind sets: codepoint is auto-assigned (PUA); only the name is user-facing. */
-    addIconGlyph: (name) => {
+    addIconGlyph: ({ name = '', unicode = null } = {}) => {
       const { glyphSet, history } = get();
       const codepoint = nextIconCodepoint(glyphSet);
       const size = glyphSet.meta.defaultGlyphWidth != null
         ? glyphSet.meta.defaultGlyphWidth
         : Math.max(1, Math.round(glyphSet.meta.pixelsPerEm));
-      const glyph = createGlyph({ width: size, height: glyphSet.meta.pixelsPerEm, name });
+      const glyph = createGlyph({ width: size, height: glyphSet.meta.pixelsPerEm, name, unicode });
       setGlyphModel(glyphSet, codepoint, glyph);
       pushSnapshot(history, glyphContentSnapshot(glyphSet));
       set({ glyphSet: { ...glyphSet }, history: { ...history }, activeCodepoint: codepoint, glyphCanvas: glyphToCanvas(glyph), canUndo: historyCanUndo(history), canRedo: historyCanRedo(history) });
@@ -409,11 +409,12 @@ export const useStore = create((set, get) => {
       });
       autosaveScheduler(serializeGlyphSetProject(glyphSet));
     },
-    renameGlyph: (codepoint, name) => {
+    updateGlyphMeta: (codepoint, patch) => {
       const { glyphSet, history } = get();
       const glyph = glyphSet.glyphs.get(codepoint);
       if (!glyph) return;
-      glyph.name = name;
+      if ('name' in patch) glyph.name = patch.name;
+      if ('unicode' in patch) glyph.unicode = patch.unicode;
       pushSnapshot(history, glyphContentSnapshot(glyphSet));
       set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history) });
       autosaveScheduler(serializeGlyphSetProject(glyphSet));

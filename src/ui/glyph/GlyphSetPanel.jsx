@@ -7,9 +7,38 @@
 // affordance — name in, next PUA codepoint derived automatically — lives
 // here instead.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../state/store.js';
 import { GlyphThumbnail } from './GlyphThumbnail.jsx';
+
+// Returns null (clear), a codepoint number (valid), or undefined (invalid).
+// Accepts: single character, U+xxxx, &#x1F600;, &#9829;, &hearts;
+function parseUnicodeInput(text) {
+  const t = text.trim();
+  if (!t) return null;
+  const uPlus = /^u\+([0-9a-f]{1,6})$/i.exec(t);
+  if (uPlus) return parseInt(uPlus[1], 16);
+  const numHex = /^&#x([0-9a-f]+);?$/i.exec(t);
+  if (numHex) return parseInt(numHex[1], 16);
+  const numDec = /^&#([0-9]+);?$/.exec(t);
+  if (numDec) return parseInt(numDec[1], 10);
+  if (/^&[a-z][a-z0-9]*;$/i.test(t)) {
+    const el = document.createElement('textarea');
+    el.innerHTML = t;
+    const decoded = el.value;
+    if (decoded && decoded !== t) return decoded.codePointAt(0);
+    return undefined;
+  }
+  const chars = [...t];
+  if (chars.length === 1) return t.codePointAt(0);
+  return undefined;
+}
+
+function unicodeDisplay(cp) {
+  if (cp == null) return null;
+  try { return `${String.fromCodePoint(cp)} (U+${cp.toString(16).toUpperCase().padStart(4, '0')})`; }
+  catch { return null; }
+}
 
 function glyphLabel(codepoint, glyph, kind) {
   if (kind === 'icons') return glyph.name || '(unnamed)';
@@ -28,9 +57,24 @@ export function GlyphSetPanel() {
   const selectGlyph = useStore((s) => s.selectGlyph);
   const removeGlyphAction = useStore((s) => s.removeGlyphAction);
   const addIconGlyph = useStore((s) => s.addIconGlyph);
+  const updateGlyphMeta = useStore((s) => s.updateGlyphMeta);
   const [query, setQuery] = useState('');
   const [newIconName, setNewIconName] = useState('');
+  const [newIconUnicode, setNewIconUnicode] = useState('');
+  const [newIconUnicodeError, setNewIconUnicodeError] = useState(false);
   const [hoveredCodepoint, setHoveredCodepoint] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editUnicode, setEditUnicode] = useState('');
+  const [editUnicodeError, setEditUnicodeError] = useState(false);
+
+  useEffect(() => {
+    if (activeCodepoint == null || !glyphSet) { setEditName(''); setEditUnicode(''); setEditUnicodeError(false); return; }
+    const g = glyphSet.glyphs.get(activeCodepoint);
+    if (!g) return;
+    setEditName(g.name ?? '');
+    setEditUnicode(g.unicode != null ? String.fromCodePoint(g.unicode) : '');
+    setEditUnicodeError(false);
+  }, [activeCodepoint]);
 
   const entries = useMemo(() => {
     if (!glyphSet) return [];
@@ -53,17 +97,38 @@ export function GlyphSetPanel() {
       </strong>
       <input placeholder="Search..." value={query} onChange={(e) => setQuery(e.target.value)} style={{ width: '100%' }} />
       {glyphSet.kind === 'icons' && (
-        <div style={{ display: 'flex', gap: 4 }}>
-          <input placeholder="New icon name" value={newIconName} onChange={(e) => setNewIconName(e.target.value)} style={{ flex: 1 }} />
-          <button
-            disabled={!newIconName.trim()}
-            onClick={() => {
-              addIconGlyph(newIconName.trim());
-              setNewIconName('');
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <input
+              placeholder="Icon name"
+              value={newIconName}
+              onChange={(e) => setNewIconName(e.target.value)}
+              style={{ flex: 1 }}
+            />
+            <button
+              disabled={!newIconName.trim()}
+              onClick={() => {
+                const parsed = parseUnicodeInput(newIconUnicode);
+                addIconGlyph({ name: newIconName.trim(), unicode: parsed ?? null });
+                setNewIconName('');
+                setNewIconUnicode('');
+                setNewIconUnicodeError(false);
+              }}
+            >
+              + Add Icon
+            </button>
+          </div>
+          <input
+            placeholder="Unicode character (optional) — paste ❤, U+2764, &hearts;, &#x2764;"
+            value={newIconUnicode}
+            onChange={(e) => {
+              setNewIconUnicode(e.target.value);
+              setNewIconUnicodeError(e.target.value.trim() !== '' && parseUnicodeInput(e.target.value) === undefined);
             }}
-          >
-            + Add Icon
-          </button>
+            style={{ borderColor: newIconUnicodeError ? '#c0392b' : undefined }}
+          />
+          {newIconUnicodeError && <span style={{ color: '#c0392b', fontSize: '0.8em' }}>Not a recognized character, U+xxxx, HTML entity, or &#xNNNN;</span>}
+          {!newIconUnicodeError && (() => { const p = parseUnicodeInput(newIconUnicode); return p != null ? <span style={{ color: '#888', fontSize: '0.8em' }}>{unicodeDisplay(p)}</span> : null; })()}
         </div>
       )}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxHeight: 320, overflow: 'auto' }}>
@@ -110,6 +175,33 @@ export function GlyphSetPanel() {
         ))}
         {entries.length === 0 && <span style={{ color: '#888', fontSize: '0.85em' }}>No glyphs yet.</span>}
       </div>
+      {glyphSet.kind === 'icons' && activeCodepoint != null && glyphSet.glyphs.has(activeCodepoint) && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, borderTop: '1px solid #333', paddingTop: 6 }}>
+          <span style={{ fontSize: '0.8em', color: '#aaa' }}>Edit selected icon</span>
+          <input
+            placeholder="Icon name"
+            value={editName}
+            onChange={(e) => {
+              setEditName(e.target.value);
+              updateGlyphMeta(activeCodepoint, { name: e.target.value });
+            }}
+          />
+          <input
+            placeholder="Unicode character (optional) — paste ❤, U+2764, &hearts;, &#x2764;"
+            value={editUnicode}
+            onChange={(e) => {
+              setEditUnicode(e.target.value);
+              const parsed = parseUnicodeInput(e.target.value);
+              if (parsed === undefined) { setEditUnicodeError(true); return; }
+              setEditUnicodeError(false);
+              updateGlyphMeta(activeCodepoint, { unicode: parsed });
+            }}
+            style={{ borderColor: editUnicodeError ? '#c0392b' : undefined }}
+          />
+          {editUnicodeError && <span style={{ color: '#c0392b', fontSize: '0.8em' }}>Not a recognized character, U+xxxx, HTML entity, or &#xNNNN;</span>}
+          {!editUnicodeError && (() => { const p = parseUnicodeInput(editUnicode); return p != null ? <span style={{ color: '#888', fontSize: '0.8em' }}>{unicodeDisplay(p)}</span> : null; })()}
+        </div>
+      )}
     </div>
   );
 }

@@ -62,7 +62,7 @@ export function createGlyphSet({ kind, meta } = {}) {
  * @param {{width: number, height: number, advanceWidth?: number, leftSideBearing?: number, name?: string}} options
  * @returns {object} Glyph
  */
-export function createGlyph({ width, height, advanceWidth, leftSideBearing = 0, name = '' }) {
+export function createGlyph({ width, height, advanceWidth, leftSideBearing = 0, name = '', unicode = null }) {
   return {
     width,
     height,
@@ -70,6 +70,7 @@ export function createGlyph({ width, height, advanceWidth, leftSideBearing = 0, 
     advanceWidth: advanceWidth ?? width,
     leftSideBearing,
     name,
+    unicode,
   };
 }
 

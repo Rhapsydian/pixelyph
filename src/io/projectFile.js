@@ -115,6 +115,7 @@ function serializeGlyph(glyph) {
     advanceWidth: glyph.advanceWidth,
     leftSideBearing: glyph.leftSideBearing,
     name: glyph.name,
+    unicode: glyph.unicode ?? null,
   };
 }
 
@@ -126,6 +127,7 @@ function deserializeGlyph(glyph) {
     advanceWidth: glyph.advanceWidth,
     leftSideBearing: glyph.leftSideBearing,
     name: glyph.name,
+    unicode: glyph.unicode ?? null,
   };
 }
 
