@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createCanvas, paintCell, addLayer } from '../../../src/model/Canvas.js';
-import { composeLayersSvg } from '../../../src/export/svg/composeLayersSvg.js';
+import { createCanvas, paintCell, addLayer, addFrame, setActiveFrame } from '../../../src/model/Canvas.js';
+import { composeLayersSvg, composeFrameBody } from '../../../src/export/svg/composeLayersSvg.js';
 
 test('an empty canvas composes to an svg with a matching viewBox and no paths', () => {
   const canvas = createCanvas({ width: 3, height: 2 });
@@ -130,4 +130,35 @@ test('a name with no slug-safe characters falls back to "layer-unnamed" rather t
   paintCell(canvas, 0, 0, 'x');
   const svg = composeLayersSvg(canvas);
   assert.match(svg, /<g id="layer-unnamed"/);
+});
+
+// --- Animation (Phase 7): frame-aware composition ---
+
+test('composeLayersSvg renders whichever frame is active, not always frame 0', () => {
+  const canvas = createCanvas({ width: 2, height: 1 });
+  paintCell(canvas, 0, 0, '#ff0000'); // frame 0
+  addFrame(canvas); // frame 1, active
+  paintCell(canvas, 1, 0, '#00ff00'); // frame 1
+
+  const svgFrame1 = composeLayersSvg(canvas);
+  assert.match(svgFrame1, /fill="#00ff00"/);
+  assert.ok(!svgFrame1.includes('#ff0000'));
+
+  setActiveFrame(canvas, 0);
+  const svgFrame0 = composeLayersSvg(canvas);
+  assert.match(svgFrame0, /fill="#ff0000"/);
+  assert.ok(!svgFrame0.includes('#00ff00'));
+});
+
+test('composeFrameBody renders a specific frame without mutating canvas.activeFrame', () => {
+  const canvas = createCanvas({ width: 2, height: 1 });
+  paintCell(canvas, 0, 0, '#ff0000'); // frame 0
+  addFrame(canvas); // frame 1, active
+  paintCell(canvas, 1, 0, '#00ff00'); // frame 1
+
+  const { body: frame0Body } = composeFrameBody(canvas, 0);
+  const { body: frame1Body } = composeFrameBody(canvas, 1);
+  assert.match(frame0Body, /fill="#ff0000"/);
+  assert.match(frame1Body, /fill="#00ff00"/);
+  assert.equal(canvas.activeFrame, 1); // untouched by composeFrameBody's shallow override
 });

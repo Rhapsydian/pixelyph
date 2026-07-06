@@ -28,6 +28,12 @@ globalThis.indexedDB = {
   },
 };
 
+// newProject()/openAnyProject() confirm before discarding an already-open
+// project (see store.js) — a `window.confirm` call, unavailable under plain
+// `node --test`. Each test file's project starts fresh in-process, so always
+// confirming is equivalent to a user clicking "OK" every time.
+globalThis.window = { confirm: () => true };
+
 function paintColumn(x, height, color) {
   for (let y = 0; y < height; y++) useStore.getState().paintCellLive(x, y, color);
   useStore.getState().commitStroke();
@@ -81,4 +87,34 @@ test('cross-glyph copy-paste: selecting in glyph A, switching to glyph B, and pa
 
   assert.ok(onlyColumnFilled(glyphA, 0), "glyph A's pixels are untouched by the paste into B");
   assert.ok(columnIsFilled(glyphB, 5), "glyph B received the pasted stem (centered paste at x=floor((12-1)/2)=5)");
+});
+
+test('addFrame/duplicateFrame/removeFrame are undo-tracked; setActiveFrame is a working-session pointer move that isn\'t', () => {
+  const store = useStore.getState();
+  store.newProject('draw');
+  useStore.getState().paintCellLive(0, 0, '#ff0000');
+  useStore.getState().commitStroke();
+
+  store.addFrame();
+  assert.equal(useStore.getState().canvas.frameCount, 2);
+  assert.equal(useStore.getState().canvas.activeFrame, 1);
+
+  useStore.getState().undo();
+  assert.equal(useStore.getState().canvas.frameCount, 1, 'addFrame is undo-tracked, like a resize or style change');
+
+  useStore.getState().redo();
+  assert.equal(useStore.getState().canvas.frameCount, 2);
+
+  useStore.getState().duplicateFrame(0);
+  assert.equal(useStore.getState().canvas.frameCount, 3);
+
+  // setActiveFrame doesn't push a snapshot, so undo still reverts the last
+  // *committed* action (duplicateFrame) regardless of which frame is active.
+  useStore.getState().setActiveFrame(0);
+  assert.equal(useStore.getState().canvas.activeFrame, 0);
+  useStore.getState().undo();
+  assert.equal(useStore.getState().canvas.frameCount, 2, 'undo reverted duplicateFrame, unaffected by the intervening setActiveFrame');
+
+  useStore.getState().removeFrame(0);
+  assert.equal(useStore.getState().canvas.frameCount, 1);
 });

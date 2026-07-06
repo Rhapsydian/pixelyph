@@ -9,7 +9,7 @@ A pixel-art and pixel-font editor that outputs scalable SVG (and real font files
 
 ## Status
 
-Early development. Draw mode (both tiers), Glyph mode, project management (startup screen, new-project wizard, autosave recovery), font compilation, and the Electron desktop shell are implemented — see "Features" below. Animation and a visual design pass are still ahead.
+Early development. Draw mode (both tiers, with frame-based animation), Glyph mode, project management (startup screen, new-project wizard, autosave recovery), font compilation, and the Electron desktop shell are implemented — see "Features" below. A visual design pass is still ahead.
 
 ## Features
 
@@ -36,6 +36,15 @@ Early development. Draw mode (both tiers), Glyph mode, project management (start
 - Per-layer stroke: color, width, cap, join, and dash array
 - Per-layer effects: drop-shadow, blur, and a glow preset (a zero-offset, brightened drop-shadow)
 - Tier toggle: simple → advanced is always safe; advanced → simple asks for confirmation, since it collapses every layer to its topmost visible color per cell (gradients and free-floating positions don't survive the trip)
+
+**Animation** — every layer carries a uniform number of frames (adding/duplicating/removing a frame does it across every layer at once, so they never drift out of sync), works in both tiers:
+
+- Frame strip: add, duplicate, delete, and click-to-select frames, each shown as a live thumbnail; a frame-rate control feeds every animated export
+- Onion skinning: a faded, color-tinted (reddish/bluish) preview of the adjacent frame(s) rendered behind the one actually being edited
+- Export a self-contained, looping **animated SVG** (one `<g>` per frame, stepped via a single shared CSS `@keyframes` rule with negative per-frame delays rather than one animation per frame)
+- Export a **sprite sheet**: a single-row PNG tiling every frame plus a JSON metadata sidecar (`{frames:[{x,y,w,h}], frameRate}`, TexturePacker/Aseprite-style), bundled as one `.zip`
+- Export an **animated GIF** via [gifenc](https://github.com/mattdesl/gifenc) (pure JS, no native dependency — same reasoning as the font pipeline's WASM/pure-JS picks), with real GIF transparency for fully-transparent pixels
+- Both raster animation exports reuse the same single-frame `rasterizeFrame` rasterizer PNG/WebP export already uses, called once per animation frame
 
 **Glyph mode** — one plain grid per glyph rather than layered artwork. Reuses the exact same live-SVG pixel editor as Draw mode (same tools, undo/redo, zoom/pan, grid overlay) via a single-color pseudo-canvas adapter, so there's no separate glyph-painting implementation:
 

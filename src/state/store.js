@@ -27,6 +27,10 @@ import {
   clampActiveLayer,
   topVisibleLayerAt,
   convertTier as convertTierModel,
+  addFrame as addFrameModel,
+  duplicateFrame as duplicateFrameModel,
+  removeFrame as removeFrameModel,
+  setActiveFrame as setActiveFrameModel,
 } from '../model/Canvas.js';
 import { mirrorPoints } from '../model/mirror.js';
 import { createHistory, pushSnapshot, undo as historyUndo, redo as historyRedo, canUndo as historyCanUndo, canRedo as historyCanRedo } from '../model/history.js';
@@ -35,7 +39,10 @@ import { parseLospecPalette } from '../model/paletteImport.js';
 import { importRasterToGrid } from '../model/importRaster.js';
 import { decodeImageFile } from '../io/imageDecode.js';
 import { composeLayersSvg } from '../export/svg/composeLayersSvg.js';
+import { composeAnimatedSvg } from '../export/svg/animatedSvg.js';
 import { rasterizeFrame } from '../export/raster/rasterizeFrame.js';
+import { buildSpriteSheet } from '../export/raster/spriteSheet.js';
+import { buildAnimatedGif } from '../export/raster/animatedRaster.js';
 import { copySvgToClipboard } from '../export/clipboard.js';
 import { serializeProject, deserializeProject, saveProjectToString, loadProjectFromString, serializeGlyphSetProject, deserializeGlyphSetProject, saveGlyphProjectToString, loadGlyphProjectFromString } from '../io/projectFile.js';
 import { saveFile, openFile } from '../io/platform.js';
@@ -52,7 +59,11 @@ import { slugify } from '../export/slugify.js';
 import { createZip } from '../export/zip.js';
 
 function contentSnapshot(canvas) {
-  return { layers: canvas.layers, width: canvas.width, height: canvas.height, palette: canvas.palette, tier: canvas.tier };
+  // frameCount is artwork content (every layer's frames.length matches it) —
+  // included so undo correctly reverts an add/duplicate/remove-frame action,
+  // same as any other structural edit. activeFrame is excluded, same
+  // reasoning as activeLayerId below (a working-session pointer, not content).
+  return { layers: canvas.layers, width: canvas.width, height: canvas.height, palette: canvas.palette, tier: canvas.tier, frameCount: canvas.frameCount };
 }
 
 function applyContentSnapshot(canvas, snapshot) {
@@ -61,12 +72,15 @@ function applyContentSnapshot(canvas, snapshot) {
   canvas.height = snapshot.height;
   canvas.palette = snapshot.palette;
   canvas.tier = snapshot.tier;
+  canvas.frameCount = snapshot.frameCount;
   // simpleTier.colorToLayerId is bookkeeping, not artwork — rebuild it from
   // the restored layers so it can't fall out of sync with what undo/redo just restored.
   canvas.simpleTier.colorToLayerId = new Map(canvas.layers.filter((l) => l.autoManaged).map((l) => [l.autoColor, l.id]));
-  // activeLayerId is excluded from snapshots (a working-session concern,
-  // not artwork), so a restored `layers` array might no longer contain it.
+  // activeLayerId/activeFrame are excluded from snapshots (working-session
+  // concerns, not artwork), so a restored `layers` array might no longer
+  // contain/fit them.
   clampActiveLayer(canvas);
+  canvas.activeFrame = Math.max(0, Math.min(canvas.activeFrame, canvas.frameCount - 1));
 }
 
 function glyphContentSnapshot(glyphSet) {
@@ -259,6 +273,35 @@ export const useStore = create((set, get) => {
       convertTierModel(get().canvas, newTier);
       commit();
     },
+
+    // --- Animation (Phase 7): frames ---
+    // add/duplicate/remove are committed actions (undo-tracked, like a
+    // resize or style change — see Canvas.js's addFrame/duplicateFrame/
+    // removeFrame for the "every layer stays in lockstep" invariant);
+    // setActiveFrame/setFrameRate are working-session pointer moves/playback
+    // settings, same as setActiveLayerId/setSymmetryMode above.
+    onionSkinEnabled: false,
+    addFrame: (index) => {
+      addFrameModel(get().canvas, index);
+      commit();
+    },
+    duplicateFrame: (index) => {
+      duplicateFrameModel(get().canvas, index);
+      commit();
+    },
+    removeFrame: (index) => {
+      removeFrameModel(get().canvas, index);
+      commit();
+    },
+    setActiveFrame: (index) => {
+      setActiveFrameModel(get().canvas, index);
+      touchCanvas();
+    },
+    setFrameRate: (fps) => {
+      get().canvas.frameRate = fps;
+      touchCanvas();
+    },
+    toggleOnionSkin: () => set((s) => ({ onionSkinEnabled: !s.onionSkinEnabled })),
 
     undo: () => {
       const { mode, canvas, glyphSet, activeCodepoint, history } = get();
@@ -676,6 +719,27 @@ export const useStore = create((set, get) => {
     },
     copySvg: async () => {
       await copySvgToClipboard(composeLayersSvg(get().canvas));
+    },
+    /** Self-contained looping animated SVG (Phase 7) — meaningful for any frame count, but only actually animates once frameCount > 1. */
+    exportAnimatedSvg: async () => {
+      const svg = composeAnimatedSvg(get().canvas);
+      await saveFile('animation.svg', new Blob([svg], { type: 'image/svg+xml' }));
+    },
+    /** PNG sprite sheet + JSON metadata sidecar, bundled as one .zip — same "one save dialog" pattern exportFont's multi-file case uses. */
+    exportSpriteSheet: async (scale = 1) => {
+      const { canvas } = get();
+      const { blob, metadata } = await buildSpriteSheet(canvas, scale);
+      const pngBytes = new Uint8Array(await blob.arrayBuffer());
+      const jsonBytes = new TextEncoder().encode(JSON.stringify(metadata, null, 2));
+      const zipBytes = createZip([
+        { name: 'spritesheet.png', data: pngBytes },
+        { name: 'spritesheet.json', data: jsonBytes },
+      ]);
+      await saveFile('spritesheet.zip', new Blob([zipBytes], { type: 'application/zip' }));
+    },
+    exportAnimatedGif: async (scale = 1) => {
+      const blob = await buildAnimatedGif(get().canvas, scale);
+      await saveFile('animation.gif', blob);
     },
     saveProject: async () => {
       const text = saveProjectToString(get().canvas);

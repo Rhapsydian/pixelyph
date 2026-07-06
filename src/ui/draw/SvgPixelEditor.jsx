@@ -20,7 +20,7 @@ import { GridOverlay } from './GridOverlay.jsx';
 import { BrushCursor } from './BrushCursor.jsx';
 import { ReferenceImageLayer } from './ReferenceImageLayer.jsx';
 import { TransparencyBackground } from './TransparencyBackground.jsx';
-import { composeLayersBody } from '../../export/svg/composeLayersSvg.js';
+import { composeLayersBody, composeFrameBody } from '../../export/svg/composeLayersSvg.js';
 
 /**
  * The Canvas-shaped document this editor is currently painting: Draw mode's
@@ -45,6 +45,7 @@ export function SvgPixelEditor() {
   const showGrid = useStore((s) => s.showGrid);
   const selection = useStore((s) => s.selection);
   const floatingSelection = useStore((s) => s.floatingSelection);
+  const onionSkinEnabled = useStore((s) => s.onionSkinEnabled);
   const doc = mode === 'glyph' ? glyphCanvas : canvas;
 
   const svgRef = useRef(null);
@@ -241,6 +242,23 @@ export function SvgPixelEditor() {
   );
   const defsHtml = defs.length ? `<defs>${defs.join('')}</defs>` : '';
 
+  // Onion skinning (Phase 7, Draw mode only — glyphs never animate): a faded,
+  // color-tinted ghost of the immediately adjacent frame(s), rendered behind
+  // the current frame's own body so the previous/next pose is visible as a
+  // drawing reference without being mistaken for the frame actually being
+  // edited. Reddish for "before," bluish for "after" — the same convention
+  // most frame-based animation tools use.
+  const onionSkin = useMemo(() => {
+    if (mode !== 'draw' || !onionSkinEnabled || !doc || doc.frameCount <= 1) return null;
+    const prevIndex = doc.activeFrame - 1;
+    const nextIndex = doc.activeFrame + 1;
+    return {
+      prev: prevIndex >= 0 ? composeFrameBody(doc, prevIndex).body : null,
+      next: nextIndex < doc.frameCount ? composeFrameBody(doc, nextIndex).body : null,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, onionSkinEnabled, doc, canvas, tickCount]);
+
   const activeLayer = doc && doc.tier === 'advanced' ? doc.layers.find((l) => l.id === doc.activeLayerId) : null;
 
   const normalizedSelection = selection && {
@@ -284,6 +302,12 @@ export function SvgPixelEditor() {
         <TransparencyBackground width={doc.width} height={doc.height} />
         {defsHtml && <g dangerouslySetInnerHTML={{ __html: defsHtml }} />}
         {doc.referenceImage && <ReferenceImageLayer referenceImage={doc.referenceImage} width={doc.width} height={doc.height} />}
+        {onionSkin?.prev && (
+          <g opacity={0.35} style={{ filter: 'sepia(1) hue-rotate(-60deg) saturate(4)' }} dangerouslySetInnerHTML={{ __html: onionSkin.prev }} />
+        )}
+        {onionSkin?.next && (
+          <g opacity={0.35} style={{ filter: 'sepia(1) hue-rotate(140deg) saturate(4)' }} dangerouslySetInnerHTML={{ __html: onionSkin.next }} />
+        )}
         <g dangerouslySetInnerHTML={{ __html: body }} />
         {activeLayer && (
           <rect

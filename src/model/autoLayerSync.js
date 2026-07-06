@@ -7,8 +7,9 @@
 import { set } from './Grid.js';
 import { createLayer, isEmpty } from './Layer.js';
 
-function frameGrid(layer) {
-  return { width: layer.width, height: layer.height, pixels: layer.frames[0].pixels };
+function frameGrid(canvas, layer) {
+  const frameIndex = Math.max(0, Math.min(canvas.activeFrame ?? 0, layer.frames.length - 1));
+  return { width: layer.width, height: layer.height, pixels: layer.frames[frameIndex].pixels };
 }
 
 /**
@@ -25,7 +26,7 @@ export function getOrCreateAutoLayer(canvas, color) {
     const existing = canvas.layers.find((l) => l.id === existingId);
     if (existing) return existing;
   }
-  const layer = createLayer({ name: color, width: canvas.width, height: canvas.height, fill: color, autoManaged: true, autoColor: color });
+  const layer = createLayer({ name: color, width: canvas.width, height: canvas.height, fill: color, autoManaged: true, autoColor: color, frameCount: canvas.frameCount });
   canvas.layers.push(layer);
   canvas.simpleTier.colorToLayerId.set(color, layer.id);
   return layer;
@@ -43,11 +44,11 @@ export function getOrCreateAutoLayer(canvas, color) {
  */
 export function paintSimpleCell(canvas, x, y, color) {
   for (const layer of canvas.layers.filter((l) => l.autoManaged && l.autoColor !== color)) {
-    set(frameGrid(layer), x, y, 0);
+    set(frameGrid(canvas, layer), x, y, 0);
   }
   if (color) {
     const target = getOrCreateAutoLayer(canvas, color);
-    set(frameGrid(target), x, y, 1);
+    set(frameGrid(canvas, target), x, y, 1);
   }
   canvas.layers = canvas.layers.filter((layer) => {
     if (!layer.autoManaged || !isEmpty(layer)) return true;

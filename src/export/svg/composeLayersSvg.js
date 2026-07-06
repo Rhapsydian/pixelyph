@@ -47,7 +47,12 @@ export function composeLayersBody(canvas) {
   const body = canvas.layers
     .filter((layer) => layer.visible)
     .map((layer) => {
-      const frame = layer.frames[0];
+      // Renders whichever frame is active — the editing surface always shows
+      // "the current frame," and single-frame exports (SVG/PNG/WebP) are a
+      // snapshot of it. animatedSvg.js/spriteSheet.js/animatedRaster.js
+      // (Phase 7) render every frame separately instead of calling this once.
+      const frameIndex = Math.max(0, Math.min(canvas.activeFrame ?? 0, layer.frames.length - 1));
+      const frame = layer.frames[frameIndex];
       const d = gridToPath(frame.pixels, layer.width, layer.height);
       if (!d) return '';
       const elementId = uniqueLayerElementId(layer.name, usedIds);
@@ -72,4 +77,19 @@ export function composeLayersSvg(canvas) {
   const { body, defs } = composeLayersBody(canvas);
   const defsBlock = defs.length ? `<defs>${defs.join('')}</defs>` : '';
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${canvas.width} ${canvas.height}">${defsBlock}${body}</svg>`;
+}
+
+/**
+ * composeLayersBody for a specific frame, regardless of which frame is
+ * currently active for editing — the primitive animatedSvg.js/spriteSheet.js/
+ * animatedRaster.js (Phase 7) all build on to render every frame of an
+ * animation, one at a time. A shallow override (not a mutation) of `canvas`,
+ * since composeLayersBody only ever reads `activeFrame` off it.
+ *
+ * @param {object} canvas Canvas
+ * @param {number} frameIndex
+ * @returns {{ body: string, defs: string[] }}
+ */
+export function composeFrameBody(canvas, frameIndex) {
+  return composeLayersBody({ ...canvas, activeFrame: frameIndex });
 }

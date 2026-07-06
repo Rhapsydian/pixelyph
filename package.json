@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "buffer": "^6.0.3",
+    "gifenc": "^1.0.3",
     "opentype.js": "^2.0.0",
     "pixelloom": "^0.1.1",
     "quantize": "^1.0.2",

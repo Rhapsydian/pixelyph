@@ -34,6 +34,10 @@ export function FileMenu() {
   const exportRaster = useStore((s) => s.exportRaster);
   const copySvg = useStore((s) => s.copySvg);
   const exportGlyphSvg = useStore((s) => s.exportGlyphSvg);
+  const exportAnimatedSvg = useStore((s) => s.exportAnimatedSvg);
+  const exportSpriteSheet = useStore((s) => s.exportSpriteSheet);
+  const exportAnimatedGif = useStore((s) => s.exportAnimatedGif);
+  const frameCount = useStore((s) => s.canvas.frameCount);
 
   const [open, setOpen] = useState(false);
   const [scale, setScale] = useState(4);
@@ -85,6 +89,14 @@ export function FileMenu() {
               <button role="menuitem" style={itemStyle} onClick={runAndClose(() => exportRaster('png', scale))}>Export PNG</button>
               <button role="menuitem" style={itemStyle} onClick={runAndClose(() => exportRaster('webp', scale))}>Export WebP</button>
               <button role="menuitem" style={itemStyle} onClick={runAndClose(copySvg)}>Copy as SVG</button>
+              {frameCount > 1 && (
+                <>
+                  <div style={dividerStyle} />
+                  <button role="menuitem" style={itemStyle} onClick={runAndClose(exportAnimatedSvg)}>Export Animated SVG</button>
+                  <button role="menuitem" style={itemStyle} onClick={runAndClose(() => exportSpriteSheet(scale))}>Export Sprite Sheet (.zip)</button>
+                  <button role="menuitem" style={itemStyle} onClick={runAndClose(() => exportAnimatedGif(scale))}>Export Animated GIF</button>
+                </>
+              )}
             </>
           ) : (
             <button role="menuitem" style={itemStyle} onClick={runAndClose(exportGlyphSvg)}>Export Glyph SVG</button>

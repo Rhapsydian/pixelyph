@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createCanvas, paintCell, colorAt } from '../../src/model/Canvas.js';
+import { createCanvas, paintCell, colorAt, addFrame, setActiveFrame } from '../../src/model/Canvas.js';
 
 function paintedColors(canvas) {
   return canvas.layers.filter((l) => l.autoManaged).map((l) => l.autoColor).sort();
@@ -70,4 +70,30 @@ test('erasing (null color) clears a cell without creating a layer', () => {
   paintCell(canvas, 0, 0, null);
   assert.equal(colorAt(canvas, 0, 0), null);
   assert.equal(canvas.layers.length, 0);
+});
+
+test('simple-tier auto-layer paint targets the active frame only, and an auto layer created mid-animation gets every frame', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  addFrame(canvas); // frame 1, active
+  paintCell(canvas, 0, 0, '#ff0000');
+  const layer = canvas.layers.find((l) => l.autoColor === '#ff0000');
+  assert.equal(layer.frames.length, 2); // matches canvas.frameCount even though it didn't exist at frame 0
+  assert.equal(layer.frames[1].pixels[0], 1);
+  assert.equal(layer.frames[0].pixels[0], 0);
+});
+
+test('auto-layer GC only collects a layer once every frame is empty, not just the active one', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  paintCell(canvas, 0, 0, '#ff0000'); // frame 0
+  addFrame(canvas); // frame 1, active
+  paintCell(canvas, 1, 1, '#ff0000'); // frame 1
+
+  setActiveFrame(canvas, 0);
+  paintCell(canvas, 0, 0, null); // clear frame 0's only red cell
+  // frame 1 still has a red cell, so the layer must survive
+  assert.equal(canvas.layers.some((l) => l.autoColor === '#ff0000'), true);
+
+  setActiveFrame(canvas, 1);
+  paintCell(canvas, 1, 1, null); // clear frame 1's only red cell too
+  assert.equal(canvas.layers.some((l) => l.autoColor === '#ff0000'), false);
 });

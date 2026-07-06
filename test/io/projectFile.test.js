@@ -57,6 +57,18 @@ test('an empty canvas (no layers) round-trips too', () => {
   assert.deepStrictEqual(restored, canvas);
 });
 
+test('deserializeProject defaults frameCount/activeFrame/frameRate for a pre-Phase-7 file that lacks them', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  const doc = serializeProject(canvas);
+  delete doc.canvas.frameCount;
+  delete doc.canvas.activeFrame;
+  delete doc.canvas.frameRate;
+  const restored = deserializeProject(doc);
+  assert.equal(restored.frameCount, 1);
+  assert.equal(restored.activeFrame, 0);
+  assert.equal(restored.frameRate, 12);
+});
+
 test('deserializeProject rejects a non-draw document', () => {
   assert.throws(() => deserializeProject({ pixelyphVersion: 1, kind: 'glyph', glyphSet: {} }), /expected kind 'draw'/);
 });

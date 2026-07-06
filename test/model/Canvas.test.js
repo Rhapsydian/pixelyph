@@ -14,6 +14,10 @@ import {
   clampActiveLayer,
   topVisibleLayerAt,
   convertTier,
+  addFrame,
+  duplicateFrame,
+  removeFrame,
+  setActiveFrame,
 } from '../../src/model/Canvas.js';
 
 test('colorAt reads the topmost (last) visible layer that owns a cell', () => {
@@ -265,11 +269,161 @@ test('eraseFromLayer clears a cell from a specific layer regardless of activeLay
   const layer = addLayer(canvas, { name: 'A' });
   paintCell(canvas, 0, 0, 'x');
   addLayer(canvas, { name: 'B' }); // becomes active; `layer` is no longer canvas.activeLayerId
-  eraseFromLayer(layer, 0, 0);
+  eraseFromLayer(canvas, layer, 0, 0);
   assert.equal(layer.frames[0].pixels[0], 0);
 
   layer.frames[0].pixels[0] = 1;
   layer.locked = true;
-  eraseFromLayer(layer, 0, 0);
+  eraseFromLayer(canvas, layer, 0, 0);
   assert.equal(layer.frames[0].pixels[0], 1); // untouched — locked
+});
+
+// --- Animation (Phase 7): frame add/remove/duplicate ---
+
+test('addFrame inserts a blank frame into every layer, keeping frameCount uniform, and makes it active', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const a = addLayer(canvas, { name: 'A' });
+  const b = addLayer(canvas, { name: 'B' });
+  paintCell(canvas, 0, 0, 'x'); // paints frame 0 of the active layer (b)
+
+  addFrame(canvas);
+
+  assert.equal(canvas.frameCount, 2);
+  assert.equal(canvas.activeFrame, 1);
+  assert.equal(a.frames.length, 2);
+  assert.equal(b.frames.length, 2);
+  // the invariant: every layer gets the new blank frame, regardless of which layer was active
+  assert.ok(a.frames[1].pixels.every((v) => v === 0));
+  assert.ok(b.frames[1].pixels.every((v) => v === 0));
+  // frame 0's prior content is untouched
+  assert.equal(b.frames[0].pixels[0], 1);
+});
+
+test('addFrame inserts at a given index, shifting later frames back', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas, {});
+  paintCell(canvas, 0, 0, 'x'); // frame 0
+  addFrame(canvas); // frame 1, now active
+  paintCell(canvas, 1, 1, 'x'); // frame 1
+
+  addFrame(canvas, 1); // insert a blank frame between 0 and (old) 1
+
+  assert.equal(layer.frames.length, 3);
+  assert.equal(layer.frames[0].pixels[0], 1); // original frame 0 untouched
+  assert.ok(layer.frames[1].pixels.every((v) => v === 0)); // new blank frame
+  assert.equal(layer.frames[2].pixels[3], 1); // old frame 1 shifted to index 2
+  assert.equal(canvas.activeFrame, 1);
+});
+
+test('duplicateFrame copies every layer\'s frame at index, inserting the copy right after it', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas, {});
+  paintCell(canvas, 0, 0, 'x');
+
+  duplicateFrame(canvas, 0);
+
+  assert.equal(canvas.frameCount, 2);
+  assert.equal(canvas.activeFrame, 1);
+  assert.equal(layer.frames[1].pixels[0], 1);
+  // independent buffers — mutating the copy doesn't affect the original
+  layer.frames[1].pixels[0] = 0;
+  assert.equal(layer.frames[0].pixels[0], 1);
+});
+
+test('removeFrame removes the frame from every layer and clamps activeFrame', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas, {});
+  addFrame(canvas); // frame 1
+  addFrame(canvas); // frame 2, active
+  paintCell(canvas, 0, 0, 'x'); // frame 2
+
+  removeFrame(canvas, 1);
+
+  assert.equal(canvas.frameCount, 2);
+  assert.equal(layer.frames.length, 2);
+  assert.equal(layer.frames[1].pixels[0], 1); // old frame 2 shifted to index 1
+  assert.equal(canvas.activeFrame, 1); // clamped from the stale index 2
+});
+
+test('removeFrame refuses to remove the last remaining frame', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas, {});
+  removeFrame(canvas, 0);
+  assert.equal(canvas.frameCount, 1);
+  assert.equal(layer.frames.length, 1);
+});
+
+test('setActiveFrame clamps to the valid range', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  addFrame(canvas);
+  setActiveFrame(canvas, 5);
+  assert.equal(canvas.activeFrame, 1);
+  setActiveFrame(canvas, -3);
+  assert.equal(canvas.activeFrame, 0);
+});
+
+test('paintCell targets only the active frame, leaving other frames of the same layer untouched', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas, {});
+  paintCell(canvas, 0, 0, 'x'); // frame 0
+  addFrame(canvas); // frame 1, active
+  paintCell(canvas, 1, 1, 'x'); // frame 1
+
+  assert.equal(layer.frames[0].pixels[0], 1);
+  assert.equal(layer.frames[0].pixels[3], 0);
+  assert.equal(layer.frames[1].pixels[0], 0);
+  assert.equal(layer.frames[1].pixels[3], 1);
+});
+
+test('colorAt/topVisibleLayerAt read from the active frame, not always frame 0', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas, { name: 'A' });
+  addFrame(canvas); // frame 1, active
+  paintCell(canvas, 0, 0, 'x'); // color arg is ignored for advanced-tier paint (see Canvas.paintCell); layer.style.fill drives colorAt
+
+  assert.equal(colorAt(canvas, 0, 0), layer.style.fill);
+  assert.equal(topVisibleLayerAt(canvas, 0, 0), layer);
+
+  setActiveFrame(canvas, 0);
+  assert.equal(colorAt(canvas, 0, 0), null);
+  assert.equal(topVisibleLayerAt(canvas, 0, 0), null);
+});
+
+test('mergeLayerDown merges frame-by-frame, keeping bottom\'s frameCount', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const bottom = addLayer(canvas, { name: 'bottom' });
+  addFrame(canvas); // frame 1
+  const top = addLayer(canvas, { name: 'top' }); // active, 2 frames (matches canvas.frameCount)
+
+  bottom.frames[0].pixels[0] = 1;
+  bottom.frames[1].pixels[1] = 1;
+  top.frames[0].pixels[2] = 1;
+  top.frames[1].pixels[3] = 1;
+
+  mergeLayerDown(canvas, top.id);
+
+  assert.equal(canvas.layers.length, 1);
+  const merged = canvas.layers[0];
+  assert.equal(merged.frames.length, 2);
+  assert.equal(merged.frames[0].pixels[0], 1);
+  assert.equal(merged.frames[0].pixels[2], 1);
+  assert.equal(merged.frames[1].pixels[1], 1);
+  assert.equal(merged.frames[1].pixels[3], 1);
+});
+
+test('addLayer creates a new layer with canvas.frameCount frames, not always 1', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  addFrame(canvas);
+  addFrame(canvas);
+  const layer = addLayer(canvas, {});
+  assert.equal(layer.frames.length, 3);
 });

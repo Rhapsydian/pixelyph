@@ -42,7 +42,21 @@ export function createCanvas({ width, height, palette = [] }) {
     // (persisted, but not part of undo snapshots) rather than artwork
     // content, so it lives here rather than being threaded through explicitly.
     activeLayerId: null,
+    // Animation (Phase 7): every layer's `frames` array is kept the same
+    // length (`frameCount`) uniformly — see addFrame/duplicateFrame/
+    // removeFrame below, the only places that length ever changes.
+    // `frameCount` is artwork content (part of undo snapshots, like
+    // width/height); `activeFrame` is a working-session pointer (like
+    // activeLayerId) into that array — persisted, but excluded from undo.
+    frameCount: 1,
+    activeFrame: 0,
+    frameRate: 12,
   };
+}
+
+/** @returns {number} the frame index every paint/read operation should target — clamps defensively in case activeFrame ever drifts out of range (e.g. an older saved project). */
+function currentFrameIndex(canvas) {
+  return Math.max(0, Math.min(canvas.activeFrame ?? 0, canvas.frameCount - 1));
 }
 
 /**
@@ -65,11 +79,12 @@ export function paintCell(canvas, x, y, color) {
   }
   const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
   if (!layer || layer.locked) return;
+  const frameIndex = currentFrameIndex(canvas);
   if (color) {
     growToInclude(layer, x, y);
-    set({ width: layer.width, height: layer.height, pixels: layer.frames[0].pixels }, x - layer.offset.x, y - layer.offset.y, 1);
+    set({ width: layer.width, height: layer.height, pixels: layer.frames[frameIndex].pixels }, x - layer.offset.x, y - layer.offset.y, 1);
   } else {
-    set({ width: layer.width, height: layer.height, pixels: layer.frames[0].pixels }, x - layer.offset.x, y - layer.offset.y, 0);
+    set({ width: layer.width, height: layer.height, pixels: layer.frames[frameIndex].pixels }, x - layer.offset.x, y - layer.offset.y, 0);
   }
 }
 
@@ -84,7 +99,7 @@ export function paintCell(canvas, x, y, color) {
  * @returns {object} Layer
  */
 export function addLayer(canvas, { name, fill = '#000000' } = {}) {
-  const layer = createLayer({ name: name ?? `Layer ${canvas.layers.length + 1}`, width: canvas.width, height: canvas.height, fill });
+  const layer = createLayer({ name: name ?? `Layer ${canvas.layers.length + 1}`, width: canvas.width, height: canvas.height, fill, frameCount: canvas.frameCount });
   canvas.layers.push(layer);
   canvas.activeLayerId = layer.id;
   return layer;
@@ -170,22 +185,29 @@ export function mergeLayerDown(canvas, layerId) {
   const maxY = Math.max(top.offset.y + top.height, bottom.offset.y + bottom.height);
   const width = maxX - minX;
   const height = maxY - minY;
-  const pixels = new Uint8Array(width * height);
-  for (const layer of [bottom, top]) {
-    const frame = layer.frames[0];
-    for (let y = 0; y < layer.height; y++) {
-      for (let x = 0; x < layer.width; x++) {
-        if (!frame.pixels[y * layer.width + x]) continue;
-        const nx = layer.offset.x + x - minX;
-        const ny = layer.offset.y + y - minY;
-        pixels[ny * width + nx] = 1;
+  // Frames merge index-for-index — both layers already carry the same
+  // uniform frameCount (see the invariant addFrame/duplicateFrame/removeFrame
+  // maintain), so frame 0 of the merged layer combines frame 0 of each
+  // source layer, frame 1 combines frame 1, and so on.
+  const frames = bottom.frames.map((_, frameIndex) => {
+    const pixels = new Uint8Array(width * height);
+    for (const layer of [bottom, top]) {
+      const frame = layer.frames[frameIndex];
+      for (let y = 0; y < layer.height; y++) {
+        for (let x = 0; x < layer.width; x++) {
+          if (!frame.pixels[y * layer.width + x]) continue;
+          const nx = layer.offset.x + x - minX;
+          const ny = layer.offset.y + y - minY;
+          pixels[ny * width + nx] = 1;
+        }
       }
     }
-  }
+    return { pixels };
+  });
   bottom.offset = { x: minX, y: minY };
   bottom.width = width;
   bottom.height = height;
-  bottom.frames = [{ pixels }];
+  bottom.frames = frames;
   canvas.layers.splice(index, 1);
   canvas.activeLayerId = bottom.id;
 }
@@ -198,15 +220,16 @@ export function mergeLayerDown(canvas, layerId) {
  * No-ops out-of-bounds or on a locked layer, matching paintCell's own
  * "locked blocks writes" convention.
  *
+ * @param {object} canvas
  * @param {object} layer
  * @param {number} canvasX
  * @param {number} canvasY
  */
-export function eraseFromLayer(layer, canvasX, canvasY) {
+export function eraseFromLayer(canvas, layer, canvasX, canvasY) {
   if (layer.locked) return;
   const lx = canvasX - layer.offset.x;
   const ly = canvasY - layer.offset.y;
-  set({ width: layer.width, height: layer.height, pixels: layer.frames[0].pixels }, lx, ly, 0);
+  set({ width: layer.width, height: layer.height, pixels: layer.frames[currentFrameIndex(canvas)].pixels }, lx, ly, 0);
 }
 
 /**
@@ -234,13 +257,14 @@ export function clampActiveLayer(canvas) {
  * @returns {object|null} Layer
  */
 export function topVisibleLayerAt(canvas, x, y) {
+  const frameIndex = currentFrameIndex(canvas);
   for (let i = canvas.layers.length - 1; i >= 0; i--) {
     const layer = canvas.layers[i];
     if (!layer.visible) continue;
     const lx = x - layer.offset.x;
     const ly = y - layer.offset.y;
     if (lx < 0 || ly < 0 || lx >= layer.width || ly >= layer.height) continue;
-    if (layer.frames[0].pixels[ly * layer.width + lx]) return layer;
+    if (layer.frames[frameIndex].pixels[ly * layer.width + lx]) return layer;
   }
   return null;
 }
@@ -326,15 +350,77 @@ export function resizeCanvas(canvas, newWidth, newHeight, anchor = 'top-left') {
  * @returns {string|null} a solid fill color, or null if the cell is empty/out of bounds
  */
 export function colorAt(canvas, x, y) {
+  const frameIndex = currentFrameIndex(canvas);
   for (let i = canvas.layers.length - 1; i >= 0; i--) {
     const layer = canvas.layers[i];
     if (!layer.visible) continue;
     const lx = x - layer.offset.x;
     const ly = y - layer.offset.y;
     if (lx < 0 || ly < 0 || lx >= layer.width || ly >= layer.height) continue;
-    if (layer.frames[0].pixels[ly * layer.width + lx]) {
+    if (layer.frames[frameIndex].pixels[ly * layer.width + lx]) {
       return typeof layer.style.fill === 'string' ? layer.style.fill : null;
     }
   }
   return null;
+}
+
+// --- Animation (Phase 7): frames.length kept uniform across every layer ---
+
+/**
+ * Inserts one new blank frame into every layer at `index` (defaulting to
+ * right after the currently active frame) and makes it active. The one
+ * invariant every frame operation here maintains: every layer's `frames`
+ * array is always exactly `canvas.frameCount` long, in lockstep.
+ *
+ * @param {object} canvas
+ * @param {number} [index]
+ */
+export function addFrame(canvas, index) {
+  const insertAt = index ?? currentFrameIndex(canvas) + 1;
+  for (const layer of canvas.layers) {
+    layer.frames.splice(insertAt, 0, { pixels: new Uint8Array(layer.width * layer.height) });
+  }
+  canvas.frameCount++;
+  canvas.activeFrame = insertAt;
+}
+
+/**
+ * Inserts a copy of frame `index` directly after it, in every layer, and
+ * makes the copy active.
+ *
+ * @param {object} canvas
+ * @param {number} index
+ */
+export function duplicateFrame(canvas, index) {
+  const insertAt = index + 1;
+  for (const layer of canvas.layers) {
+    layer.frames.splice(insertAt, 0, { pixels: layer.frames[index].pixels.slice() });
+  }
+  canvas.frameCount++;
+  canvas.activeFrame = insertAt;
+}
+
+/**
+ * Removes frame `index` from every layer. No-ops if only one frame remains —
+ * an animation can be trimmed down to a single frame, but never to zero.
+ *
+ * @param {object} canvas
+ * @param {number} index
+ */
+export function removeFrame(canvas, index) {
+  if (canvas.frameCount <= 1) return;
+  for (const layer of canvas.layers) layer.frames.splice(index, 1);
+  canvas.frameCount--;
+  canvas.activeFrame = Math.min(canvas.activeFrame, canvas.frameCount - 1);
+}
+
+/**
+ * Makes `index` the active frame — a working-session pointer move (like
+ * setActiveLayerId), not a committed action. Clamped to the valid range.
+ *
+ * @param {object} canvas
+ * @param {number} index
+ */
+export function setActiveFrame(canvas, index) {
+  canvas.activeFrame = Math.max(0, Math.min(index, canvas.frameCount - 1));
 }

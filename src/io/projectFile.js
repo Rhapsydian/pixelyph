@@ -70,6 +70,13 @@ export function serializeProject(canvas) {
       symmetryMode: canvas.symmetryMode,
       referenceImage: canvas.referenceImage ?? null,
       activeLayerId: canvas.activeLayerId ?? null,
+      // Animation (Phase 7): frameCount is artwork content (every layer's
+      // frames.length matches it); activeFrame/frameRate are working-session/
+      // playback conveniences persisted the same way symmetryMode/activeLayerId
+      // already are.
+      frameCount: canvas.frameCount,
+      activeFrame: canvas.activeFrame,
+      frameRate: canvas.frameRate,
       simpleTier: { colorToLayerId: Array.from(canvas.simpleTier.colorToLayerId.entries()) },
       layers: canvas.layers.map(serializeLayer),
     },
@@ -92,6 +99,12 @@ export function deserializeProject(doc) {
     symmetryMode: c.symmetryMode,
     referenceImage: c.referenceImage ?? undefined,
     activeLayerId: c.activeLayerId ?? null,
+    // Fall back to single-frame defaults for projects saved before Phase 7 —
+    // no version-migration step exists yet (see the plan's "explicitly
+    // deferred" note), so old files simply don't have these fields.
+    frameCount: c.frameCount ?? 1,
+    activeFrame: c.activeFrame ?? 0,
+    frameRate: c.frameRate ?? 12,
     simpleTier: { colorToLayerId: new Map(c.simpleTier.colorToLayerId) },
     layers: c.layers.map(deserializeLayer),
   };

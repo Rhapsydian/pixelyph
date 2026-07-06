@@ -62,6 +62,7 @@ export function extractRectFromActiveLayer(canvas, rect) {
   const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
   if (!layer) return [];
   const previewColor = typeof layer.style.fill === 'string' ? layer.style.fill : NON_SOLID_FILL_PREVIEW_COLOR;
+  const frame = layer.frames[Math.max(0, Math.min(canvas.activeFrame ?? 0, layer.frames.length - 1))];
   const cells = [];
   for (let y = rect.y0; y <= rect.y1; y++) {
     const ly = y - layer.offset.y;
@@ -69,7 +70,7 @@ export function extractRectFromActiveLayer(canvas, rect) {
     for (let x = rect.x0; x <= rect.x1; x++) {
       const lx = x - layer.offset.x;
       if (lx < 0 || lx >= layer.width) continue;
-      if (layer.frames[0].pixels[ly * layer.width + lx]) cells.push({ dx: x - rect.x0, dy: y - rect.y0, color: previewColor });
+      if (frame.pixels[ly * layer.width + lx]) cells.push({ dx: x - rect.x0, dy: y - rect.y0, color: previewColor });
     }
   }
   return cells;
@@ -96,7 +97,7 @@ export function clearRectAllLayers(canvas, rect) {
   for (let y = rect.y0; y <= rect.y1; y++) {
     for (let x = rect.x0; x <= rect.x1; x++) {
       const layer = topVisibleLayerAt(canvas, x, y);
-      if (layer) eraseFromLayer(layer, x, y);
+      if (layer) eraseFromLayer(canvas, layer, x, y);
     }
   }
 }

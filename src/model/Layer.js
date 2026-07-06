@@ -25,10 +25,11 @@ function makeId() {
 
 /**
  * @param {{ name?: string, width: number, height: number, fill?: string,
- *           offset?: {x:number,y:number}, autoManaged?: boolean, autoColor?: string }} options
+ *           offset?: {x:number,y:number}, autoManaged?: boolean, autoColor?: string,
+ *           frameCount?: number }} options
  * @returns {Layer}
  */
-export function createLayer({ name = 'Layer', width, height, fill = '#000000', offset = { x: 0, y: 0 }, autoManaged, autoColor }) {
+export function createLayer({ name = 'Layer', width, height, fill = '#000000', offset = { x: 0, y: 0 }, autoManaged, autoColor, frameCount = 1 }) {
   return {
     id: makeId(),
     name,
@@ -39,7 +40,7 @@ export function createLayer({ name = 'Layer', width, height, fill = '#000000', o
     width,
     height,
     style: { fill, effects: [] },
-    frames: [{ pixels: new Uint8Array(width * height) }],
+    frames: Array.from({ length: frameCount }, () => ({ pixels: new Uint8Array(width * height) })),
     ...(autoManaged !== undefined ? { autoManaged } : {}),
     ...(autoColor !== undefined ? { autoColor } : {}),
   };

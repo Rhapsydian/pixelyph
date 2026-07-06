@@ -5,6 +5,7 @@ import { PaletteSimple } from './ui/draw/PaletteSimple.jsx';
 import { ImportImagePanel } from './ui/draw/ImportImagePanel.jsx';
 import { SvgPixelEditor } from './ui/draw/SvgPixelEditor.jsx';
 import { TilePreviewPanel } from './ui/draw/TilePreviewPanel.jsx';
+import { FrameStrip } from './ui/draw/FrameStrip.jsx';
 import { LayersPanel } from './ui/draw/LayersPanel.jsx';
 import { LayerStylePanel } from './ui/draw/LayerStylePanel.jsx';
 import { GlyphGridEditor } from './ui/glyph/GlyphGridEditor.jsx';
@@ -295,6 +296,7 @@ export default function App() {
               <LayerStylePanel />
             </div>
           </div>
+          <FrameStrip />
           <TilePreviewPanel />
         </>
       ) : (
