@@ -10,9 +10,9 @@ export function TransparencyBackground({ width, height }) {
     <>
       <defs>
         <pattern id="pixelyph-checkerboard" width={1} height={1} patternUnits="userSpaceOnUse">
-          <rect x={0} y={0} width={1} height={1} fill="#ffffff" />
-          <rect x={0} y={0} width={0.5} height={0.5} fill="#d0d0d0" />
-          <rect x={0.5} y={0.5} width={0.5} height={0.5} fill="#d0d0d0" />
+          <rect x={0} y={0} width={1} height={1} fill="var(--chrome-bg-raised)" />
+          <rect x={0} y={0} width={0.5} height={0.5} fill="var(--chrome-border)" />
+          <rect x={0.5} y={0.5} width={0.5} height={0.5} fill="var(--chrome-border)" />
         </pattern>
       </defs>
       <rect x={0} y={0} width={width} height={height} fill="url(#pixelyph-checkerboard)" pointerEvents="none" />

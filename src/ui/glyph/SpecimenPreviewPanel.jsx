@@ -29,7 +29,7 @@ export function SpecimenPreviewPanel() {
   if (!glyphSet) return null;
 
   return (
-    <div className="panel" style={{ background: 'var(--chrome-bg-panel)', borderRadius: 'var(--radius-md)', minWidth: 320 }}>
+    <div className="panel canvas-region-stretch" style={{ background: 'var(--chrome-bg-panel)', borderRadius: 'var(--radius-md)' }}>
       <strong>Specimen Preview</strong>
       {glyphSet.kind === 'characters' ? (
         <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a sample string..." rows={2} style={{ width: '100%', resize: 'vertical' }} />

@@ -91,7 +91,7 @@ export function FrameStrip() {
   const togglePlayback = useStore((s) => s.togglePlayback);
 
   return (
-    <div className="panel">
+    <div className="panel canvas-region-stretch">
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
         <strong>Frames</strong>
         <IconButton

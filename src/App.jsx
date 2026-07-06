@@ -10,55 +10,6 @@ import { GlyphGridEditor } from './ui/glyph/GlyphGridEditor.jsx';
 import { SpecimenPreviewPanel } from './ui/glyph/SpecimenPreviewPanel.jsx';
 import { CHARSET_PRESETS, CHARSET_PRESET_IDS } from './model/charsetPresets.js';
 
-const ANCHORS = ['top-left', 'top', 'top-right', 'left', 'center', 'right', 'bottom-left', 'bottom', 'bottom-right'];
-
-function CanvasSizeControl() {
-  const width = useStore((s) => s.canvas.width);
-  const height = useStore((s) => s.canvas.height);
-  const resizeCanvas = useStore((s) => s.resizeCanvas);
-  const [nextWidth, setNextWidth] = useState(width);
-  const [nextHeight, setNextHeight] = useState(height);
-  const [anchor, setAnchor] = useState('top-left');
-
-  return (
-    <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-      <input type="number" min={1} max={512} value={nextWidth} onChange={(e) => setNextWidth(Number(e.target.value))} style={{ width: 56 }} />
-      x
-      <input type="number" min={1} max={512} value={nextHeight} onChange={(e) => setNextHeight(Number(e.target.value))} style={{ width: 56 }} />
-      <select value={anchor} onChange={(e) => setAnchor(e.target.value)}>
-        {ANCHORS.map((a) => (
-          <option key={a} value={a}>
-            {a}
-          </option>
-        ))}
-      </select>
-      <button className="btn" onClick={() => resizeCanvas(nextWidth, nextHeight, anchor)}>Resize</button>
-    </span>
-  );
-}
-
-function GlyphSizeControl() {
-  const activeCodepoint = useStore((s) => s.activeCodepoint);
-  const glyphSet = useStore((s) => s.glyphSet);
-  const resizeActiveGlyph = useStore((s) => s.resizeActiveGlyph);
-  const glyph = activeCodepoint != null ? glyphSet?.glyphs.get(activeCodepoint) : null;
-  const [nextWidth, setNextWidth] = useState(glyph?.width ?? 1);
-
-  useEffect(() => {
-    setNextWidth(glyph?.width ?? 1);
-  }, [activeCodepoint, glyph?.width]);
-
-  if (!glyph) return null;
-
-  return (
-    <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-      Glyph width:
-      <input type="number" min={1} max={256} value={nextWidth} onChange={(e) => setNextWidth(Number(e.target.value))} style={{ width: 56 }} />
-      <button className="btn" onClick={() => resizeActiveGlyph(nextWidth)}>Resize</button>
-    </span>
-  );
-}
-
 // --- New Project wizard ---
 
 function deriveDefaultWidth(pixelsPerEm, kind) {
@@ -249,7 +200,6 @@ export default function App() {
       <header className="app-header">
         <h1 className="app-logo">Pixelyph</h1>
         <MenuBar />
-        <span style={{ marginLeft: 'auto' }}>{mode === 'draw' ? <CanvasSizeControl /> : <GlyphSizeControl />}</span>
       </header>
       <ContextBar />
       <div className="app-workspace">

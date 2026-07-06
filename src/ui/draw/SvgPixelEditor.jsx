@@ -49,6 +49,7 @@ export function SvgPixelEditor() {
   const doc = mode === 'glyph' ? glyphCanvas : canvas;
 
   const svgRef = useRef(null);
+  const containerRef = useRef(null);
   const dragRef = useRef({ mode: null, start: null, origin: null });
   const isPointerDownRef = useRef(false);
   // Set when a pointerDown arrives while the animation is playing — that
@@ -129,6 +130,23 @@ export function SvgPixelEditor() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  // Scroll wheel controls zoom directly (rather than scrolling the
+  // container) — needs a native listener with { passive: false } since
+  // React attaches onWheel as passive by default, which silently ignores
+  // preventDefault() and would scroll the page alongside zooming.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    function onWheel(evt) {
+      evt.preventDefault();
+      const state = useStore.getState();
+      const delta = evt.deltaY > 0 ? -1 : 1;
+      state.setZoom(Math.max(4, Math.min(48, state.zoom + delta)));
+    }
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [doc]);
 
   const ctx = useMemo(
     () => ({
@@ -292,14 +310,15 @@ export function SvgPixelEditor() {
   if (!doc) {
     return (
       <div
+        ref={containerRef}
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           minHeight: 200,
-          border: '1px solid #444',
-          background: '#2a2a2a',
-          color: '#888',
+          border: '1px solid var(--chrome-border-strong)',
+          background: 'var(--chrome-bg-canvas-surround)',
+          color: 'var(--chrome-text-muted)',
         }}
       >
         No glyph selected — type a character or click a placeholder in the character map, then click Create.
@@ -308,7 +327,7 @@ export function SvgPixelEditor() {
   }
 
   return (
-    <div style={{ overflow: 'auto', border: '1px solid #444', background: '#2a2a2a', maxWidth: '100%', maxHeight: '70vh' }}>
+    <div ref={containerRef} style={{ overflow: 'auto', border: '1px solid var(--chrome-border-strong)', background: 'var(--chrome-bg-canvas-surround)', maxWidth: '100%', maxHeight: '70vh' }}>
       <svg
         ref={svgRef}
         width={pixelWidth}
