@@ -89,6 +89,90 @@ test('cross-glyph copy-paste: selecting in glyph A, switching to glyph B, and pa
   assert.ok(columnIsFilled(glyphB, 5), "glyph B received the pasted stem (centered paste at x=floor((12-1)/2)=5)");
 });
 
+test('palette actions (add/remove/reorder/clear) are undo-tracked, same as any other structural edit', () => {
+  const store = useStore.getState();
+  store.newProject('draw');
+  store.clearPaletteGroup('colors'); // newProject seeds the standard default palette; start from a known-empty state
+
+  store.addPaletteColor('#ff0000');
+  store.addPaletteColor('#00ff00');
+  assert.deepEqual(useStore.getState().canvas.palette.colors, ['#ff0000', '#00ff00']);
+
+  store.reorderPaletteEntry('colors', '#ff0000', 1);
+  assert.deepEqual(useStore.getState().canvas.palette.colors, ['#00ff00', '#ff0000']);
+
+  store.removePaletteEntry('colors', '#00ff00');
+  assert.deepEqual(useStore.getState().canvas.palette.colors, ['#ff0000']);
+
+  useStore.getState().undo();
+  assert.deepEqual(useStore.getState().canvas.palette.colors, ['#00ff00', '#ff0000'], 'removePaletteEntry is undo-tracked');
+
+  store.clearPaletteGroup('colors');
+  assert.deepEqual(useStore.getState().canvas.palette.colors, []);
+});
+
+test('applyPaletteEntryToActiveLayer: a saved fill (gradient) clones onto the active layer\'s fill, independent of the palette entry afterward', () => {
+  const store = useStore.getState();
+  store.newProject('draw');
+  store.setTier('advanced');
+  const layer = useStore.getState().canvas.layers[0];
+
+  store.addPaletteFill({ type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] });
+  const fillEntry = useStore.getState().canvas.palette.fills[0];
+
+  store.applyPaletteEntryToActiveLayer('fills', fillEntry.id);
+  const appliedFill = useStore.getState().canvas.layers.find((l) => l.id === layer.id).style.fill;
+  assert.equal(appliedFill.type, 'linear-gradient');
+  assert.equal(appliedFill.stops.length, 2);
+
+  appliedFill.stops.push({ offset: 0.5, color: '#888' });
+  assert.equal(fillEntry.stops.length, 2, 'mutating the applied fill must not affect the palette entry it came from');
+});
+
+test('applyPaletteEntryToActiveLayer: a saved style replaces fill+stroke+effects wholesale', () => {
+  const store = useStore.getState();
+  store.newProject('draw');
+  store.setTier('advanced');
+  const layer = useStore.getState().canvas.layers[0];
+  store.updateLayerStyle(layer.id, { fill: '#111111' });
+
+  store.addPaletteStyle({ fill: '#abcdef', stroke: { color: '#000000', width: 0.2 }, effects: [{ type: 'blur', stdDeviation: 0.3 }] });
+  const styleEntry = useStore.getState().canvas.palette.styles[0];
+
+  store.applyPaletteEntryToActiveLayer('styles', styleEntry.id);
+  const appliedStyle = useStore.getState().canvas.layers.find((l) => l.id === layer.id).style;
+  assert.equal(appliedStyle.fill, '#abcdef');
+  assert.equal(appliedStyle.stroke.width, 0.2);
+  assert.equal(appliedStyle.effects.length, 1);
+});
+
+test('importPixelyphPalette replaces the whole palette (colors + fills + styles); importLospecPalette only replaces colors', () => {
+  const store = useStore.getState();
+  store.newProject('draw');
+  store.addPaletteFill({ type: 'radial-gradient', cx: 0.5, cy: 0.5, r: 0.5, stops: [] });
+  store.addPaletteStyle({ fill: '#000000', effects: [] });
+
+  const ok = store.importPixelyphPalette(JSON.stringify({ pixelyphPalette: 1, colors: ['#123456'], fills: [], styles: [] }));
+  assert.equal(ok, true);
+  assert.deepEqual(useStore.getState().canvas.palette, { colors: ['#123456'], fills: [], styles: [] });
+
+  store.addPaletteFill({ type: 'radial-gradient', cx: 0.5, cy: 0.5, r: 0.5, stops: [] });
+  store.importLospecPalette('#aabbcc\n#ddeeff');
+  const palette = useStore.getState().canvas.palette;
+  assert.deepEqual(palette.colors, ['#aabbcc', '#ddeeff']);
+  assert.equal(palette.fills.length, 1, 'importLospecPalette must not touch the fills group');
+});
+
+test('importPixelyphPalette returns false and leaves the palette untouched for invalid/non-palette JSON', () => {
+  const store = useStore.getState();
+  store.newProject('draw');
+  store.addPaletteColor('#ff0000');
+  const before = useStore.getState().canvas.palette;
+  const ok = store.importPixelyphPalette('not json');
+  assert.equal(ok, false);
+  assert.equal(useStore.getState().canvas.palette, before, 'palette reference is unchanged on a failed import');
+});
+
 test('addFrame/duplicateFrame/removeFrame are undo-tracked; setActiveFrame is a working-session pointer move that isn\'t', () => {
   const store = useStore.getState();
   store.newProject('draw');

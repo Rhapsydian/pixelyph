@@ -108,3 +108,25 @@ project's current "early development" status where "clone and
 
 **To resolve:** revisit once the project is far enough along that shipping
 installable builds to non-developers actually makes sense.
+
+## Layer groups/folders — deferred again
+
+**Not scoped.** Raised during Phase 9's (Palette/Layers/Style review)
+planning and deferred a second time rather than built. A flat layer list
+(`LayersPanel.jsx`) is simple to reorder and reason about; nesting layers
+under a collapsible named group touches several things at once:
+
+- Reorder semantics: Phase 9 kept single-step move-up/move-down (no drag-
+  and-drop) for both layers and the palette — moving a layer in or out of
+  a group, or past a group boundary, needs its own defined behavior on top
+  of that.
+- Collapse/expand state per group — a new piece of working-session state
+  (like `activeLayerId`/`activeFrame`), not artwork content.
+- `composeLayersSvg.js`'s `composeLayersBody` currently iterates
+  `canvas.layers` as a flat, linear list — grouping would need either a
+  flattening pass before composition or a recursive rewrite, without
+  changing the exported SVG's actual visual stacking order.
+
+**To resolve:** scope properly in its own planning session if/when it's
+picked up — likely bigger than a slice of whatever phase is running at
+the time.

@@ -9,7 +9,7 @@ A pixel-art and pixel-font editor that outputs scalable SVG (and real font files
 
 ## Status
 
-Early development. Draw mode (both tiers, with frame-based animation), Glyph mode, project management (startup screen, new-project wizard, autosave recovery), font compilation, the Electron desktop shell, and a full visual design pass (real app layout, a token-based dark theme, a viewport minimap, resizable panels) are implemented — see "Features" below. Next up: a functional review of Palette, Layers, and Style — connecting the palette to per-layer color pickers, resolving the hidden layer-offset inputs, layer thumbnails, and possibly drag-and-drop reordering and style presets are all under consideration.
+Early development. Draw mode (both tiers, with frame-based animation), Glyph mode, project management (startup screen, new-project wizard, autosave recovery), font compilation, the Electron desktop shell, a full visual design pass (real app layout, a token-based dark theme, a viewport minimap, resizable panels), and a functional review of Palette/Layers/Style (a shared, exportable palette covering colors/gradients/patterns/saved styles, per-layer thumbnails, a rebuilt color-picking UI) are implemented — see "Features" below. The layer-offset X/Y inputs and layer groups/folders remain deliberately deferred (see `BACKLOG.md`).
 
 ## Features
 
@@ -23,7 +23,7 @@ Early development. Draw mode (both tiers, with frame-based animation), Glyph mod
 - Scroll wheel over the canvas zooms in/out directly; a toggleable grid overlay (off by default) and undo/redo
 - A **viewport minimap**, docked above the side panel's tabs: a small full-canvas thumbnail plus the zoom control; once zoom exceeds what's visible, a proportional rectangle appears that can be dragged to pan — native canvas scrollbars are disabled in favor of this
 - Checkerboard backdrop so an unpainted/transparent cell is never confused with one painted white
-- Palette swatches with Lospec `.hex` palette import
+- Palette: three groups — Colors, Gradients & Patterns, and saved Styles (a layer's whole fill+stroke+effects) — each independently reorderable (move left/right) and clearable; colors accept alpha (`#RRGGBBAA`); import accepts either a Lospec `.hex` file (colors only) or a previously-exported Pixelyph palette file (all three groups), and the whole palette can be exported back out for reuse across projects
 - Raster image import — downsamples and quantizes a PNG/JPEG/etc. into editable pixel layers (nearest-neighbor or area-averaging, matched to the existing palette or a freshly generated one)
 - Reference-image underlay for trace-over work (display-only, never exported)
 - Tile/pattern preview for checking seamless textures
@@ -33,11 +33,12 @@ Early development. Draw mode (both tiers, with frame-based animation), Glyph mod
 
 **Simple tier** hides layer management behind auto-managed, one-per-color layers — paint and the bookkeeping happens for you. **Advanced tier** exposes real layers with independent style:
 
-- Layers panel: add/remove/reorder/duplicate/merge-down (merging keeps the bottom layer's style, matching Photoshop/Aseprite convention), visible/locked toggles, opacity, and an eyedropper that activates a layer instead of sampling a color (unambiguous once gradients exist)
+- Layers panel: a per-layer live thumbnail, add/remove/reorder/duplicate/merge-down (merging keeps the bottom layer's style, matching Photoshop/Aseprite convention — move/duplicate/merge/delete act on whichever layer is currently active, from one toolbar rather than per-row buttons), visible/locked toggles, opacity, and an eyedropper that activates a layer instead of sampling a color (unambiguous once gradients exist)
 - Selection scope toggle: marquee select/copy/cut can read from just the active layer, or from whichever visible layer is topmost at each cell — paste always lands on the active layer either way
-- Per-layer fill: solid, linear gradient, or radial gradient (editable stops/angle/center) — solid and gradient-stop colors carry independent alpha (`#RRGGBBAA`), separate from stroke/effect alpha
+- Per-layer fill: solid, linear gradient, radial gradient (editable stops/angle/center), or a pattern (pasted SVG markup, tiled at a chosen size — authoring a pattern visually is out of scope) — solid and gradient-stop colors carry independent alpha (`#RRGGBBAA`), separate from stroke/effect alpha; any fill or a layer's whole style can be saved to the shared palette and reapplied to other layers
 - Per-layer stroke: color (independent alpha), width, join, and dash array
 - Per-layer effects: drop-shadow, blur, and a glow preset (a zero-offset, brightened drop-shadow) — each effect's color has independent alpha too
+- Color inputs throughout accept 3/4/6/8-digit hex shorthand directly, with a live preview swatch that opens a full R/G/B/A picker, plus quick-pick swatches from the shared palette's Colors group — every opacity/alpha slider (layer opacity, color alpha, reference-image opacity) pairs with a directly-editable percentage box
 - Tier toggle: simple → advanced is always safe, and creates one full-canvas layer with a solid black fill if the canvas was blank (so advanced tier never opens onto an empty, unpaintable layer stack); advanced → simple asks for confirmation, since it collapses every layer to its topmost visible color per cell (gradients and free-floating positions don't survive the trip)
 
 **Animation** — every layer carries a uniform number of frames (adding/duplicating/removing a frame does it across every layer at once, so they never drift out of sync), works in both tiers:

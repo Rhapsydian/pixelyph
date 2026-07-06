@@ -19,6 +19,8 @@ import {
   removeFrame,
   setActiveFrame,
   setFrameDuration,
+  cloneLayerStyle,
+  cloneFillValue,
 } from '../../src/model/Canvas.js';
 
 test('colorAt reads the topmost (last) visible layer that owns a cell', () => {
@@ -236,6 +238,42 @@ test('duplicateLayer copies content/style independently and inserts directly abo
 test('duplicateLayer returns null for an unknown layer id', () => {
   const canvas = createCanvas({ width: 2, height: 2 });
   assert.equal(duplicateLayer(canvas, 'nope'), null);
+});
+
+test('duplicateLayer copies a pattern fill independently (regression: cloneFillValue must not assume every object fill has .stops, like a gradient does)', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const original = addLayer(canvas, { name: 'Patterned' });
+  original.style.fill = { type: 'pattern', content: '<rect width="1" height="1"/>', width: 4, height: 4 };
+
+  const copy = duplicateLayer(canvas, original.id);
+  assert.deepEqual(copy.style.fill, original.style.fill);
+  assert.notEqual(copy.style.fill, original.style.fill);
+
+  copy.style.fill.content = '<circle/>';
+  assert.equal(original.style.fill.content, '<rect width="1" height="1"/>');
+});
+
+test('cloneFillValue clones a gradient\'s stops independently, passes patterns/solids/null through with no nested structure to clone', () => {
+  const gradient = { type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#fff' }] };
+  const clonedGradient = cloneFillValue(gradient);
+  assert.deepEqual(clonedGradient, gradient);
+  clonedGradient.stops[0].color = '#000';
+  assert.equal(gradient.stops[0].color, '#fff');
+
+  const pattern = { type: 'pattern', content: '<rect/>', width: 2, height: 2 };
+  assert.deepEqual(cloneFillValue(pattern), pattern);
+  assert.notEqual(cloneFillValue(pattern), pattern);
+
+  assert.equal(cloneFillValue('#ff0000'), '#ff0000');
+  assert.equal(cloneFillValue(null), null);
+});
+
+test('cloneLayerStyle handles every fill kind (solid/gradient/pattern/none) without throwing', () => {
+  for (const fill of ['#ff0000', { type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#fff' }] }, { type: 'pattern', content: '<rect/>', width: 2, height: 2 }, null]) {
+    const style = { fill, stroke: undefined, effects: [] };
+    assert.deepEqual(cloneLayerStyle(style), style);
+  }
 });
 
 test('mergeLayerDown combines pixel data across different offsets/sizes and keeps the bottom layer\'s id/name/style', () => {

@@ -32,11 +32,23 @@ import {
   removeFrame as removeFrameModel,
   setActiveFrame as setActiveFrameModel,
   setFrameDuration as setFrameDurationModel,
+  cloneLayerStyle,
+  cloneFillValue,
 } from '../model/Canvas.js';
 import { mirrorPoints } from '../model/mirror.js';
 import { createHistory, pushSnapshot, undo as historyUndo, redo as historyRedo, canUndo as historyCanUndo, canRedo as historyCanRedo } from '../model/history.js';
 import { normalizeRect, extractRectColors, extractRectFromActiveLayer, clearRect, clearRectAllLayers, pasteCells } from '../model/selection.js';
 import { parseLospecPalette } from '../model/paletteImport.js';
+import {
+  addColor as addPaletteColorModel,
+  addFill as addPaletteFillModel,
+  addStyle as addPaletteStyleModel,
+  removeEntry as removePaletteEntryModel,
+  reorderEntry as reorderPaletteEntryModel,
+  clearGroup as clearPaletteGroupModel,
+  serializePaletteFile,
+  parsePaletteFile,
+} from '../model/Palette.js';
 import { importRasterToGrid } from '../model/importRaster.js';
 import { decodeImageFile } from '../io/imageDecode.js';
 import { composeLayersSvg } from '../export/svg/composeLayersSvg.js';
@@ -419,15 +431,73 @@ export const useStore = create((set, get) => {
       commit();
     },
 
-    setPalette: (colors) => {
-      get().canvas.palette = colors;
+    // --- Palette (Phase 9): the shared swatch library — colors, saved
+    // fill values (gradients/patterns), and saved full layer styles. Each
+    // group's add/remove/reorder/clear is a thin wrapper over Palette.js's
+    // pure functions, committed (undo-tracked) the same way every other
+    // structural edit is.
+    addPaletteColor: (hex) => {
+      addPaletteColorModel(get().canvas.palette, hex);
+      commit();
+    },
+    addPaletteFill: (fillValue) => {
+      addPaletteFillModel(get().canvas.palette, fillValue);
+      commit();
+    },
+    addPaletteStyle: (styleValue) => {
+      addPaletteStyleModel(get().canvas.palette, cloneLayerStyle(styleValue));
+      commit();
+    },
+    removePaletteEntry: (group, key) => {
+      removePaletteEntryModel(get().canvas.palette, group, key);
+      commit();
+    },
+    reorderPaletteEntry: (group, key, direction) => {
+      reorderPaletteEntryModel(get().canvas.palette, group, key, direction);
+      commit();
+    },
+    clearPaletteGroup: (group) => {
+      clearPaletteGroupModel(get().canvas.palette, group);
+      commit();
+    },
+    /** Advanced tier only: applies a palette entry to the active layer — colors set `fill` to that color, fills clone their gradient/pattern value into `fill`, styles replace fill+stroke+effects wholesale. */
+    applyPaletteEntryToActiveLayer: (group, key) => {
+      const { canvas } = get();
+      const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
+      if (!layer) return;
+      if (group === 'colors') {
+        layer.style = { ...layer.style, fill: key };
+      } else if (group === 'fills') {
+        const entry = canvas.palette.fills.find((f) => f.id === key);
+        if (!entry) return;
+        const { id, ...fillValue } = entry;
+        layer.style = { ...layer.style, fill: cloneFillValue(fillValue) };
+      } else if (group === 'styles') {
+        const entry = canvas.palette.styles.find((s) => s.id === key);
+        if (!entry) return;
+        layer.style = cloneLayerStyle(entry);
+      } else {
+        return;
+      }
       commit();
     },
     importLospecPalette: (text) => {
       const colors = parseLospecPalette(text);
       if (colors.length === 0) return;
-      get().canvas.palette = colors;
+      get().canvas.palette.colors = colors;
       commit();
+    },
+    /** Imports a previously-exported Pixelyph palette (colors + fills + styles), replacing the whole palette. */
+    importPixelyphPalette: (text) => {
+      const parsed = parsePaletteFile(text);
+      if (!parsed) return false;
+      get().canvas.palette = parsed;
+      commit();
+      return true;
+    },
+    exportPalette: async () => {
+      const text = serializePaletteFile(get().canvas.palette);
+      await saveFile('palette.pixelyph-palette.json', new Blob([text], { type: 'application/json' }));
     },
 
     // --- Project lifecycle (Phase 4) ---
@@ -761,7 +831,7 @@ export const useStore = create((set, get) => {
     importRasterImage: async (file, { mode = 'nearest', useExistingPalette = false, maxColors = 16 } = {}) => {
       const { canvas } = get();
       const image = await decodeImageFile(file);
-      const result = importRasterToGrid(image, canvas.width, canvas.height, { mode, palette: useExistingPalette ? canvas.palette : undefined, maxColors });
+      const result = importRasterToGrid(image, canvas.width, canvas.height, { mode, palette: useExistingPalette ? canvas.palette.colors : undefined, maxColors });
       for (let y = 0; y < result.height; y++) {
         for (let x = 0; x < result.width; x++) {
           const color = result.colors[y * result.width + x];
@@ -769,9 +839,9 @@ export const useStore = create((set, get) => {
         }
       }
       if (!useExistingPalette) {
-        const merged = [...canvas.palette];
+        const merged = [...canvas.palette.colors];
         for (const color of result.palette) if (!merged.includes(color)) merged.push(color);
-        canvas.palette = merged;
+        canvas.palette.colors = merged;
       }
       commit();
     },

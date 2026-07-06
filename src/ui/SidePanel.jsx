@@ -1,5 +1,5 @@
 // Tabbed side panel, mode/tier-aware — replaces the old stack of
-// independent full-width bars (PaletteSimple/ImportImagePanel/
+// independent full-width bars (PalettePanel/ImportImagePanel/
 // TilePreviewPanel/LayersPanel/LayerStylePanel in Draw mode;
 // CharacterMapPanel/GlyphSetPanel/FontMetadataPanel/FontExportPanel in
 // Glyph mode). Each tab renders the existing panel component unmodified in
@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 import { useStore } from '../state/store.js';
 import { useResizeDrag } from './useResizeDrag.js';
 import { ViewportPreview } from './ViewportPreview.jsx';
-import { PaletteSimple } from './draw/PaletteSimple.jsx';
+import { PalettePanel } from './draw/PalettePanel.jsx';
 import { ImportImagePanel } from './draw/ImportImagePanel.jsx';
 import { TilePreviewPanel } from './draw/TilePreviewPanel.jsx';
 import { LayersPanel } from './draw/LayersPanel.jsx';
@@ -20,7 +20,7 @@ import { FontMetadataPanel } from './glyph/FontMetadataPanel.jsx';
 import { FontExportPanel } from './glyph/FontExportPanel.jsx';
 
 function drawTabs(tier) {
-  const tabs = [{ id: 'palette', label: 'Palette', Content: PaletteSimple }];
+  const tabs = [{ id: 'palette', label: 'Palette', Content: PalettePanel }];
   if (tier === 'advanced') {
     tabs.push({ id: 'layers', label: 'Layers', Content: LayersPanel });
     tabs.push({ id: 'style', label: 'Style', Content: LayerStylePanel });

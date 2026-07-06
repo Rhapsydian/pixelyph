@@ -4,11 +4,14 @@
 // See the plan's v1 LayerStyle scope note for why these are the only
 // primitives offered here.
 
+import { useEffect, useState } from 'react';
 import { useStore } from '../../state/store.js';
 import { ColorAlphaInput } from '../ColorAlphaInput.jsx';
+import { FillSwatch } from '../FillSwatch.jsx';
 
 const DEFAULT_LINEAR_GRADIENT = { type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#ffffff' }, { offset: 1, color: '#000000' }] };
 const DEFAULT_RADIAL_GRADIENT = { type: 'radial-gradient', cx: 0.5, cy: 0.5, r: 0.5, stops: [{ offset: 0, color: '#ffffff' }, { offset: 1, color: '#000000' }] };
+const DEFAULT_PATTERN = { type: 'pattern', content: '<rect width="1" height="1" fill="#888888"/>', width: 4, height: 4 };
 const DEFAULT_STROKE = { color: '#000000', width: 0.15, linejoin: 'round' };
 const DEFAULT_DROP_SHADOW = { type: 'drop-shadow', dx: 0.3, dy: 0.3, blur: 0.2, color: '#000000', opacity: 0.6 };
 const GLOW_PRESET = { type: 'drop-shadow', dx: 0, dy: 0, blur: 0.4, color: '#ffee88', opacity: 0.9 };
@@ -21,6 +24,8 @@ function fillKind(fill) {
 }
 
 function FillEditor({ layer, updateLayerStyle }) {
+  const addPaletteColor = useStore((s) => s.addPaletteColor);
+  const addPaletteFill = useStore((s) => s.addPaletteFill);
   const fill = layer.style.fill;
   const kind = fillKind(fill);
 
@@ -29,6 +34,12 @@ function FillEditor({ layer, updateLayerStyle }) {
     else if (newKind === 'solid') updateLayerStyle(layer.id, { fill: typeof fill === 'string' ? fill : '#808080' });
     else if (newKind === 'linear-gradient') updateLayerStyle(layer.id, { fill: DEFAULT_LINEAR_GRADIENT });
     else if (newKind === 'radial-gradient') updateLayerStyle(layer.id, { fill: DEFAULT_RADIAL_GRADIENT });
+    else if (newKind === 'pattern') updateLayerStyle(layer.id, { fill: DEFAULT_PATTERN });
+  }
+
+  function saveToPalette() {
+    if (kind === 'solid') addPaletteColor(fill);
+    else if (kind === 'linear-gradient' || kind === 'radial-gradient' || kind === 'pattern') addPaletteFill(fill);
   }
 
   function updateStop(index, patch) {
@@ -45,15 +56,31 @@ function FillEditor({ layer, updateLayerStyle }) {
     updateLayerStyle(layer.id, { fill: { ...fill, stops: fill.stops.filter((_, i) => i !== index) } });
   }
 
+  // Controlled + resynced-on-change (not defaultValue) so switching to a
+  // different pattern layer, or undo/redo, updates the textarea's displayed
+  // content rather than leaving it showing a stale value.
+  const [patternContent, setPatternContent] = useState(kind === 'pattern' ? fill.content : '');
+  useEffect(() => {
+    if (kind === 'pattern') setPatternContent(fill.content);
+  }, [layer.id, kind, kind === 'pattern' ? fill.content : null]);
+
   return (
     <fieldset style={{ border: '1px solid var(--chrome-border)', borderRadius: 'var(--radius-sm)' }}>
       <legend>Fill</legend>
-      <select value={kind} onChange={(e) => setKind(e.target.value)}>
-        <option value="none">None</option>
-        <option value="solid">Solid</option>
-        <option value="linear-gradient">Linear gradient</option>
-        <option value="radial-gradient">Radial gradient</option>
-      </select>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+        <select value={kind} onChange={(e) => setKind(e.target.value)}>
+          <option value="none">None</option>
+          <option value="solid">Solid</option>
+          <option value="linear-gradient">Linear gradient</option>
+          <option value="radial-gradient">Radial gradient</option>
+          <option value="pattern">Pattern</option>
+        </select>
+        {kind !== 'none' && (
+          <button className="btn" onClick={saveToPalette} title="Save this fill to the shared palette">
+            Save to palette
+          </button>
+        )}
+      </span>
 
       {kind === 'solid' && (
         <span style={{ marginLeft: 8 }}>
@@ -63,25 +90,28 @@ function FillEditor({ layer, updateLayerStyle }) {
 
       {(kind === 'linear-gradient' || kind === 'radial-gradient') && (
         <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {kind === 'linear-gradient' && (
-            <label>
-              Angle:{' '}
-              <input type="number" value={fill.angle} onChange={(e) => updateLayerStyle(layer.id, { fill: { ...fill, angle: Number(e.target.value) } })} style={{ width: 60 }} />°
-            </label>
-          )}
-          {kind === 'radial-gradient' && (
-            <span style={{ display: 'inline-flex', gap: 8 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <FillSwatch fill={fill} size={40} title="Live preview" />
+            {kind === 'linear-gradient' && (
               <label>
-                cx: <input type="number" step={0.05} value={fill.cx} onChange={(e) => updateLayerStyle(layer.id, { fill: { ...fill, cx: Number(e.target.value) } })} style={{ width: 50 }} />
+                Angle:{' '}
+                <input type="number" value={fill.angle} onChange={(e) => updateLayerStyle(layer.id, { fill: { ...fill, angle: Number(e.target.value) } })} style={{ width: 60 }} />°
               </label>
-              <label>
-                cy: <input type="number" step={0.05} value={fill.cy} onChange={(e) => updateLayerStyle(layer.id, { fill: { ...fill, cy: Number(e.target.value) } })} style={{ width: 50 }} />
-              </label>
-              <label>
-                r: <input type="number" step={0.05} value={fill.r} onChange={(e) => updateLayerStyle(layer.id, { fill: { ...fill, r: Number(e.target.value) } })} style={{ width: 50 }} />
-              </label>
-            </span>
-          )}
+            )}
+            {kind === 'radial-gradient' && (
+              <span style={{ display: 'inline-flex', gap: 8 }}>
+                <label>
+                  cx: <input type="number" step={0.05} value={fill.cx} onChange={(e) => updateLayerStyle(layer.id, { fill: { ...fill, cx: Number(e.target.value) } })} style={{ width: 50 }} />
+                </label>
+                <label>
+                  cy: <input type="number" step={0.05} value={fill.cy} onChange={(e) => updateLayerStyle(layer.id, { fill: { ...fill, cy: Number(e.target.value) } })} style={{ width: 50 }} />
+                </label>
+                <label>
+                  r: <input type="number" step={0.05} value={fill.r} onChange={(e) => updateLayerStyle(layer.id, { fill: { ...fill, r: Number(e.target.value) } })} style={{ width: 50 }} />
+                </label>
+              </span>
+            )}
+          </span>
           {fill.stops.map((stop, i) => (
             <span key={i} style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
               <input type="number" min={0} max={1} step={0.05} value={stop.offset} onChange={(e) => updateStop(i, { offset: Number(e.target.value) })} style={{ width: 50 }} />
@@ -94,6 +124,30 @@ function FillEditor({ layer, updateLayerStyle }) {
           <button onClick={addStop} style={{ alignSelf: 'flex-start' }}>
             + Stop
           </button>
+        </div>
+      )}
+
+      {kind === 'pattern' && (
+        <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <FillSwatch fill={fill} size={40} title="Live preview" />
+            <label>
+              Tile width: <input type="number" min={0.1} step={0.5} value={fill.width} onChange={(e) => updateLayerStyle(layer.id, { fill: { ...fill, width: Number(e.target.value) } })} style={{ width: 50 }} />
+            </label>
+            <label>
+              Tile height: <input type="number" min={0.1} step={0.5} value={fill.height} onChange={(e) => updateLayerStyle(layer.id, { fill: { ...fill, height: Number(e.target.value) } })} style={{ width: 50 }} />
+            </label>
+          </span>
+          <label>
+            Pattern content (raw SVG markup, tiled at the size above — authoring a pattern visually is out of scope):
+            <textarea
+              value={patternContent}
+              onChange={(e) => setPatternContent(e.target.value)}
+              onBlur={() => patternContent !== fill.content && updateLayerStyle(layer.id, { fill: { ...fill, content: patternContent } })}
+              rows={3}
+              style={{ width: '100%', fontFamily: 'var(--font-mono, monospace)', fontSize: 'var(--text-xs)' }}
+            />
+          </label>
         </div>
       )}
     </fieldset>
@@ -219,6 +273,7 @@ export function LayerStylePanel() {
   // subscribing to it is what SvgPixelEditor already does for the same reason.
   const canvas = useStore((s) => s.canvas);
   const updateLayerStyle = useStore((s) => s.updateLayerStyle);
+  const addPaletteStyle = useStore((s) => s.addPaletteStyle);
 
   if (canvas.tier !== 'advanced') return null;
   const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
@@ -226,7 +281,12 @@ export function LayerStylePanel() {
 
   return (
     <div className="panel">
-      <strong>Style — {layer.name}</strong>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <strong>Style — {layer.name}</strong>
+        <button className="btn" onClick={() => addPaletteStyle(layer.style)} title="Save this layer's whole fill+stroke+effects as a reusable palette entry">
+          Save style
+        </button>
+      </div>
       <FillEditor layer={layer} updateLayerStyle={updateLayerStyle} />
       <StrokeEditor layer={layer} updateLayerStyle={updateLayerStyle} />
       <EffectsEditor layer={layer} updateLayerStyle={updateLayerStyle} />

@@ -4,6 +4,8 @@
 // JSON bloat on larger canvases. Pure data in/out — no DOM/Electron API,
 // same code runs in the web build and the Electron build.
 
+import { normalizePalette } from '../model/Palette.js';
+
 export const PIXELYPH_VERSION = 1;
 
 function bytesToBase64(bytes) {
@@ -97,7 +99,9 @@ export function deserializeProject(doc) {
     width: c.width,
     height: c.height,
     tier: c.tier,
-    palette: c.palette,
+    // Pre-Phase-9 saves have a bare string[] palette; normalizePalette
+    // migrates it to the { colors, fills, styles } shape transparently.
+    palette: normalizePalette(c.palette),
     symmetryMode: c.symmetryMode,
     referenceImage: c.referenceImage ?? undefined,
     activeLayerId: c.activeLayerId ?? null,

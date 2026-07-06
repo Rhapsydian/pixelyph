@@ -19,14 +19,14 @@ test('buildDrawDocument produces a canvas with the standard default dimensions',
 
 test('buildDrawDocument uses the standard default palette', () => {
   const canvas = buildDrawDocument();
-  assert.deepEqual(canvas.palette, DEFAULT_PALETTE);
+  assert.deepEqual(canvas.palette.colors, DEFAULT_PALETTE);
 });
 
 test('buildDrawDocument produces independent canvases each call', () => {
   const a = buildDrawDocument();
   const b = buildDrawDocument();
-  a.palette.push('#ff0000');
-  assert.equal(b.palette.length, DEFAULT_PALETTE.length, 'palettes should be independent arrays');
+  a.palette.colors.push('#ff0000');
+  assert.equal(b.palette.colors.length, DEFAULT_PALETTE.length, 'palettes should be independent arrays');
 });
 
 // --- buildGlyphDocument ---

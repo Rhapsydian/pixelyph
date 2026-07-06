@@ -81,6 +81,14 @@ test('deserializeProject derives a uniform frameDurations array from frameRate/f
   assert.deepEqual(restored.frameDurations, [Math.round(1000 / 24), Math.round(1000 / 24), Math.round(1000 / 24)]);
 });
 
+test('deserializeProject migrates a pre-Phase-9 bare-array palette into the { colors, fills, styles } shape', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  const doc = serializeProject(canvas);
+  doc.canvas.palette = ['#ff0000', '#00ff00']; // pre-Phase-9 saves stored palette as a flat array
+  const restored = deserializeProject(doc);
+  assert.deepEqual(restored.palette, { colors: ['#ff0000', '#00ff00'], fills: [], styles: [] });
+});
+
 test('deserializeProject rejects a non-draw document', () => {
   assert.throws(() => deserializeProject({ pixelyphVersion: 1, kind: 'glyph', glyphSet: {} }), /expected kind 'draw'/);
 });

@@ -8,10 +8,33 @@
 import { resizeAt, anchorOffset, ANCHOR_X_FRACS, ANCHOR_Y_FRACS, set } from './Grid.js';
 import { paintSimpleCell } from './autoLayerSync.js';
 import { createLayer, growToInclude } from './Layer.js';
+import { normalizePalette } from './Palette.js';
 
-function cloneLayerStyle(style) {
+/**
+ * Deep-clones a bare fill value (solid/gradient/pattern/null) — gradients'
+ * `stops` array is the only nested structure that needs its own copy;
+ * patterns (content/width/height) and solid strings have nothing further
+ * to clone.
+ *
+ * @param {string|object|null} fill
+ * @returns {string|object|null}
+ */
+export function cloneFillValue(fill) {
+  if (typeof fill === 'string' || fill == null) return fill;
+  return { ...fill, ...(fill.stops ? { stops: fill.stops.map((s) => ({ ...s })) } : {}) };
+}
+
+/**
+ * Deep-clones a Layer's style (fill/stroke/effects) so mutating one layer's
+ * style afterward never affects the other — used by duplicateLayer, and by
+ * the palette's "save style"/"apply style" flow (state/store.js).
+ *
+ * @param {object} style Layer.style
+ * @returns {object} an independent copy
+ */
+export function cloneLayerStyle(style) {
   return {
-    fill: typeof style.fill === 'string' || style.fill == null ? style.fill : { ...style.fill, stops: style.fill.stops.map((s) => ({ ...s })) },
+    fill: cloneFillValue(style.fill),
     stroke: style.stroke ? { ...style.stroke, ...(style.stroke.dashArray ? { dashArray: style.stroke.dashArray.slice() } : {}) } : undefined,
     effects: style.effects.map((e) => ({ ...e })),
   };
@@ -23,7 +46,7 @@ function makeId() {
 }
 
 /**
- * @param {{ width: number, height: number, palette?: string[] }} options
+ * @param {{ width: number, height: number, palette?: string[]|{colors?:string[],fills?:object[],styles?:object[]} }} options
  * @returns {object} Canvas
  */
 export function createCanvas({ width, height, palette = [] }) {
@@ -33,7 +56,7 @@ export function createCanvas({ width, height, palette = [] }) {
     height,
     layers: [],
     tier: 'simple',
-    palette,
+    palette: normalizePalette(palette),
     simpleTier: { colorToLayerId: new Map() },
     symmetryMode: 'none',
     referenceImage: undefined,

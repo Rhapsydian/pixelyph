@@ -30,6 +30,14 @@ test('serializeFill: radial-gradient carries cx/cy/r through verbatim', () => {
   assert.match(def, /<radialGradient id="grad-2" cx="0\.5" cy="0\.4" r="0\.6">/);
 });
 
+test('serializeFill: pattern emits a <pattern> def sized in userSpaceOnUse and passes content through verbatim', () => {
+  const fill = { type: 'pattern', content: '<rect width="1" height="1" fill="#f00"/>', width: 2, height: 3 };
+  const { attr, def } = serializeFill(fill, 'grad-3');
+  assert.equal(attr, 'url(#grad-3)');
+  assert.match(def, /<pattern id="grad-3" patternUnits="userSpaceOnUse" width="2" height="3">/);
+  assert.match(def, /<rect width="1" height="1" fill="#f00"\/>/);
+});
+
 test('serializeStroke: no stroke serializes to an empty string', () => {
   assert.equal(serializeStroke(undefined), '');
 });

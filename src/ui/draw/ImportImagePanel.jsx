@@ -4,6 +4,7 @@
 
 import { useRef, useState } from 'react';
 import { useStore } from '../../state/store.js';
+import { PercentSlider } from '../PercentSlider.jsx';
 
 function readAsDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -69,14 +70,7 @@ export function ImportImagePanel() {
         <>
           <label>
             Opacity:{' '}
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={referenceImage.opacity}
-              onChange={(e) => setReferenceImageOpacity(Number(e.target.value))}
-            />
+            <PercentSlider value={referenceImage.opacity} onChange={setReferenceImageOpacity} title="Reference image opacity" />
           </label>
           <button className="btn" onClick={clearReferenceImage}>Clear Reference</button>
         </>
