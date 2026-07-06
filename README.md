@@ -9,7 +9,7 @@ A pixel-art and pixel-font editor that outputs scalable SVG (and real font files
 
 ## Status
 
-Early development. Draw mode (both tiers), Glyph mode, project management (startup screen, new-project wizard, autosave recovery), and font compilation are implemented — see "Features" below. The Electron desktop shell, animation, and a visual design pass are still ahead.
+Early development. Draw mode (both tiers), Glyph mode, project management (startup screen, new-project wizard, autosave recovery), font compilation, and the Electron desktop shell are implemented — see "Features" below. Animation and a visual design pass are still ahead.
 
 ## Features
 
@@ -63,12 +63,22 @@ Early development. Draw mode (both tiers), Glyph mode, project management (start
 
 Behind the UI, `src/model`, `src/export`, and `src/io/projectFile.js` (including `GlyphSet.js` and `charsetPresets.js`) are pure data/functions with no DOM dependency — the same style as pixelloom's own `trace.js`/`index.js` — and are covered by `node --test`.
 
+**Electron desktop shell** — the exact same `src/` code as the web build, wrapped by `electron-vite`; only `src/io/platform.js` and `src/io/autosave.js` branch on `isElectron()` to call through IPC instead of the web APIs:
+
+- Save/Open dialogs are native OS file pickers (`electron/main/index.js`'s `dialog.showSaveDialog`/`showOpenDialog`) instead of the File System Access API or a download link
+- Autosave writes to a JSON file in the app's userData directory instead of IndexedDB
+- `electron/preload/index.js` exposes the narrow `window.pixelyph.{saveFile,openFile,writeAutosave,readAutosave,clearAutosave}` bridge those two files already expected
+- Packaged for Windows via `electron-builder` (NSIS installer); macOS/Linux targets are a config addition away, not attempted yet
+
 ## Development
 
 ```sh
 npm install
-npm run dev    # start the dev server
-npm test       # run node --test
+npm run dev            # start the web dev server
+npm test                # run node --test
+npm run electron:dev    # start the Electron app (HMR renderer)
+npm run electron:build  # build electron/, out/main + out/preload + out/renderer
+npm run dist:win        # build, then package a Windows installer into release/
 ```
 
 ## Backlog

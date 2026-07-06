@@ -14,5 +14,5 @@
       "quantize": ["src/types/quantize.d.ts"]
     }
   },
-  "include": ["src/**/*", "test/**/*"]
+  "include": ["src/**/*", "test/**/*", "electron/**/*"]
 }
