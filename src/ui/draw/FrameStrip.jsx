@@ -10,9 +10,11 @@ import { useEffect, useState } from 'react';
 import { useStore } from '../../state/store.js';
 import { composeFrameBody } from '../../export/svg/composeLayersSvg.js';
 import { IconButton } from '../IconButton.jsx';
+import { useResizeDrag } from '../useResizeDrag.js';
 import { PlayIcon, PauseIcon, PlusIcon, DuplicateIcon, TrashIcon } from '../icons.jsx';
 
 const THUMBNAIL_SIZE = 48;
+const MIN_HEIGHT = 140;
 
 function FrameThumbnail({ canvas, frameIndex }) {
   const { body, defs } = composeFrameBody(canvas, frameIndex);
@@ -89,9 +91,12 @@ export function FrameStrip() {
   const toggleOnionSkin = useStore((s) => s.toggleOnionSkin);
   const isPlaying = useStore((s) => s.isPlaying);
   const togglePlayback = useStore((s) => s.togglePlayback);
+  const [height, onHandlePointerDown] = useResizeDrag({ initial: MIN_HEIGHT, min: MIN_HEIGHT, max: 480, axis: 'y', invert: true });
 
   return (
-    <div className="panel canvas-region-stretch">
+    <div className="canvas-region-stretch" style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      <div className="resize-handle-row" onPointerDown={onHandlePointerDown} title="Drag to resize" />
+      <div className="panel" style={{ height, minHeight: MIN_HEIGHT, overflow: 'auto', minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
         <strong>Frames</strong>
         <IconButton
@@ -127,6 +132,7 @@ export function FrameStrip() {
             isOnlyFrame={canvas.frameCount <= 1}
           />
         ))}
+      </div>
       </div>
     </div>
   );

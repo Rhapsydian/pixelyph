@@ -205,17 +205,10 @@ export default function App() {
       <div className="app-workspace">
         <ToolRail />
         <main className="canvas-region">
-          {mode === 'draw' ? (
-            <>
-              <SvgPixelEditor />
-              <FrameStrip />
-            </>
-          ) : (
-            <>
-              <GlyphGridEditor />
-              <SpecimenPreviewPanel />
-            </>
-          )}
+          <div className="canvas-editor-area">
+            {mode === 'draw' ? <SvgPixelEditor /> : <GlyphGridEditor />}
+          </div>
+          {mode === 'draw' ? <FrameStrip /> : <SpecimenPreviewPanel />}
         </main>
         <SidePanel />
       </div>
