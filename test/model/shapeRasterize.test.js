@@ -41,7 +41,7 @@ test('rasterizeRect normalizes reversed corners', () => {
 
 test('rasterizeEllipse filled circle has no holes and is roughly symmetric', () => {
   const grid = createGrid(9, 9);
-  rasterizeEllipse(grid, 4, 4, 4, 4, { filled: true });
+  rasterizeEllipse(grid, 0, 0, 8, 8, { filled: true });
   // every row within the circle's vertical extent has at least one on pixel, and the shape is left-right symmetric
   for (let y = 0; y < 9; y++) {
     const row = grid.pixels.slice(y * 9, y * 9 + 9);
@@ -58,9 +58,9 @@ test('rasterizeEllipse filled circle has no holes and is roughly symmetric', () 
 
 test('rasterizeEllipse outline is a subset of the filled version', () => {
   const filled = createGrid(9, 9);
-  rasterizeEllipse(filled, 4, 4, 4, 4, { filled: true });
+  rasterizeEllipse(filled, 0, 0, 8, 8, { filled: true });
   const outline = createGrid(9, 9);
-  rasterizeEllipse(outline, 4, 4, 4, 4, { filled: false });
+  rasterizeEllipse(outline, 0, 0, 8, 8, { filled: false });
   for (let i = 0; i < filled.pixels.length; i++) {
     if (outline.pixels[i]) assert.equal(filled.pixels[i], 1, `outline pixel ${i} should also be filled`);
   }
@@ -69,13 +69,25 @@ test('rasterizeEllipse outline is a subset of the filled version', () => {
   assert.ok(outlineCount < filledCount, 'outline should have fewer on pixels than filled');
 });
 
-test('rasterizeEllipse with zero radius plots a single pixel', () => {
+test('rasterizeEllipse with a 1x1 bounding box plots a single pixel', () => {
   const grid = createGrid(3, 3);
-  rasterizeEllipse(grid, 1, 1, 0, 0, { filled: false });
+  rasterizeEllipse(grid, 1, 1, 1, 1, { filled: false });
   assert.deepEqual(rows(grid), [
     [0, 0, 0],
     [0, 1, 0],
     [0, 0, 0],
+  ]);
+});
+
+test('rasterizeEllipse with a 1-cell-wide bounding box draws a vertical line', () => {
+  const grid = createGrid(3, 5);
+  rasterizeEllipse(grid, 1, 0, 1, 4, { filled: false });
+  assert.deepEqual(rows(grid), [
+    [0, 1, 0],
+    [0, 1, 0],
+    [0, 1, 0],
+    [0, 1, 0],
+    [0, 1, 0],
   ]);
 });
 
@@ -109,18 +121,74 @@ function isFullyConnected(grid) {
 
 test('rasterizeEllipse outline has no gaps for a wide, flat ellipse (regression: per-row min/max used to drop the flat cap)', () => {
   const grid = createGrid(21, 11);
-  rasterizeEllipse(grid, 10, 5, 9, 4, { filled: false });
+  rasterizeEllipse(grid, 1, 1, 19, 9, { filled: false });
   assert.ok(isFullyConnected(grid), 'outline should be one unbroken 8-connected loop');
 });
 
 test('rasterizeEllipse outline has no gaps for a tall, narrow ellipse', () => {
   const grid = createGrid(11, 21);
-  rasterizeEllipse(grid, 5, 10, 3, 9, { filled: false });
+  rasterizeEllipse(grid, 2, 1, 8, 19, { filled: false });
   assert.ok(isFullyConnected(grid), 'outline should be one unbroken 8-connected loop');
 });
 
 test('rasterizeEllipse outline has no gaps for a circle', () => {
   const grid = createGrid(15, 15);
-  rasterizeEllipse(grid, 7, 7, 6, 6, { filled: false });
+  rasterizeEllipse(grid, 1, 1, 13, 13, { filled: false });
   assert.ok(isFullyConnected(grid), 'outline should be one unbroken 8-connected loop');
+});
+
+test('rasterizeEllipse normalizes reversed corners', () => {
+  const gridA = createGrid(9, 9);
+  rasterizeEllipse(gridA, 8, 8, 0, 0, { filled: true });
+  const gridB = createGrid(9, 9);
+  rasterizeEllipse(gridB, 0, 0, 8, 8, { filled: true });
+  assert.deepEqual(rows(gridA), rows(gridB));
+});
+
+// Regression test for the actual reported bug: dragging the ellipse tool
+// from a fixed corner used to compute a fractional center+radius from the
+// two corners and round each independently, which — for an even-width
+// bounding box — rounded to the exact same shape as the adjacent odd-width
+// box one drag step earlier. The ellipse only visibly grew every other
+// pixel, and a 16-wide circle (an even width) was unreachable. Operating
+// directly on the box's edges (no center/radius rounding) fixes this: every
+// incremental drag step must reach its own requested edge exactly.
+test('rasterizeEllipse outline reaches every bounding box edge exactly at every drag increment, including even widths', () => {
+  for (let x1 = 1; x1 <= 15; x1++) {
+    const grid = createGrid(16, 16);
+    rasterizeEllipse(grid, 0, 0, x1, x1, { filled: false });
+    let maxX = -1;
+    let maxY = -1;
+    for (let y = 0; y < grid.height; y++) {
+      for (let x = 0; x < grid.width; x++) {
+        if (grid.pixels[y * grid.width + x]) {
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+        }
+      }
+    }
+    assert.equal(maxX, x1, `dragging to x1=${x1} should reach x=${x1}, not a rounded-down neighbor`);
+    assert.equal(maxY, x1, `dragging to y1=${x1} should reach y=${x1}, not a rounded-down neighbor`);
+  }
+});
+
+test('rasterizeEllipse outline fits a 16x16 (even-width) bounding box exactly, as a circle', () => {
+  const grid = createGrid(16, 16);
+  rasterizeEllipse(grid, 0, 0, 15, 15, { filled: false });
+  assert.ok(isFullyConnected(grid), 'outline should be one unbroken 8-connected loop');
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (let y = 0; y < grid.height; y++) {
+    for (let x = 0; x < grid.width; x++) {
+      if (grid.pixels[y * grid.width + x]) {
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+      }
+    }
+  }
+  assert.deepEqual({ minX, maxX, minY, maxY }, { minX: 0, maxX: 15, minY: 0, maxY: 15 });
 });

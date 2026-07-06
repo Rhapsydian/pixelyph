@@ -27,34 +27,41 @@ export function rasterizeRect(grid, x0, y0, x1, y1, { filled = false } = {}) {
 }
 
 /**
- * Midpoint ellipse algorithm (two-region, integer-only) — the standard
- * approach for pixel-grid circles/ellipses. Filled mode collects, per
- * scanline, the min/max x the boundary touches and spans between them.
- * Outline mode plots every point the algorithm actually traces — not just
- * each row's two x-extremes, which loses points and breaks continuity: near
- * the flat top/bottom of a wide ellipse, the algorithm legitimately plots
- * several x's for the same row before y next decrements (that's exactly
- * what "flat" means here), and collapsing those down to only the row's
- * leftmost/rightmost point can leave the two surviving points several
- * pixels apart with nothing drawn between them, and no guarantee the row
- * below reconnects to either one — a visible gap in the outline.
+ * Ellipse-in-rectangle rasterization (Zingl's algorithm) — takes the drag's
+ * two corners directly, the same convention as rasterizeRect above, rather
+ * than a center+radius. That's not just a style choice: a center+radius
+ * form only has a well-defined *integer* radius every other drag step
+ * (radius = (x1-x0)/2 is a whole number only when the box width is odd),
+ * so rounding cx/rx independently for an even-width box made two adjacent
+ * drag positions round to the identical shape — the ellipse visibly only
+ * updated every other pixel, and a 16-wide (even) circle was unreachable.
+ * Operating on the box's edges directly needs no such rounding: even and
+ * odd widths/heights both converge to an exact pixel-perfect boundary.
+ *
+ * Filled mode collects, per scanline, the min/max x the boundary touches
+ * and spans between them. Outline mode plots every point the algorithm
+ * actually traces — not just each row's two x-extremes, which loses points
+ * and breaks continuity: near the flat top/bottom of a wide ellipse, the
+ * algorithm legitimately plots several x's for the same row before y next
+ * decrements (that's exactly what "flat" means here), and collapsing those
+ * down to only the row's leftmost/rightmost point can leave the two
+ * surviving points several pixels apart with nothing drawn between them,
+ * and no guarantee the row below reconnects to either one — a visible gap.
  *
  * @param {import('./Grid.js').Grid} grid
- * @param {number} cx
- * @param {number} cy
- * @param {number} rx
- * @param {number} ry
+ * @param {number} x0
+ * @param {number} y0
+ * @param {number} x1
+ * @param {number} y1
  * @param {{ filled?: boolean }} [options]
  */
-export function rasterizeEllipse(grid, cx, cy, rx, ry, { filled = false } = {}) {
-  cx = Math.round(cx);
-  cy = Math.round(cy);
-  rx = Math.round(rx);
-  ry = Math.round(ry);
-  if (rx <= 0 || ry <= 0) {
-    set(grid, cx, cy, 1);
-    return;
-  }
+export function rasterizeEllipse(grid, x0, y0, x1, y1, { filled = false } = {}) {
+  const minX = Math.min(x0, x1);
+  const maxX = Math.max(x0, x1);
+  const minY = Math.min(y0, y1);
+  const maxY = Math.max(y0, y1);
+  const a = maxX - minX;
+  const b = maxY - minY;
 
   /** @type {Map<number, {minX:number,maxX:number}>} */
   const rows = new Map();
@@ -69,53 +76,63 @@ export function rasterizeEllipse(grid, cx, cy, rx, ry, { filled = false } = {}) 
     }
     points.push([px, py]);
   };
-  const plot = (x, y) => {
-    record(cx + x, cy + y);
-    record(cx - x, cy + y);
-    record(cx + x, cy - y);
-    record(cx - x, cy - y);
-  };
 
-  const rx2 = rx * rx;
-  const ry2 = ry * ry;
-  const twoRx2 = 2 * rx2;
-  const twoRy2 = 2 * ry2;
+  if (a === 0 && b === 0) {
+    // A 1x1 box — a single pixel, same as the old zero-radius case.
+    record(minX, minY);
+  } else if (a === 0) {
+    // A 1-cell-wide box: the ellipse degenerates to a vertical line: no
+    // separate "outline" to distinguish from "filled" at that width.
+    for (let y = minY; y <= maxY; y++) record(minX, y);
+  } else if (b === 0) {
+    for (let x = minX; x <= maxX; x++) record(x, minY);
+  } else {
+    let xL = minX;
+    let xR = maxX;
+    const b1 = b & 1;
+    let dx = 4 * (1 - a) * b * b;
+    let dy = 4 * (b1 + 1) * a * a;
+    let err = dx + dy + b1 * a * a;
+    let yT = minY + Math.floor((b + 1) / 2);
+    let yB = yT - b1;
+    const aStep = 8 * a * a;
+    const bStep = 8 * b * b;
 
-  let x = 0;
-  let y = ry;
-  let dx = 0;
-  let dy = twoRx2 * y;
-  let p1 = ry2 - rx2 * ry + 0.25 * rx2;
-  while (dx < dy) {
-    plot(x, y);
-    x++;
-    dx += twoRy2;
-    if (p1 < 0) {
-      p1 += dx + ry2;
-    } else {
-      y--;
-      dy -= twoRx2;
-      p1 += dx - dy + ry2;
-    }
-  }
+    do {
+      record(xR, yT);
+      record(xL, yT);
+      record(xL, yB);
+      record(xR, yB);
+      const e2 = 2 * err;
+      if (e2 <= dy) {
+        yT++;
+        yB--;
+        dy += aStep;
+        err += dy;
+      }
+      if (e2 >= dx || 2 * err > dy) {
+        xL++;
+        xR--;
+        dx += bStep;
+        err += dx;
+      }
+    } while (xL <= xR);
 
-  let p2 = ry2 * (x + 0.5) ** 2 + rx2 * (y - 1) ** 2 - rx2 * ry2;
-  while (y >= 0) {
-    plot(x, y);
-    y--;
-    dy -= twoRx2;
-    if (p2 > 0) {
-      p2 += rx2 - dy;
-    } else {
-      x++;
-      dx += twoRy2;
-      p2 += dx - dy + rx2;
+    // Finishes off the tip of a flat (near-1-cell-tall/wide) ellipse, which
+    // the main loop above can exit before fully closing.
+    while (yT - yB < b) {
+      record(xL - 1, yT);
+      record(xR + 1, yT);
+      yT++;
+      record(xL - 1, yB);
+      record(xR + 1, yB);
+      yB--;
     }
   }
 
   if (filled) {
-    for (const [py, { minX, maxX }] of rows) {
-      for (let px = minX; px <= maxX; px++) set(grid, px, py, 1);
+    for (const [py, { minX: rMinX, maxX: rMaxX }] of rows) {
+      for (let px = rMinX; px <= rMaxX; px++) set(grid, px, py, 1);
     }
   } else {
     for (const [px, py] of points) set(grid, px, py, 1);

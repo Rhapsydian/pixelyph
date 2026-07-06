@@ -1,6 +1,7 @@
 // Same shape as rectangle.js — a thin wrapper around
-// model/shapeRasterize.js's rasterizeEllipse, driven by the drag's
-// bounding box (cx/cy/rx/ry derived from the two corners).
+// model/shapeRasterize.js's rasterizeEllipse, driven directly by the drag's
+// two corners (rasterizeEllipse takes the bounding box, not a center +
+// radius — see its doc comment for why that matters here).
 //
 // Right-click (ctx.erasing) rasterizes the same shape in null instead of
 // the active color — see toolColor.js for the erase-color/preview-tint split.
@@ -20,12 +21,8 @@ function cellsFromGrid(grid) {
 }
 
 function computeEllipseCells(x0, y0, x1, y1, filled, width, height) {
-  const cx = (x0 + x1) / 2;
-  const cy = (y0 + y1) / 2;
-  const rx = Math.abs(x1 - x0) / 2;
-  const ry = Math.abs(y1 - y0) / 2;
   const grid = createGrid(width, height);
-  rasterizeEllipse(grid, cx, cy, rx, ry, { filled });
+  rasterizeEllipse(grid, x0, y0, x1, y1, { filled });
   return cellsFromGrid(grid);
 }
 
