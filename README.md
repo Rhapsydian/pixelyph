@@ -27,9 +27,9 @@ Early development. Draw mode (both tiers), Glyph mode, project management (start
 - Export to SVG, PNG, or WebP (at 1x/4x/8x/16x), Copy-as-SVG to the clipboard, and `.pixelyph` project save/load — exported SVG layers get a CSS-selectable `id` derived from the layer name
 - Autosave to IndexedDB with resume-on-launch recovery
 
-**Simple tier** hides layer management behind auto-managed, one-per-color layers — paint and the bookkeeping happens for you. **Advanced tier** exposes real layers with independent position and style:
+**Simple tier** hides layer management behind auto-managed, one-per-color layers — paint and the bookkeeping happens for you. **Advanced tier** exposes real layers with independent style:
 
-- Layers panel: add/remove/reorder/duplicate/merge-down (merging keeps the bottom layer's style, matching Photoshop/Aseprite convention), visible/locked toggles, opacity, per-layer offset (move), and an eyedropper that activates a layer instead of sampling a color (unambiguous once gradients exist)
+- Layers panel: add/remove/reorder/duplicate/merge-down (merging keeps the bottom layer's style, matching Photoshop/Aseprite convention), visible/locked toggles, opacity, and an eyedropper that activates a layer instead of sampling a color (unambiguous once gradients exist)
 - Selection scope toggle: marquee select/copy/cut can read from just the active layer, or from whichever visible layer is topmost at each cell — paste always lands on the active layer either way
 - Per-layer fill: solid, linear gradient, or radial gradient (editable stops/angle/center)
 - Per-layer stroke: color, width, cap, join, and dash array
