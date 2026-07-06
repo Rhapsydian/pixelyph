@@ -171,6 +171,17 @@ test('convertTier simple -> advanced flips autoManaged off and preserves layer c
   assert.equal(canvas.activeLayerId, layerId);
 });
 
+test('convertTier simple -> advanced on a blank canvas creates one empty layer with a solid black fill', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  assert.equal(canvas.layers.length, 0);
+  convertTier(canvas, 'advanced');
+  assert.equal(canvas.tier, 'advanced');
+  assert.equal(canvas.layers.length, 1);
+  assert.equal(canvas.layers[0].style.fill, '#000000');
+  assert.equal(canvas.activeLayerId, canvas.layers[0].id);
+  assert.equal(colorAt(canvas, 0, 0), null); // layer exists but is unpainted
+});
+
 test('convertTier advanced -> simple rebuilds one auto-managed layer per composited color, dropping non-solid fills', () => {
   const canvas = createCanvas({ width: 2, height: 1 });
   canvas.tier = 'advanced';

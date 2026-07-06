@@ -283,7 +283,10 @@ export function topVisibleLayerAt(canvas, x, y) {
 /**
  * Switches `canvas.tier`. Simple -> advanced is always safe: it just flips
  * every layer's `autoManaged` off, handing them over as free-floating
- * layers with their existing style/position untouched. Advanced -> simple
+ * layers with their existing style/position untouched — or, for a blank
+ * canvas with no layers yet, creates one so advanced tier never opens onto
+ * an unpaintable empty layer stack (matching the "+ Add Layer" button's own
+ * default: a full-canvas layer with a solid black fill). Advanced -> simple
  * is potentially lossy (the caller should confirm first): every layer is
  * discarded and rebuilt as auto-managed, one per distinct composited color,
  * by re-painting each canvas cell's `colorAt` result through the normal
@@ -300,6 +303,7 @@ export function convertTier(canvas, newTier) {
     for (const layer of canvas.layers) layer.autoManaged = false;
     canvas.simpleTier = { colorToLayerId: new Map() };
     canvas.tier = 'advanced';
+    if (canvas.layers.length === 0) addLayer(canvas);
     clampActiveLayer(canvas);
     return;
   }
