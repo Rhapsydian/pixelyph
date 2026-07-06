@@ -9,16 +9,19 @@ A pixel-art and pixel-font editor that outputs scalable SVG (and real font files
 
 ## Status
 
-Early development. Draw mode (both tiers, with frame-based animation), Glyph mode, project management (startup screen, new-project wizard, autosave recovery), font compilation, and the Electron desktop shell are implemented — see "Features" below. A visual design pass is still ahead.
+Early development. Draw mode (both tiers, with frame-based animation), Glyph mode, project management (startup screen, new-project wizard, autosave recovery), font compilation, the Electron desktop shell, and a full visual design pass (real app layout, a token-based dark theme, a viewport minimap, resizable panels) are implemented — see "Features" below. Next up: a functional review of Palette, Layers, and Style — connecting the palette to per-layer color pickers, resolving the hidden layer-offset inputs, layer thumbnails, and possibly drag-and-drop reordering and style presets are all under consideration.
 
 ## Features
 
 **Draw mode** — a live SVG pixel editor, not a Canvas2D approximation: the editing surface is the same `composeLayersSvg` output that gets exported (gradients, stroke, and filters included), so what you see while drawing is exactly what you get.
 
+- App layout: a header (branding + a **File / Edit / Export** menu bar) above a context bar (tier toggle, symmetry, selection scope, grid toggle, undo/redo, canvas resize), a vertical tool rail on the left, the canvas viewport in the middle, and a tabbed, resizable side panel on the right (Palette/Layers/Style/Import/Tile Preview) — dragging the panel's left edge or the frame strip's top edge resizes them
+- The **Edit** menu surfaces Cut/Copy/Paste/Select All/Deselect/Commit Move as real, clickable, keyboard-shortcut-labeled items — previously these only worked via keyboard shortcuts with no visible control anywhere
 - Tools: pencil, eraser, bucket fill, eyedropper, line, rectangle, ellipse (both outline and filled), and a rectangular marquee selection with move/copy/paste — Enter commits a move in place, Escape cancels it, Ctrl+A/C/X/V select-all/copy/cut/paste (an app-internal clipboard)
 - Right-click erases instead of paints for pencil, bucket fill, line, rectangle, and ellipse — no need to switch to the eraser tool for a quick correction mid-stroke
 - Symmetry/mirror drawing (horizontal, vertical, or both), applied uniformly across every tool
-- Zoom, toggleable grid overlay, undo/redo
+- Scroll wheel over the canvas zooms in/out directly; a toggleable grid overlay (off by default) and undo/redo
+- A **viewport minimap**, docked above the side panel's tabs: a small full-canvas thumbnail plus the zoom control; once zoom exceeds what's visible, a proportional rectangle appears that can be dragged to pan — native canvas scrollbars are disabled in favor of this
 - Checkerboard backdrop so an unpainted/transparent cell is never confused with one painted white
 - Palette swatches with Lospec `.hex` palette import
 - Raster image import — downsamples and quantizes a PNG/JPEG/etc. into editable pixel layers (nearest-neighbor or area-averaging, matched to the existing palette or a freshly generated one)
@@ -32,14 +35,14 @@ Early development. Draw mode (both tiers, with frame-based animation), Glyph mod
 
 - Layers panel: add/remove/reorder/duplicate/merge-down (merging keeps the bottom layer's style, matching Photoshop/Aseprite convention), visible/locked toggles, opacity, and an eyedropper that activates a layer instead of sampling a color (unambiguous once gradients exist)
 - Selection scope toggle: marquee select/copy/cut can read from just the active layer, or from whichever visible layer is topmost at each cell — paste always lands on the active layer either way
-- Per-layer fill: solid, linear gradient, or radial gradient (editable stops/angle/center)
-- Per-layer stroke: color, width, cap, join, and dash array
-- Per-layer effects: drop-shadow, blur, and a glow preset (a zero-offset, brightened drop-shadow)
-- Tier toggle: simple → advanced is always safe; advanced → simple asks for confirmation, since it collapses every layer to its topmost visible color per cell (gradients and free-floating positions don't survive the trip)
+- Per-layer fill: solid, linear gradient, or radial gradient (editable stops/angle/center) — solid and gradient-stop colors carry independent alpha (`#RRGGBBAA`), separate from stroke/effect alpha
+- Per-layer stroke: color (independent alpha), width, join, and dash array
+- Per-layer effects: drop-shadow, blur, and a glow preset (a zero-offset, brightened drop-shadow) — each effect's color has independent alpha too
+- Tier toggle: simple → advanced is always safe, and creates one full-canvas layer with a solid black fill if the canvas was blank (so advanced tier never opens onto an empty, unpaintable layer stack); advanced → simple asks for confirmation, since it collapses every layer to its topmost visible color per cell (gradients and free-floating positions don't survive the trip)
 
 **Animation** — every layer carries a uniform number of frames (adding/duplicating/removing a frame does it across every layer at once, so they never drift out of sync), works in both tiers:
 
-- Frame strip: add, duplicate, delete, and click-to-select frames, each shown as a live thumbnail, with its own duration (milliseconds) editable per frame — a "default FPS" control sets the pace for newly-added frames only, it doesn't retroactively rescale existing ones
+- Frame strip: a resizable panel docked to the bottom of the window (drag its top edge to resize) with add, duplicate, delete, and click-to-select frames, each shown as a live thumbnail, with its own duration (milliseconds) editable per frame — a "default FPS" control sets the pace for newly-added frames only, it doesn't retroactively rescale existing ones
 - In-editor Play/Pause preview: steps through the actual editing surface on a timer using each frame's own duration, looping — manually selecting a frame (or a project switch) pauses it, the same "scrubbing takes back control" convention most animation/video players use; clicking or dragging on the canvas itself while playing also pauses it, but that click/drag is swallowed rather than also painting into whatever frame happens to be active at that instant
 - Onion skinning: a faded, color-tinted (reddish/bluish) preview of the adjacent frame(s) rendered behind the one actually being edited
 - Export a self-contained, looping **animated SVG** (one `<g>` per frame, each with its own CSS `@keyframes` rule sized to its own duration's share of the total cycle, offset by a negative delay equal to the cumulative duration of every frame before it — so frames can each run at a different speed, not just a uniform rate)
@@ -70,7 +73,7 @@ Early development. Draw mode (both tiers, with frame-based animation), Glyph mod
 - Three choices: **New Project** (opens a wizard), **Existing Project** (file picker, kind-dispatching — opens the matching mode automatically), and **Continue Last Session** (only shown when IndexedDB has an autosave snapshot)
 - New Project wizard: Draw (mode choice only, uses standard defaults) or Glyph (mode + kind: characters/icons, family name, and initial charset preset for character sets)
 - Mode is chosen once at project creation — not toggled mid-session; opening a new project while one is open asks for confirmation first
-- A **File** dropdown menu in the header (New/Open/Save Project, plus the mode-appropriate export actions) replaces both the old mode-switcher toggle and, in the Electron build, the native OS menu bar — the same DOM menu renders identically in both, so there's exactly one implementation of "the file menu" instead of two
+- A **File / Edit / Export** menu bar in the header (see "Draw mode" above) replaces both the old mode-switcher toggle and, in the Electron build, the native OS menu bar — the same DOM menu renders identically in both, so there's exactly one implementation of "the menu bar" instead of two
 
 Behind the UI, `src/model`, `src/export`, and `src/io/projectFile.js` (including `GlyphSet.js` and `charsetPresets.js`) are pure data/functions with no DOM dependency — the same style as pixelloom's own `trace.js`/`index.js` — and are covered by `node --test`.
 
@@ -79,7 +82,7 @@ Behind the UI, `src/model`, `src/export`, and `src/io/projectFile.js` (including
 - Save/Open dialogs are native OS file pickers (`electron/main/index.js`'s `dialog.showSaveDialog`/`showOpenDialog`) instead of the File System Access API or a download link
 - Autosave writes to a JSON file in the app's userData directory instead of IndexedDB
 - `electron/preload/index.js` exposes the narrow `window.pixelyph.{saveFile,openFile,writeAutosave,readAutosave,clearAutosave}` bridge those two files already expected
-- Electron's own native menu bar is disabled (`Menu.setApplicationMenu(null)`) in favor of the app's DOM-based File menu (see "Project management" above) — one menu implementation, not two
+- Electron's own native menu bar is disabled (`Menu.setApplicationMenu(null)`) in favor of the app's DOM-based menu bar (see "Project management" above) — one menu implementation, not two
 - Packaged for Windows via `electron-builder` (NSIS installer); macOS/Linux targets are a config addition away, not attempted yet
 
 ## Development
