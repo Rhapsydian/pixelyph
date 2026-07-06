@@ -135,3 +135,61 @@ test('setFrameDuration is undo-tracked, like any other structural edit', () => {
   useStore.getState().redo();
   assert.equal(useStore.getState().canvas.frameDurations[1], 500);
 });
+
+test('playAnimation is a no-op for a single-frame canvas (nothing to animate)', () => {
+  const store = useStore.getState();
+  store.newProject('draw');
+  assert.equal(useStore.getState().canvas.frameCount, 1);
+  store.playAnimation();
+  assert.equal(useStore.getState().isPlaying, false);
+});
+
+test('playAnimation advances activeFrame on a timer using each frame\'s own duration, looping; pauseAnimation stops it', async () => {
+  const store = useStore.getState();
+  store.newProject('draw');
+  store.addFrame(); // 2 frames, activeFrame now 1
+  store.setFrameDuration(0, 5);
+  store.setFrameDuration(1, 5);
+  useStore.getState().setActiveFrame(0);
+
+  useStore.getState().playAnimation();
+  assert.equal(useStore.getState().isPlaying, true);
+
+  await new Promise((resolve) => setTimeout(resolve, 40)); // several 5ms ticks
+  assert.equal(useStore.getState().isPlaying, true, 'still looping — a two-frame animation never runs out on its own');
+
+  useStore.getState().pauseAnimation();
+  assert.equal(useStore.getState().isPlaying, false);
+
+  const frameAfterPause = useStore.getState().canvas.activeFrame;
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  assert.equal(useStore.getState().canvas.activeFrame, frameAfterPause, 'paused — no further advancement');
+});
+
+test('manually navigating to a frame during playback pauses it (scrubbing takes back control)', () => {
+  const store = useStore.getState();
+  store.newProject('draw');
+  store.addFrame();
+  store.setFrameDuration(0, 5);
+  store.setFrameDuration(1, 5);
+
+  useStore.getState().playAnimation();
+  assert.equal(useStore.getState().isPlaying, true);
+
+  useStore.getState().setActiveFrame(0);
+  assert.equal(useStore.getState().isPlaying, false);
+});
+
+test('closeProject stops any running playback', () => {
+  const store = useStore.getState();
+  store.newProject('draw');
+  store.addFrame();
+  store.setFrameDuration(0, 5);
+  store.setFrameDuration(1, 5);
+
+  useStore.getState().playAnimation();
+  assert.equal(useStore.getState().isPlaying, true);
+
+  useStore.getState().closeProject();
+  assert.equal(useStore.getState().isPlaying, false);
+});

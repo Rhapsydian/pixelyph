@@ -130,6 +130,38 @@ export const useStore = create((set, get) => {
     set({ canvas: { ...get().canvas } });
   }
 
+  // --- Animation playback (Phase 7 follow-on) ---
+  // A single setTimeout chain, not a store field — a timer handle isn't
+  // serializable/reactive state, same reasoning as autosaveScheduler below.
+  // Re-reads `get()` fresh on every tick rather than closing over `canvas`,
+  // so it naturally adapts if frameCount/durations change mid-playback
+  // (e.g. a frame gets added or removed while the animation is running).
+  let playbackTimeoutId = null;
+
+  function stopPlaybackTimer() {
+    if (playbackTimeoutId != null) {
+      clearTimeout(playbackTimeoutId);
+      playbackTimeoutId = null;
+    }
+  }
+
+  function scheduleNextPlaybackFrame() {
+    const { canvas, isPlaying } = get();
+    if (!isPlaying || canvas.frameCount <= 1) {
+      set({ isPlaying: false });
+      return;
+    }
+    const duration = canvas.frameDurations[canvas.activeFrame] ?? Math.max(1, Math.round(1000 / canvas.frameRate));
+    playbackTimeoutId = setTimeout(() => {
+      const state = get();
+      if (!state.isPlaying) return; // paused while this tick was waiting
+      const nextFrame = (state.canvas.activeFrame + 1) % state.canvas.frameCount;
+      setActiveFrameModel(state.canvas, nextFrame);
+      touchCanvas();
+      scheduleNextPlaybackFrame();
+    }, duration);
+  }
+
   /**
    * Single commit function for both modes. In glyph mode, reads the active
    * glyph's pixels back out of `glyphCanvas` before snapshotting — matching
@@ -309,8 +341,11 @@ export const useStore = create((set, get) => {
       removeFrameModel(get().canvas, index);
       commit();
     },
+    /** Manual frame navigation — also stops playback, the same "scrubbing takes back control" convention most animation/video UIs use. */
     setActiveFrame: (index) => {
+      stopPlaybackTimer();
       setActiveFrameModel(get().canvas, index);
+      set({ isPlaying: false });
       touchCanvas();
     },
     setFrameRate: (fps) => {
@@ -322,6 +357,19 @@ export const useStore = create((set, get) => {
       commit();
     },
     toggleOnionSkin: () => set((s) => ({ onionSkinEnabled: !s.onionSkinEnabled })),
+
+    /** In-editor animation preview: steps activeFrame on a timer using each frame's own duration, looping forever. Doesn't touch undo (setActiveFrameModel isn't a committed action). */
+    isPlaying: false,
+    playAnimation: () => {
+      if (get().canvas.frameCount <= 1) return; // nothing to animate
+      set({ isPlaying: true });
+      scheduleNextPlaybackFrame();
+    },
+    pauseAnimation: () => {
+      stopPlaybackTimer();
+      set({ isPlaying: false });
+    },
+    togglePlayback: () => (get().isPlaying ? get().pauseAnimation() : get().playAnimation()),
 
     undo: () => {
       const { mode, canvas, glyphSet, activeCodepoint, history } = get();
@@ -392,6 +440,8 @@ export const useStore = create((set, get) => {
      */
     newProject: (mode, options = {}) => {
       if (get().projectOpen && !window.confirm('Discard the current project and start a new one?')) return;
+      stopPlaybackTimer();
+      set({ isPlaying: false });
       if (mode === 'glyph') {
         const { glyphSet, initialPreset } = buildGlyphDocument(options);
         const h = createHistory(glyphContentSnapshot(glyphSet));
@@ -429,7 +479,8 @@ export const useStore = create((set, get) => {
 
     /** Called by the header "New Project" button after the user confirms discarding the current project. */
     closeProject: () => {
-      set({ projectOpen: false });
+      stopPlaybackTimer();
+      set({ projectOpen: false, isPlaying: false });
     },
 
     // --- Glyph mode: GlyphSet operations ---
@@ -775,6 +826,8 @@ export const useStore = create((set, get) => {
       if (!result) return;
       const text = await result.blob.text();
       const doc = JSON.parse(text);
+      stopPlaybackTimer();
+      set({ isPlaying: false });
       if (doc.kind === 'glyph') {
         const restored = deserializeGlyphSetProject(doc);
         const h = createHistory(glyphContentSnapshot(restored));
@@ -792,6 +845,8 @@ export const useStore = create((set, get) => {
       return snapshot ?? null;
     },
     resumeAutosave: (doc) => {
+      stopPlaybackTimer();
+      set({ isPlaying: false });
       if (doc.kind === 'glyph') {
         const restored = deserializeGlyphSetProject(doc);
         const h = createHistory(glyphContentSnapshot(restored));

@@ -89,11 +89,16 @@ export function FrameStrip() {
   const setFrameRate = useStore((s) => s.setFrameRate);
   const onionSkinEnabled = useStore((s) => s.onionSkinEnabled);
   const toggleOnionSkin = useStore((s) => s.toggleOnionSkin);
+  const isPlaying = useStore((s) => s.isPlaying);
+  const togglePlayback = useStore((s) => s.togglePlayback);
 
   return (
     <div style={{ padding: '0.5rem', background: '#1e1e1e', color: '#eee', display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
         <strong>Frames</strong>
+        <button onClick={togglePlayback} disabled={canvas.frameCount <= 1} title="Preview the animation using each frame's own duration, looping forever">
+          {isPlaying ? '⏸ Pause' : '▶ Play'}
+        </button>
         <button onClick={() => addFrame()}>+ Add Frame</button>
         <label title="The duration a newly-added frame gets — doesn't change existing frames' own durations">
           Default FPS:{' '}

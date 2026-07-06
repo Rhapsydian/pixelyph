@@ -40,6 +40,7 @@ Early development. Draw mode (both tiers, with frame-based animation), Glyph mod
 **Animation** — every layer carries a uniform number of frames (adding/duplicating/removing a frame does it across every layer at once, so they never drift out of sync), works in both tiers:
 
 - Frame strip: add, duplicate, delete, and click-to-select frames, each shown as a live thumbnail, with its own duration (milliseconds) editable per frame — a "default FPS" control sets the pace for newly-added frames only, it doesn't retroactively rescale existing ones
+- In-editor Play/Pause preview: steps through the actual editing surface on a timer using each frame's own duration, looping — manually selecting a frame (or a project switch) pauses it, the same "scrubbing takes back control" convention most animation/video players use
 - Onion skinning: a faded, color-tinted (reddish/bluish) preview of the adjacent frame(s) rendered behind the one actually being edited
 - Export a self-contained, looping **animated SVG** (one `<g>` per frame, each with its own CSS `@keyframes` rule sized to its own duration's share of the total cycle, offset by a negative delay equal to the cumulative duration of every frame before it — so frames can each run at a different speed, not just a uniform rate)
 - Export a **sprite sheet**: a single-row PNG tiling every frame plus a JSON metadata sidecar (`{frames:[{x,y,w,h,duration}]}`, TexturePacker/Aseprite-style — `duration` is per-frame, in milliseconds), bundled as one `.zip`
