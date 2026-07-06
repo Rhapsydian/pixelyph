@@ -126,6 +126,10 @@ export function SvgPixelEditor() {
     () => ({
       drag: dragRef.current,
       shiftKey: false,
+      // Set from the pointer button at gesture start (handlePointerDown) —
+      // right-click paints null instead of the active color for pencil,
+      // bucketFill, line, rectangle, and ellipse (see tools/toolColor.js).
+      erasing: false,
       get activeColor() {
         return useStore.getState().activeColor;
       },
@@ -192,6 +196,10 @@ export function SvgPixelEditor() {
     evt.currentTarget.setPointerCapture(evt.pointerId);
     isPointerDownRef.current = true;
     ctx.shiftKey = evt.shiftKey;
+    // Captured once per gesture, not re-checked on move/up: evt.button only
+    // reports the button that changed state, so it reads 0 on move events
+    // even while the right button is held for the whole drag.
+    ctx.erasing = evt.button === 2;
     const { x, y } = clientToCell(evt);
     setCursorCell({ x, y });
     tools[activeTool].onPointerDown(ctx, x, y);
@@ -271,6 +279,7 @@ export function SvgPixelEditor() {
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onContextMenu={(evt) => evt.preventDefault()}
       >
         <TransparencyBackground width={doc.width} height={doc.height} />
         {defsHtml && <g dangerouslySetInnerHTML={{ __html: defsHtml }} />}

@@ -3,9 +3,13 @@
 // bounds writes, so no extra bounds math needed here), read back which
 // cells ended up on, and reuse that identical cell list for both the live
 // preview and the final paint — no duplicate geometry logic between the two.
+//
+// Right-click (ctx.erasing) rasterizes the same shape in null instead of
+// the active color — see toolColor.js for the erase-color/preview-tint split.
 
 import { createGrid } from '../../../model/Grid.js';
 import { rasterizeRect } from '../../../model/shapeRasterize.js';
+import { resolvePaintColor, resolvePreviewColor } from './toolColor.js';
 
 function cellsFromGrid(grid) {
   const cells = [];
@@ -26,18 +30,21 @@ function computeRectCells(x0, y0, x1, y1, filled, width, height) {
 export const rectangleTool = {
   onPointerDown(ctx, x, y) {
     ctx.drag.start = { x, y };
-    ctx.setPreview(computeRectCells(x, y, x, y, ctx.shapeFilled, ctx.canvasWidth, ctx.canvasHeight).map((c) => ({ ...c, color: ctx.activeColor })));
+    const previewColor = resolvePreviewColor(ctx);
+    ctx.setPreview(computeRectCells(x, y, x, y, ctx.shapeFilled, ctx.canvasWidth, ctx.canvasHeight).map((c) => ({ ...c, color: previewColor })));
   },
   onPointerMove(ctx, x, y) {
     if (!ctx.drag.start) return;
+    const previewColor = resolvePreviewColor(ctx);
     ctx.setPreview(
-      computeRectCells(ctx.drag.start.x, ctx.drag.start.y, x, y, ctx.shapeFilled, ctx.canvasWidth, ctx.canvasHeight).map((c) => ({ ...c, color: ctx.activeColor })),
+      computeRectCells(ctx.drag.start.x, ctx.drag.start.y, x, y, ctx.shapeFilled, ctx.canvasWidth, ctx.canvasHeight).map((c) => ({ ...c, color: previewColor })),
     );
   },
   onPointerUp(ctx, x, y) {
     if (!ctx.drag.start) return;
+    const paintColor = resolvePaintColor(ctx);
     const cells = computeRectCells(ctx.drag.start.x, ctx.drag.start.y, x, y, ctx.shapeFilled, ctx.canvasWidth, ctx.canvasHeight);
-    for (const cell of cells) ctx.paintCellLive(cell.x, cell.y, ctx.activeColor);
+    for (const cell of cells) ctx.paintCellLive(cell.x, cell.y, paintColor);
     ctx.drag.start = null;
     ctx.setPreview(null);
     ctx.commitStroke();

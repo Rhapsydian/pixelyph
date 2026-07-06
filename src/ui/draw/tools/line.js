@@ -3,6 +3,11 @@
 // the final paint on release. ctx.drag is a plain mutable ref the editor
 // owns per active gesture; SvgPixelEditor is expected to clamp (x, y) to
 // valid canvas cells before calling any tool handler.
+//
+// Right-click (ctx.erasing) draws the line in null instead of the active
+// color — see toolColor.js for the erase-color/preview-tint split.
+
+import { resolvePaintColor, resolvePreviewColor } from './toolColor.js';
 
 /**
  * @returns {{x:number,y:number}[]}
@@ -35,15 +40,18 @@ export function computeLineCells(x0, y0, x1, y1) {
 export const lineTool = {
   onPointerDown(ctx, x, y) {
     ctx.drag.start = { x, y };
-    ctx.setPreview(computeLineCells(x, y, x, y).map((c) => ({ ...c, color: ctx.activeColor })));
+    const previewColor = resolvePreviewColor(ctx);
+    ctx.setPreview(computeLineCells(x, y, x, y).map((c) => ({ ...c, color: previewColor })));
   },
   onPointerMove(ctx, x, y) {
     if (!ctx.drag.start) return;
-    ctx.setPreview(computeLineCells(ctx.drag.start.x, ctx.drag.start.y, x, y).map((c) => ({ ...c, color: ctx.activeColor })));
+    const previewColor = resolvePreviewColor(ctx);
+    ctx.setPreview(computeLineCells(ctx.drag.start.x, ctx.drag.start.y, x, y).map((c) => ({ ...c, color: previewColor })));
   },
   onPointerUp(ctx, x, y) {
     if (!ctx.drag.start) return;
-    for (const cell of computeLineCells(ctx.drag.start.x, ctx.drag.start.y, x, y)) ctx.paintCellLive(cell.x, cell.y, ctx.activeColor);
+    const paintColor = resolvePaintColor(ctx);
+    for (const cell of computeLineCells(ctx.drag.start.x, ctx.drag.start.y, x, y)) ctx.paintCellLive(cell.x, cell.y, paintColor);
     ctx.drag.start = null;
     ctx.setPreview(null);
     ctx.commitStroke();

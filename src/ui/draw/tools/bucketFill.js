@@ -5,6 +5,11 @@
 // symmetry is on, and those mirrored writes would otherwise land on
 // not-yet-visited cells mid-BFS, corrupting the target-color match there
 // and cutting the flood-fill off early at the mirror axis.
+//
+// Right-click (ctx.erasing) fills the matching region with null instead of
+// the active color, clearing it in one action rather than painting it.
+
+import { resolvePaintColor } from './toolColor.js';
 
 function findMatchingRegion(ctx, x, y, target, width, height) {
   const visited = new Uint8Array(width * height);
@@ -26,7 +31,7 @@ function findMatchingRegion(ctx, x, y, target, width, height) {
 export const bucketFillTool = {
   onPointerDown(ctx, x, y) {
     const target = ctx.colorAt(x, y);
-    const newColor = ctx.activeColor;
+    const newColor = resolvePaintColor(ctx);
     if (target === newColor) return;
 
     const region = findMatchingRegion(ctx, x, y, target, ctx.canvasWidth, ctx.canvasHeight);
