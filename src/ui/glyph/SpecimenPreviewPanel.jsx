@@ -8,6 +8,8 @@
 import { useState } from 'react';
 import { useStore } from '../../state/store.js';
 import { gridToPath } from 'pixelloom';
+import { IconButton } from '../IconButton.jsx';
+import { TrashIcon } from '../icons.jsx';
 
 const PREVIEW_HEIGHT = 48;
 
@@ -29,12 +31,12 @@ export function SpecimenPreviewPanel() {
   if (!glyphSet) return null;
 
   return (
-    <div className="panel canvas-region-stretch" style={{ background: 'var(--chrome-bg-panel)', borderRadius: 'var(--radius-md)' }}>
+    <div className="panel canvas-region-stretch" style={{ background: 'var(--chrome-bg-panel)' }}>
       <strong>Specimen Preview</strong>
       {glyphSet.kind === 'characters' ? (
         <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a sample string..." rows={2} style={{ width: '100%', resize: 'vertical' }} />
       ) : (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
           {Array.from(glyphSet.glyphs.entries())
             .sort((a, b) => (a[1].name ?? '').localeCompare(b[1].name ?? ''))
             .map(([codepoint, glyph]) => (
@@ -49,9 +51,10 @@ export function SpecimenPreviewPanel() {
               </button>
             ))}
           {glyphSet.glyphs.size === 0 && <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No icons yet.</span>}
+          <IconButton icon={<TrashIcon />} label="Clear preview" disabled={text.length === 0} onClick={() => setText('')} />
         </div>
       )}
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, minHeight: PREVIEW_HEIGHT + 8, padding: 4, background: 'var(--chrome-bg-app)', border: '1px solid var(--chrome-border)', borderRadius: 'var(--radius-sm)', overflowX: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, minHeight: PREVIEW_HEIGHT + 8, padding: 4, background: 'var(--chrome-bg-app)', border: '1px solid var(--chrome-border)', overflowX: 'auto' }}>
         {text.length === 0 && <span style={{ color: 'var(--chrome-text-faint)' }}>Preview will appear here.</span>}
         {Array.from(text).map((char, i) => {
           const glyph = glyphSet.glyphs.get(char.codePointAt(0));
