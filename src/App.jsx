@@ -1,20 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from './state/store.js';
-import { Toolbar } from './ui/draw/Toolbar.jsx';
-import { PaletteSimple } from './ui/draw/PaletteSimple.jsx';
-import { ImportImagePanel } from './ui/draw/ImportImagePanel.jsx';
+import { MenuBar } from './ui/MenuBar.jsx';
+import { ToolRail } from './ui/draw/ToolRail.jsx';
+import { ContextBar } from './ui/draw/ContextBar.jsx';
+import { SidePanel } from './ui/SidePanel.jsx';
 import { SvgPixelEditor } from './ui/draw/SvgPixelEditor.jsx';
-import { TilePreviewPanel } from './ui/draw/TilePreviewPanel.jsx';
 import { FrameStrip } from './ui/draw/FrameStrip.jsx';
-import { LayersPanel } from './ui/draw/LayersPanel.jsx';
-import { LayerStylePanel } from './ui/draw/LayerStylePanel.jsx';
 import { GlyphGridEditor } from './ui/glyph/GlyphGridEditor.jsx';
-import { CharacterMapPanel } from './ui/glyph/CharacterMapPanel.jsx';
-import { GlyphSetPanel } from './ui/glyph/GlyphSetPanel.jsx';
-import { FontMetadataPanel } from './ui/glyph/FontMetadataPanel.jsx';
 import { SpecimenPreviewPanel } from './ui/glyph/SpecimenPreviewPanel.jsx';
-import { FontExportPanel } from './ui/glyph/FontExportPanel.jsx';
-import { FileMenu } from './ui/FileMenu.jsx';
 import { CHARSET_PRESETS, CHARSET_PRESET_IDS } from './model/charsetPresets.js';
 
 const ANCHORS = ['top-left', 'top', 'top-right', 'left', 'center', 'right', 'bottom-left', 'bottom', 'bottom-right'];
@@ -39,7 +32,7 @@ function CanvasSizeControl() {
           </option>
         ))}
       </select>
-      <button onClick={() => resizeCanvas(nextWidth, nextHeight, anchor)}>Resize</button>
+      <button className="btn" onClick={() => resizeCanvas(nextWidth, nextHeight, anchor)}>Resize</button>
     </span>
   );
 }
@@ -61,28 +54,8 @@ function GlyphSizeControl() {
     <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
       Glyph width:
       <input type="number" min={1} max={256} value={nextWidth} onChange={(e) => setNextWidth(Number(e.target.value))} style={{ width: 56 }} />
-      <button onClick={() => resizeActiveGlyph(nextWidth)}>Resize</button>
+      <button className="btn" onClick={() => resizeActiveGlyph(nextWidth)}>Resize</button>
     </span>
-  );
-}
-
-function GlyphWorkspace() {
-  const glyphSet = useStore((s) => s.glyphSet);
-  if (!glyphSet) return null;
-
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', padding: '1rem', alignItems: 'flex-start' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-        <GlyphGridEditor />
-        <SpecimenPreviewPanel />
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-        {glyphSet.kind === 'characters' && <CharacterMapPanel />}
-        <GlyphSetPanel />
-        <FontMetadataPanel />
-        <FontExportPanel />
-      </div>
-    </div>
   );
 }
 
@@ -128,34 +101,32 @@ function NewProjectWizard({ onBack }) {
     newProject('glyph', { kind: glyphKind, familyName, initialPreset, pixelsPerEm, defaultGlyphWidth });
   }
 
-  const buttonStyle = { background: '#4da3ff', color: '#fff', border: 'none', padding: '0.6rem 1.2rem', borderRadius: 6, cursor: 'pointer', fontSize: '1rem' };
-  const secondaryStyle = { background: '#333', color: '#eee', border: '1px solid #555', padding: '0.5rem 1rem', borderRadius: 6, cursor: 'pointer' };
-  const inputStyle = { padding: '0.4rem', borderRadius: 4 };
+  const inputStyle = { padding: '0.4rem' };
 
   if (step === 'mode') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2rem', padding: '3rem 2rem' }}>
-        <h2 style={{ margin: 0, fontSize: '1.4rem' }}>New Project — Choose Mode</h2>
+        <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>New Project — Choose Mode</h2>
         <div style={{ display: 'flex', gap: '2rem' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', background: '#1e1e1e', border: '1px solid #333', borderRadius: 8, padding: '1.5rem 2rem' }}>
+          <div className="panel" style={{ alignItems: 'center', background: 'var(--chrome-bg-panel)', border: '1px solid var(--chrome-border)', borderRadius: 'var(--radius-lg)', padding: '1.5rem 2rem' }}>
             <strong>Draw</strong>
-            <span style={{ color: '#aaa', fontSize: '0.9em', textAlign: 'center', maxWidth: 180 }}>Pixel art with SVG export. Multi-layer, advanced fills, effects.</span>
-            <button style={buttonStyle} onClick={handleDraw}>Create Draw Project</button>
+            <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-sm)', textAlign: 'center', maxWidth: 180 }}>Pixel art with SVG export. Multi-layer, advanced fills, effects.</span>
+            <button className="btn btn-primary" onClick={handleDraw}>Create Draw Project</button>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', background: '#1e1e1e', border: '1px solid #333', borderRadius: 8, padding: '1.5rem 2rem' }}>
+          <div className="panel" style={{ alignItems: 'center', background: 'var(--chrome-bg-panel)', border: '1px solid var(--chrome-border)', borderRadius: 'var(--radius-lg)', padding: '1.5rem 2rem' }}>
             <strong>Glyph / Font</strong>
-            <span style={{ color: '#aaa', fontSize: '0.9em', textAlign: 'center', maxWidth: 180 }}>Design pixel fonts or icon sets. One grid per character.</span>
-            <button style={buttonStyle} onClick={handleGlyph}>Continue →</button>
+            <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-sm)', textAlign: 'center', maxWidth: 180 }}>Design pixel fonts or icon sets. One grid per character.</span>
+            <button className="btn btn-primary" onClick={handleGlyph}>Continue →</button>
           </div>
         </div>
-        <button style={secondaryStyle} onClick={onBack}>← Back</button>
+        <button className="btn btn-secondary" onClick={onBack}>← Back</button>
       </div>
     );
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem', padding: '3rem 2rem' }}>
-      <h2 style={{ margin: 0, fontSize: '1.4rem' }}>New Glyph Project</h2>
+      <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>New Glyph Project</h2>
       <form onSubmit={handleCreateGlyph} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: 300 }}>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           Kind
@@ -203,9 +174,9 @@ function NewProjectWizard({ onBack }) {
             </select>
           </label>
         )}
-        <button type="submit" style={{ ...buttonStyle, marginTop: '0.5rem' }}>Create Glyph Project</button>
+        <button type="submit" className="btn btn-primary" style={{ marginTop: '0.5rem' }}>Create Glyph Project</button>
       </form>
-      <button style={secondaryStyle} onClick={() => setStep('mode')}>← Back</button>
+      <button className="btn btn-secondary" onClick={() => setStep('mode')}>← Back</button>
     </div>
   );
 }
@@ -215,7 +186,6 @@ function NewProjectWizard({ onBack }) {
 function StartupScreen() {
   const checkAutosaveRecovery = useStore((s) => s.checkAutosaveRecovery);
   const resumeAutosave = useStore((s) => s.resumeAutosave);
-  const discardAutosave = useStore((s) => s.discardAutosave);
   const openAnyProject = useStore((s) => s.openAnyProject);
   const [autosaveDoc, setAutosaveDoc] = useState(null);
   const [screen, setScreen] = useState('main'); // 'main' | 'wizard'
@@ -239,28 +209,25 @@ function StartupScreen() {
     await openAnyProject();
   }
 
-  const buttonStyle = { background: '#4da3ff', color: '#fff', border: 'none', padding: '0.6rem 1.4rem', borderRadius: 6, cursor: 'pointer', fontSize: '1rem', minWidth: 200 };
-  const dimStyle = { background: '#2a2a2a', color: '#666', border: '1px solid #333', padding: '0.6rem 1.4rem', borderRadius: 6, cursor: 'not-allowed', fontSize: '1rem', minWidth: 200 };
-
   if (screen === 'wizard') {
     return (
-      <main style={{ fontFamily: 'sans-serif', background: '#121212', color: '#eee', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+      <main className="app-shell" style={{ alignItems: 'center', justifyContent: 'center' }}>
         <NewProjectWizard onBack={() => setScreen('main')} />
       </main>
     );
   }
 
   return (
-    <main style={{ fontFamily: 'sans-serif', background: '#121212', color: '#eee', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2.5rem' }}>
-      <h1 style={{ fontSize: '2.5rem', margin: 0, letterSpacing: '0.05em' }}>Pixelyph</h1>
-      <p style={{ color: '#888', margin: 0 }}>SVG pixel art &amp; font design tool</p>
+    <main className="app-shell" style={{ alignItems: 'center', justifyContent: 'center', gap: '2.5rem' }}>
+      <h1 style={{ fontSize: 'var(--text-xl)', margin: 0, letterSpacing: '0.05em' }}>Pixelyph</h1>
+      <p style={{ color: 'var(--chrome-text-muted)', margin: 0 }}>SVG pixel art &amp; font design tool</p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'center' }}>
-        <button style={buttonStyle} onClick={() => setScreen('wizard')}>New Project</button>
-        <button style={buttonStyle} onClick={handleOpen}>Existing Project…</button>
+        <button className="btn btn-primary" style={{ minWidth: 200 }} onClick={() => setScreen('wizard')}>New Project</button>
+        <button className="btn btn-primary" style={{ minWidth: 200 }} onClick={handleOpen}>Existing Project…</button>
         {autosaveDoc ? (
-          <button style={buttonStyle} onClick={handleContinue}>Continue Last Session</button>
+          <button className="btn btn-primary" style={{ minWidth: 200 }} onClick={handleContinue}>Continue Last Session</button>
         ) : (
-          <button style={dimStyle} disabled title="No autosaved session found">Continue Last Session</button>
+          <button className="btn" style={{ minWidth: 200 }} disabled title="No autosaved session found">Continue Last Session</button>
         )}
       </div>
     </main>
@@ -278,30 +245,30 @@ export default function App() {
   }
 
   return (
-    <main style={{ fontFamily: 'sans-serif', background: '#121212', color: '#eee', minHeight: '100vh' }}>
-      <header style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', padding: '0.5rem 1rem', background: '#1a1a1a', borderBottom: '1px solid #333' }}>
-        <h1 style={{ fontSize: '1.1rem', margin: 0 }}>Pixelyph</h1>
-        <FileMenu />
+    <div className="app-shell">
+      <header className="app-header">
+        <h1 className="app-logo">Pixelyph</h1>
+        <MenuBar />
         <span style={{ marginLeft: 'auto' }}>{mode === 'draw' ? <CanvasSizeControl /> : <GlyphSizeControl />}</span>
       </header>
-      <Toolbar />
-      {mode === 'draw' ? (
-        <>
-          <PaletteSimple />
-          <ImportImagePanel />
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', padding: '1rem', alignItems: 'flex-start' }}>
-            <SvgPixelEditor />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <LayersPanel />
-              <LayerStylePanel />
-            </div>
-          </div>
-          <FrameStrip />
-          <TilePreviewPanel />
-        </>
-      ) : (
-        <GlyphWorkspace />
-      )}
-    </main>
+      <ContextBar />
+      <div className="app-workspace">
+        <ToolRail />
+        <main className="canvas-region">
+          {mode === 'draw' ? (
+            <>
+              <SvgPixelEditor />
+              <FrameStrip />
+            </>
+          ) : (
+            <>
+              <GlyphGridEditor />
+              <SpecimenPreviewPanel />
+            </>
+          )}
+        </main>
+        <SidePanel />
+      </div>
+    </div>
   );
 }

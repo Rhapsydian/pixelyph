@@ -29,7 +29,7 @@ export function SpecimenPreviewPanel() {
   if (!glyphSet) return null;
 
   return (
-    <div style={{ padding: '0.5rem', background: '#1e1e1e', color: '#eee', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 320 }}>
+    <div className="panel" style={{ background: 'var(--chrome-bg-panel)', borderRadius: 'var(--radius-md)', minWidth: 320 }}>
       <strong>Specimen Preview</strong>
       {glyphSet.kind === 'characters' ? (
         <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a sample string..." rows={2} style={{ width: '100%', resize: 'vertical' }} />
@@ -48,17 +48,17 @@ export function SpecimenPreviewPanel() {
                 <span style={{ fontSize: 9 }}>{glyph.name}</span>
               </button>
             ))}
-          {glyphSet.glyphs.size === 0 && <span style={{ color: '#888', fontSize: '0.85em' }}>No icons yet.</span>}
+          {glyphSet.glyphs.size === 0 && <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No icons yet.</span>}
         </div>
       )}
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, minHeight: PREVIEW_HEIGHT + 8, padding: 4, background: '#111', border: '1px solid #333', overflowX: 'auto' }}>
-        {text.length === 0 && <span style={{ color: '#555' }}>Preview will appear here.</span>}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, minHeight: PREVIEW_HEIGHT + 8, padding: 4, background: 'var(--chrome-bg-app)', border: '1px solid var(--chrome-border)', borderRadius: 'var(--radius-sm)', overflowX: 'auto' }}>
+        {text.length === 0 && <span style={{ color: 'var(--chrome-text-faint)' }}>Preview will appear here.</span>}
         {Array.from(text).map((char, i) => {
           const glyph = glyphSet.glyphs.get(char.codePointAt(0));
           return glyph ? (
             <PreviewGlyph key={i} glyph={glyph} height={PREVIEW_HEIGHT} />
           ) : (
-            <span key={i} style={{ color: '#555', width: PREVIEW_HEIGHT / 2, textAlign: 'center' }}>
+            <span key={i} style={{ color: 'var(--chrome-text-faint)', width: PREVIEW_HEIGHT / 2, textAlign: 'center' }}>
               {char === ' ' ? ' ' : '?'}
             </span>
           );

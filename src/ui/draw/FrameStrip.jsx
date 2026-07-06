@@ -9,6 +9,8 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../../state/store.js';
 import { composeFrameBody } from '../../export/svg/composeLayersSvg.js';
+import { IconButton } from '../IconButton.jsx';
+import { PlayIcon, PauseIcon, PlusIcon, DuplicateIcon, TrashIcon } from '../icons.jsx';
 
 const THUMBNAIL_SIZE = 48;
 
@@ -20,7 +22,7 @@ function FrameThumbnail({ canvas, frameIndex }) {
       width={THUMBNAIL_SIZE}
       height={THUMBNAIL_SIZE}
       viewBox={`0 0 ${canvas.width} ${canvas.height}`}
-      style={{ background: '#2a2a2a', display: 'block' }}
+      style={{ background: 'var(--chrome-bg-canvas-surround)', display: 'block' }}
     >
       {defsHtml && <g dangerouslySetInnerHTML={{ __html: defsHtml }} />}
       <g dangerouslySetInnerHTML={{ __html: body }} />
@@ -50,17 +52,17 @@ function FrameCard({ canvas, frameIndex, isActive, isOnlyFrame }) {
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
       <div
         onClick={() => setActiveFrame(frameIndex)}
+        className="cell"
         style={{
-          border: isActive ? '2px solid #4da3ff' : '1px solid #444',
-          borderRadius: 4,
+          border: isActive ? '2px solid var(--chrome-accent)' : '1px solid var(--chrome-border-strong)',
           cursor: 'pointer',
           lineHeight: 0,
         }}
       >
         <FrameThumbnail canvas={canvas} frameIndex={frameIndex} />
       </div>
-      <span style={{ fontSize: '0.75em', color: '#888' }}>{frameIndex + 1}</span>
-      <label title="This frame's own duration, in milliseconds" style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '0.75em' }}>
+      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--chrome-text-muted)' }}>{frameIndex + 1}</span>
+      <label title="This frame's own duration, in milliseconds" style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 'var(--text-xs)' }}>
         <input
           type="number"
           min={1}
@@ -72,12 +74,8 @@ function FrameCard({ canvas, frameIndex, isActive, isOnlyFrame }) {
         ms
       </label>
       <span style={{ display: 'flex', gap: 2 }}>
-        <button onClick={() => duplicateFrame(frameIndex)} title="Duplicate frame">
-          ⧉
-        </button>
-        <button onClick={() => removeFrame(frameIndex)} disabled={isOnlyFrame} title="Delete frame">
-          ✕
-        </button>
+        <IconButton icon={<DuplicateIcon />} label="Duplicate frame" onClick={() => duplicateFrame(frameIndex)} />
+        <IconButton icon={<TrashIcon />} label="Delete frame" disabled={isOnlyFrame} onClick={() => removeFrame(frameIndex)} />
       </span>
     </div>
   );
@@ -93,13 +91,17 @@ export function FrameStrip() {
   const togglePlayback = useStore((s) => s.togglePlayback);
 
   return (
-    <div style={{ padding: '0.5rem', background: '#1e1e1e', color: '#eee', display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div className="panel">
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
         <strong>Frames</strong>
-        <button onClick={togglePlayback} disabled={canvas.frameCount <= 1} title="Preview the animation using each frame's own duration, looping forever">
-          {isPlaying ? '⏸ Pause' : '▶ Play'}
-        </button>
-        <button onClick={() => addFrame()}>+ Add Frame</button>
+        <IconButton
+          icon={isPlaying ? <PauseIcon /> : <PlayIcon />}
+          label={isPlaying ? 'Pause' : 'Play'}
+          active={isPlaying}
+          disabled={canvas.frameCount <= 1}
+          onClick={togglePlayback}
+        />
+        <IconButton icon={<PlusIcon />} label="Add frame" onClick={() => addFrame()} />
         <label title="The duration a newly-added frame gets — doesn't change existing frames' own durations">
           Default FPS:{' '}
           <input

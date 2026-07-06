@@ -52,7 +52,7 @@
 // official domain name, in place of the GitHub Pages project site.
 const PIXELYPH_URL = 'https://rhapsydian.github.io/pixelyph/';
 
-const BRANDING_FOOTER = `<footer style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #333; font-size: 0.8rem; color: #888; text-align: center;">Made with <a href="${PIXELYPH_URL}" style="color: #4da3ff;">Pixelyph</a></footer>`;
+const BRANDING_FOOTER = `<footer>Made with <a href="${PIXELYPH_URL}">Pixelyph</a></footer>`;
 
 function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -148,14 +148,55 @@ export function generateDemoHtml(glyphSet, woff2Bytes, woffBytes) {
 <title>${escapeHtml(meta.familyName)} — Font Demo</title>
 <style>
 ${fontFaceRule(meta.familyName, woff2Bytes, woffBytes)}
-body { font-family: sans-serif; background: #121212; color: #eee; padding: 2rem; }
-textarea { width: 100%; font-size: 1.2rem; box-sizing: border-box; }
-.preview { font-family: "${escapeHtml(meta.familyName)}"; font-size: 2.5rem; min-height: 3rem; padding: 0.5rem; border: 1px solid #333; margin: 1rem 0; word-break: break-all; }
+:root {
+  --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem; --space-5: 1.5rem; --space-6: 2rem;
+  --chrome-bg-app: #121212; --chrome-bg-panel: #1e1e1e; --chrome-bg-raised: #262626;
+  --chrome-border: #333; --chrome-border-strong: #4a4a4a;
+  --chrome-text: #eaeaea; --chrome-text-muted: #999; --chrome-text-faint: #666;
+  --chrome-accent: #4da3ff; --chrome-accent-hover: #6db5ff;
+  --radius-sm: 4px; --radius-md: 6px;
+  --text-xs: 0.75rem; --text-sm: 0.85rem;
+}
+* { box-sizing: border-box; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--chrome-bg-app); color: var(--chrome-text);
+  padding: var(--space-6); max-width: 900px; margin: 0 auto;
+}
+h1 { font-weight: 500; }
+h2 { font-size: var(--text-sm); text-transform: uppercase; letter-spacing: 0.05em; color: var(--chrome-text-muted); margin: var(--space-6) 0 var(--space-3); }
+textarea, button {
+  font-family: inherit; color: var(--chrome-text); background: var(--chrome-bg-raised);
+  border: 1px solid var(--chrome-border); border-radius: var(--radius-sm);
+}
+textarea { width: 100%; font-size: 1.2rem; padding: var(--space-3); }
+textarea:hover, button:hover { border-color: var(--chrome-border-strong); }
+textarea:focus-visible, button:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--chrome-accent); border-color: var(--chrome-accent); }
+.preview {
+  font-family: "${escapeHtml(meta.familyName)}"; font-size: 2.5rem;
+  min-height: 3rem; padding: var(--space-3); border: 1px solid var(--chrome-border);
+  border-radius: var(--radius-md); background: var(--chrome-bg-panel);
+  margin: var(--space-4) 0; word-break: break-all;
+}
 #specimen-grid, #icon-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-.specimen-entry, .icon-swatch { display: flex; flex-direction: column; align-items: center; gap: 4px; border: 1px solid #333; padding: 6px; min-width: 40px; background: #1e1e1e; color: #eee; }
+.specimen-entry, .icon-swatch {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  border: 1px solid var(--chrome-border); border-radius: var(--radius-sm);
+  padding: var(--space-2); min-width: 40px; background: var(--chrome-bg-panel); color: var(--chrome-text);
+  transition: border-color 0.1s ease, background-color 0.1s ease;
+}
 .icon-swatch { cursor: pointer; }
+.icon-swatch:hover { background: var(--chrome-bg-raised); border-color: var(--chrome-accent); }
+.icon-swatch:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--chrome-accent); }
 .specimen-entry .glyph, .icon-swatch .glyph { font-family: "${escapeHtml(meta.familyName)}"; font-size: 1.6rem; }
-.specimen-entry .label, .icon-swatch .label { font-size: 0.65rem; color: #888; }
+.specimen-entry .label, .icon-swatch .label { font-size: 0.65rem; color: var(--chrome-text-muted); }
+footer {
+  margin-top: var(--space-6); padding-top: var(--space-4);
+  border-top: 1px solid var(--chrome-border); font-size: var(--text-xs);
+  color: var(--chrome-text-faint); text-align: center;
+}
+footer a { color: var(--chrome-accent); }
+footer a:hover { color: var(--chrome-accent-hover); }
 </style>
 </head>
 <body>

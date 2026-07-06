@@ -5,6 +5,7 @@
 // primitives offered here.
 
 import { useStore } from '../../state/store.js';
+import { ColorAlphaInput } from '../ColorAlphaInput.jsx';
 
 const DEFAULT_LINEAR_GRADIENT = { type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#ffffff' }, { offset: 1, color: '#000000' }] };
 const DEFAULT_RADIAL_GRADIENT = { type: 'radial-gradient', cx: 0.5, cy: 0.5, r: 0.5, stops: [{ offset: 0, color: '#ffffff' }, { offset: 1, color: '#000000' }] };
@@ -45,7 +46,7 @@ function FillEditor({ layer, updateLayerStyle }) {
   }
 
   return (
-    <fieldset style={{ border: '1px solid #333', borderRadius: 4 }}>
+    <fieldset style={{ border: '1px solid var(--chrome-border)', borderRadius: 'var(--radius-sm)' }}>
       <legend>Fill</legend>
       <select value={kind} onChange={(e) => setKind(e.target.value)}>
         <option value="none">None</option>
@@ -55,7 +56,9 @@ function FillEditor({ layer, updateLayerStyle }) {
       </select>
 
       {kind === 'solid' && (
-        <input type="color" value={fill} onChange={(e) => updateLayerStyle(layer.id, { fill: e.target.value })} style={{ marginLeft: 8 }} />
+        <span style={{ marginLeft: 8 }}>
+          <ColorAlphaInput value={fill} onChange={(next) => updateLayerStyle(layer.id, { fill: next })} title="Fill color and opacity" />
+        </span>
       )}
 
       {(kind === 'linear-gradient' || kind === 'radial-gradient') && (
@@ -82,7 +85,7 @@ function FillEditor({ layer, updateLayerStyle }) {
           {fill.stops.map((stop, i) => (
             <span key={i} style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
               <input type="number" min={0} max={1} step={0.05} value={stop.offset} onChange={(e) => updateStop(i, { offset: Number(e.target.value) })} style={{ width: 50 }} />
-              <input type="color" value={stop.color} onChange={(e) => updateStop(i, { color: e.target.value })} />
+              <ColorAlphaInput value={stop.color} onChange={(next) => updateStop(i, { color: next })} title="Stop color and opacity" />
               <button onClick={() => removeStop(i)} disabled={fill.stops.length <= 2}>
                 ✕
               </button>
@@ -108,7 +111,7 @@ function StrokeEditor({ layer, updateLayerStyle }) {
   }
 
   return (
-    <fieldset style={{ border: '1px solid #333', borderRadius: 4 }}>
+    <fieldset style={{ border: '1px solid var(--chrome-border)', borderRadius: 'var(--radius-sm)' }}>
       <legend>
         <label>
           <input type="checkbox" checked={!!stroke} onChange={(e) => toggleStroke(e.target.checked)} /> Stroke
@@ -116,7 +119,7 @@ function StrokeEditor({ layer, updateLayerStyle }) {
       </legend>
       {stroke && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-          <input type="color" value={stroke.color} onChange={(e) => patchStroke({ color: e.target.value })} />
+          <ColorAlphaInput value={stroke.color} onChange={(next) => patchStroke({ color: next })} title="Stroke color and opacity" />
           <label>
             Width: <input type="number" min={0} step={0.05} value={stroke.width} onChange={(e) => patchStroke({ width: Number(e.target.value) })} style={{ width: 50 }} />
           </label>
@@ -165,11 +168,11 @@ function EffectsEditor({ layer, updateLayerStyle }) {
   }
 
   return (
-    <fieldset style={{ border: '1px solid #333', borderRadius: 4 }}>
+    <fieldset style={{ border: '1px solid var(--chrome-border)', borderRadius: 'var(--radius-sm)' }}>
       <legend>Effects</legend>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {effects.map((effect, i) => (
-          <div key={i} style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', background: '#242424', padding: 4, borderRadius: 4 }}>
+          <div key={i} style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', background: 'var(--chrome-bg-raised)', padding: 4, borderRadius: 'var(--radius-sm)' }}>
             <strong>{effect.type}</strong>
             {effect.type === 'drop-shadow' && (
               <>
@@ -182,7 +185,7 @@ function EffectsEditor({ layer, updateLayerStyle }) {
                 <label>
                   blur: <input type="number" min={0} step={0.05} value={effect.blur} onChange={(e) => patchEffect(i, { blur: Number(e.target.value) })} style={{ width: 50 }} />
                 </label>
-                <input type="color" value={effect.color} onChange={(e) => patchEffect(i, { color: e.target.value })} />
+                <ColorAlphaInput value={effect.color} onChange={(next) => patchEffect(i, { color: next })} title="Effect color and opacity" />
                 <label>
                   opacity: <input type="number" min={0} max={1} step={0.05} value={effect.opacity ?? 1} onChange={(e) => patchEffect(i, { opacity: Number(e.target.value) })} style={{ width: 50 }} />
                 </label>
@@ -219,10 +222,10 @@ export function LayerStylePanel() {
 
   if (canvas.tier !== 'advanced') return null;
   const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
-  if (!layer) return <div style={{ padding: '0.5rem', color: '#888' }}>Select a layer to edit its style.</div>;
+  if (!layer) return <div className="panel" style={{ color: 'var(--chrome-text-muted)' }}>Select a layer to edit its style.</div>;
 
   return (
-    <div style={{ padding: '0.5rem', background: '#1e1e1e', color: '#eee', display: 'flex', flexDirection: 'column', gap: 8, minWidth: 320 }}>
+    <div className="panel">
       <strong>Style — {layer.name}</strong>
       <FillEditor layer={layer} updateLayerStyle={updateLayerStyle} />
       <StrokeEditor layer={layer} updateLayerStyle={updateLayerStyle} />

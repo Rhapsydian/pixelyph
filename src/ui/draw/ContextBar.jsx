@@ -1,16 +1,14 @@
-import { useStore } from '../../state/store.js';
-import { TOOL_NAMES } from './tools/index.js';
+// Thin horizontal strip directly under the header, above the canvas/rail/
+// panel row — mirrors Aseprite's own "context bar shows options for the
+// current tool/mode" pattern (aseprite.org/docs/workspace-layout/ names
+// "Tool Bar" and "Context Bar" as separate panels). Holds everything that
+// depends on tier/tool/mode rather than tool identity itself (that's
+// ToolRail's job): tier toggle, shape-filled toggle, selection scope,
+// symmetry, zoom, grid, undo/redo.
 
-const TOOL_LABELS = {
-  pencil: 'Pencil',
-  eraser: 'Eraser',
-  bucketFill: 'Bucket Fill',
-  eyedropper: 'Eyedropper',
-  line: 'Line',
-  rectangle: 'Rectangle',
-  ellipse: 'Ellipse',
-  marqueeSelect: 'Select',
-};
+import { useStore } from '../../state/store.js';
+import { IconButton } from '../IconButton.jsx';
+import { GridIcon, UndoIcon, RedoIcon } from '../icons.jsx';
 
 const SYMMETRY_OPTIONS = [
   { value: 'none', label: 'None' },
@@ -19,10 +17,9 @@ const SYMMETRY_OPTIONS = [
   { value: 'both', label: 'Mirror Both' },
 ];
 
-export function Toolbar() {
+export function ContextBar() {
   const mode = useStore((s) => s.mode);
   const activeTool = useStore((s) => s.activeTool);
-  const setActiveTool = useStore((s) => s.setActiveTool);
   const shapeFilled = useStore((s) => s.shapeFilled);
   const setShapeFilled = useStore((s) => s.setShapeFilled);
   const symmetryMode = useStore((s) => s.canvas.symmetryMode);
@@ -35,17 +32,12 @@ export function Toolbar() {
   const canRedo = useStore((s) => s.canRedo);
   const undo = useStore((s) => s.undo);
   const redo = useStore((s) => s.redo);
-  const toggleTilePreview = useStore((s) => s.toggleTilePreview);
   const tier = useStore((s) => s.canvas.tier);
   const setTier = useStore((s) => s.setTier);
   const selectionScope = useStore((s) => s.selectionScope);
   const setSelectionScope = useStore((s) => s.setSelectionScope);
 
   const isGlyphMode = mode === 'glyph';
-  // marqueeSelect works in both modes as of Phase 5 — the store's selection
-  // actions are mode-aware (read/write whichever document is active), so
-  // it's no longer Draw-mode-only.
-  const toolNames = TOOL_NAMES;
   const showsShapeToggle = activeTool === 'rectangle' || activeTool === 'ellipse';
 
   function handleTierChange(newTier) {
@@ -62,26 +54,15 @@ export function Toolbar() {
   }
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', padding: '0.5rem', background: '#1e1e1e', color: '#eee' }}>
-      <div style={{ display: 'flex', gap: '0.25rem' }}>
-        {toolNames.map((name) => (
-          <button
-            key={name}
-            onClick={() => setActiveTool(name)}
-            style={{ fontWeight: activeTool === name ? 'bold' : 'normal', background: activeTool === name ? '#4da3ff' : '#333', color: '#fff', border: 'none', padding: '0.35rem 0.6rem', borderRadius: 4, cursor: 'pointer' }}
-          >
-            {TOOL_LABELS[name]}
-          </button>
-        ))}
-      </div>
-
+    <div className="app-context-bar">
       {!isGlyphMode && (
-        <div style={{ display: 'flex', gap: '0.25rem' }} title="Simple tier hides layer management; advanced tier exposes it">
+        <div style={{ display: 'flex', gap: 4 }} title="Simple tier hides layer management; advanced tier exposes it">
           {['simple', 'advanced'].map((t) => (
             <button
               key={t}
+              className={tier === t ? 'btn active' : 'btn'}
               onClick={() => handleTierChange(t)}
-              style={{ fontWeight: tier === t ? 'bold' : 'normal', background: tier === t ? '#4da3ff' : '#333', color: '#fff', border: 'none', padding: '0.35rem 0.6rem', borderRadius: 4, cursor: 'pointer', textTransform: 'capitalize' }}
+              style={{ textTransform: 'capitalize', fontWeight: tier === t ? 500 : 400 }}
             >
               {t}
             </button>
@@ -89,8 +70,8 @@ export function Toolbar() {
         </div>
       )}
 
-      {showsShapeToggle && (
-        <label>
+      {!isGlyphMode && showsShapeToggle && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <input type="checkbox" checked={shapeFilled} onChange={(e) => setShapeFilled(e.target.checked)} /> Filled
         </label>
       )}
@@ -118,26 +99,18 @@ export function Toolbar() {
         </label>
       )}
 
-      <label>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         Zoom:{' '}
         <input type="range" min={4} max={48} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} />
         {zoom}x
       </label>
 
-      <label>
-        <input type="checkbox" checked={showGrid} onChange={toggleGrid} /> Grid
-      </label>
+      <IconButton icon={<GridIcon />} label="Toggle grid" active={showGrid} onClick={toggleGrid} />
 
-      <div style={{ display: 'flex', gap: '0.25rem' }}>
-        <button onClick={undo} disabled={!canUndo}>
-          Undo
-        </button>
-        <button onClick={redo} disabled={!canRedo}>
-          Redo
-        </button>
+      <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+        <IconButton icon={<UndoIcon />} label="Undo" disabled={!canUndo} onClick={undo} />
+        <IconButton icon={<RedoIcon />} label="Redo" disabled={!canRedo} onClick={redo} />
       </div>
-
-      {!isGlyphMode && <button onClick={toggleTilePreview}>Tile Preview</button>}
     </div>
   );
 }

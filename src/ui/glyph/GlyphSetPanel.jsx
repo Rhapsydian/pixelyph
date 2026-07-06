@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../state/store.js';
 import { GlyphThumbnail } from './GlyphThumbnail.jsx';
+import { CloseIcon } from '../icons.jsx';
 
 // Returns null (clear), a codepoint number (valid), or undefined (invalid).
 // Accepts: single character, U+xxxx, &#x1F600;, &#9829;, &hearts;
@@ -91,7 +92,7 @@ export function GlyphSetPanel() {
   if (!glyphSet) return null;
 
   return (
-    <div style={{ padding: '0.5rem', background: '#1e1e1e', color: '#eee', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 260 }}>
+    <div className="panel">
       <strong>
         Glyphs ({glyphSet.glyphs.size}) — {glyphSet.kind}
       </strong>
@@ -125,16 +126,17 @@ export function GlyphSetPanel() {
               setNewIconUnicode(e.target.value);
               setNewIconUnicodeError(e.target.value.trim() !== '' && parseUnicodeInput(e.target.value) === undefined);
             }}
-            style={{ borderColor: newIconUnicodeError ? '#c0392b' : undefined }}
+            style={{ borderColor: newIconUnicodeError ? 'var(--chrome-danger)' : undefined }}
           />
-          {newIconUnicodeError && <span style={{ color: '#c0392b', fontSize: '0.8em' }}>Not a recognized character, U+xxxx, HTML entity, or &#xNNNN;</span>}
-          {!newIconUnicodeError && (() => { const p = parseUnicodeInput(newIconUnicode); return p != null ? <span style={{ color: '#888', fontSize: '0.8em' }}>{unicodeDisplay(p)}</span> : null; })()}
+          {newIconUnicodeError && <span style={{ color: 'var(--chrome-danger)', fontSize: 'var(--text-xs)' }}>Not a recognized character, U+xxxx, HTML entity, or &#xNNNN;</span>}
+          {!newIconUnicodeError && (() => { const p = parseUnicodeInput(newIconUnicode); return p != null ? <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>{unicodeDisplay(p)}</span> : null; })()}
         </div>
       )}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxHeight: 320, overflow: 'auto' }}>
         {entries.map(({ codepoint, glyph }) => (
           <div
             key={codepoint}
+            className={activeCodepoint === codepoint ? 'cell active' : 'cell'}
             onClick={() => selectGlyph(codepoint)}
             onMouseEnter={() => setHoveredCodepoint(codepoint)}
             onMouseLeave={() => setHoveredCodepoint(null)}
@@ -143,9 +145,7 @@ export function GlyphSetPanel() {
               position: 'relative',
               cursor: 'pointer',
               padding: 2,
-              borderRadius: 4,
-              border: activeCodepoint === codepoint ? '1px solid #4da3ff' : '1px solid #666',
-              background: activeCodepoint === codepoint ? '#2d4a6b' : 'transparent',
+              border: activeCodepoint === codepoint ? '1px solid var(--chrome-accent)' : '1px solid var(--chrome-border-strong)',
             }}
           >
             <GlyphThumbnail glyph={glyph} />
@@ -162,22 +162,22 @@ export function GlyphSetPanel() {
                   position: 'absolute', top: 1, right: 1,
                   width: 14, height: 14,
                   padding: 0, lineHeight: '14px', fontSize: 10,
-                  background: '#c0392b', color: '#fff',
+                  background: 'var(--chrome-danger)', color: '#fff',
                   border: 'none', borderRadius: 2,
-                  cursor: 'pointer', display: 'flex',
+                  display: 'flex',
                   alignItems: 'center', justifyContent: 'center',
                 }}
               >
-                ×
+                <CloseIcon size={9} />
               </button>
             )}
           </div>
         ))}
-        {entries.length === 0 && <span style={{ color: '#888', fontSize: '0.85em' }}>No glyphs yet.</span>}
+        {entries.length === 0 && <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No glyphs yet.</span>}
       </div>
       {glyphSet.kind === 'icons' && activeCodepoint != null && glyphSet.glyphs.has(activeCodepoint) && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, borderTop: '1px solid #333', paddingTop: 6 }}>
-          <span style={{ fontSize: '0.8em', color: '#aaa' }}>Edit selected icon</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, borderTop: '1px solid var(--chrome-border)', paddingTop: 6 }}>
+          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--chrome-text-muted)' }}>Edit selected icon</span>
           <input
             placeholder="Icon name"
             value={editName}
@@ -196,10 +196,10 @@ export function GlyphSetPanel() {
               setEditUnicodeError(false);
               updateGlyphMeta(activeCodepoint, { unicode: parsed });
             }}
-            style={{ borderColor: editUnicodeError ? '#c0392b' : undefined }}
+            style={{ borderColor: editUnicodeError ? 'var(--chrome-danger)' : undefined }}
           />
-          {editUnicodeError && <span style={{ color: '#c0392b', fontSize: '0.8em' }}>Not a recognized character, U+xxxx, HTML entity, or &#xNNNN;</span>}
-          {!editUnicodeError && (() => { const p = parseUnicodeInput(editUnicode); return p != null ? <span style={{ color: '#888', fontSize: '0.8em' }}>{unicodeDisplay(p)}</span> : null; })()}
+          {editUnicodeError && <span style={{ color: 'var(--chrome-danger)', fontSize: 'var(--text-xs)' }}>Not a recognized character, U+xxxx, HTML entity, or &#xNNNN;</span>}
+          {!editUnicodeError && (() => { const p = parseUnicodeInput(editUnicode); return p != null ? <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>{unicodeDisplay(p)}</span> : null; })()}
         </div>
       )}
     </div>

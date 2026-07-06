@@ -8,13 +8,10 @@ import { composeLayersSvg } from '../../export/svg/composeLayersSvg.js';
 
 export function TilePreviewPanel() {
   const canvas = useStore((s) => s.canvas);
-  const open = useStore((s) => s.tilePreviewOpen);
   const svgMarkup = useMemo(() => composeLayersSvg(canvas), [canvas]);
 
-  if (!open) return null;
-
   return (
-    <div style={{ padding: '0.5rem', background: '#1e1e1e' }}>
+    <div className="panel">
       <div
         style={{
           display: 'grid',

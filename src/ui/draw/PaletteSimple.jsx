@@ -16,8 +16,8 @@ export function PaletteSimple() {
   // they do, so swap in a pointer to the real control instead.
   if (tier === 'advanced') {
     return (
-      <div style={{ padding: '0.5rem', background: '#1e1e1e', color: '#888', fontStyle: 'italic' }}>
-        Color is per-layer in advanced tier — use the Fill section in the layer style panel below.
+      <div className="panel" style={{ color: 'var(--chrome-text-muted)', fontStyle: 'italic' }}>
+        Color is per-layer in advanced tier — use the Fill section in the Style tab.
       </div>
     );
   }
@@ -41,11 +41,12 @@ export function PaletteSimple() {
   }
 
   return (
-    <div style={{ padding: '0.5rem', background: '#1e1e1e', color: '#eee' }}>
+    <div className="panel">
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
         {palette.map((color) => (
           <button
             key={color}
+            className="swatch"
             title={color}
             onClick={() => setActiveColor(color)}
             onContextMenu={(e) => {
@@ -56,17 +57,16 @@ export function PaletteSimple() {
               width: 24,
               height: 24,
               background: color,
-              border: activeColor === color ? '2px solid #fff' : '1px solid #555',
-              borderRadius: 4,
-              cursor: 'pointer',
+              border: activeColor === color ? '2px solid var(--chrome-text)' : '1px solid var(--chrome-border-strong)',
+              borderRadius: 'var(--radius-sm)',
               padding: 0,
             }}
           />
         ))}
         <input type="color" value={activeColor} onChange={(e) => addColor(e.target.value)} title="Add a color to the palette" style={{ width: 24, height: 24, padding: 0, border: 'none' }} />
       </div>
-      <div style={{ marginTop: '0.5rem' }}>
-        <button onClick={() => fileInputRef.current?.click()}>Import Lospec palette (.hex)</button>
+      <div>
+        <button className="btn" onClick={() => fileInputRef.current?.click()}>Import Lospec palette (.hex)</button>
         <input ref={fileInputRef} type="file" accept=".hex,.txt" onChange={handleLospecFile} style={{ display: 'none' }} />
       </div>
     </div>

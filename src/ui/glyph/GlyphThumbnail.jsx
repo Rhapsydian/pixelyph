@@ -17,9 +17,9 @@ export function GlyphThumbnail({ glyph, size = DEFAULT_SIZE, codepoint }) {
     return (
       <div style={{
         width: size, height: size,
-        border: '1px dashed #555', borderRadius: 2, flexShrink: 0,
+        border: '1px dashed var(--chrome-border-strong)', borderRadius: 'var(--radius-sm)', flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: '#666', fontSize: Math.floor(size * 0.6), fontFamily: 'sans-serif',
+        color: 'var(--chrome-text-faint)', fontSize: Math.floor(size * 0.6), fontFamily: 'var(--font-sans)',
         userSelect: 'none', overflow: 'hidden',
       }}>
         {char}
@@ -32,9 +32,9 @@ export function GlyphThumbnail({ glyph, size = DEFAULT_SIZE, codepoint }) {
       width={size}
       height={size}
       viewBox={`0 0 ${glyph.width} ${glyph.height}`}
-      style={{ background: '#242424', border: '1px solid #333', borderRadius: 2, flexShrink: 0, display: 'block' }}
+      style={{ background: 'var(--chrome-bg-raised)', border: '1px solid var(--chrome-border)', borderRadius: 'var(--radius-sm)', flexShrink: 0, display: 'block' }}
     >
-      {d && <path d={d} fill="#eee" fillRule="evenodd" />}
+      {d && <path d={d} fill="var(--chrome-text)" fillRule="evenodd" />}
     </svg>
   );
 }

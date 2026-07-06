@@ -1,0 +1,344 @@
+/* Design tokens for Pixelyph's app chrome (header/toolbar/panels/menus) —
+   distinct from Canvas.palette / user artwork colors, which stay untouched
+   hex values coming from user data, never from these variables. */
+
+:root {
+  /* Spacing scale (4px base grid) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  /* Chrome palette */
+  --chrome-bg-app: #121212;
+  --chrome-bg-surface: #1a1a1a;
+  --chrome-bg-panel: #1e1e1e;
+  --chrome-bg-raised: #262626;
+  --chrome-bg-canvas-surround: #2a2a2a;
+  --chrome-border: #333333;
+  --chrome-border-strong: #4a4a4a;
+  --chrome-text: #eaeaea;
+  --chrome-text-muted: #999999;
+  --chrome-text-faint: #666666;
+  --chrome-accent: #4da3ff;
+  --chrome-accent-soft: #2d4a6b;
+  --chrome-accent-hover: #6db5ff;
+  --chrome-danger: #c0392b;
+  --chrome-warning: #e0b04d;
+
+  /* Typography */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.5rem;
+
+  /* Radii */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  --focus-ring: 0 0 0 2px var(--chrome-accent);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  color: var(--chrome-text);
+  background: var(--chrome-bg-app);
+}
+
+/* Global interactive-state rules — these apply everywhere button/input/
+   select/textarea already appear, with no per-component edits needed. */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: var(--text-sm);
+  color: var(--chrome-text);
+}
+
+button {
+  background: var(--chrome-bg-raised);
+  border: 1px solid var(--chrome-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  transition: background-color 0.1s ease, border-color 0.1s ease;
+}
+
+button:hover:not(:disabled) {
+  background: var(--chrome-border-strong);
+  border-color: var(--chrome-border-strong);
+}
+
+button:active:not(:disabled) {
+  background: var(--chrome-accent-soft);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input,
+select,
+textarea {
+  background: var(--chrome-bg-raised);
+  border: 1px solid var(--chrome-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+}
+
+input:hover:not(:disabled),
+select:hover:not(:disabled),
+textarea:hover:not(:disabled) {
+  border-color: var(--chrome-border-strong);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  background: initial;
+  border: initial;
+  padding: 0;
+  cursor: pointer;
+}
+
+input[type="color"] {
+  padding: 0;
+  cursor: pointer;
+}
+
+input[type="range"] {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+/* Shared component classes */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  color: var(--chrome-text);
+}
+
+.btn {
+  background: var(--chrome-bg-raised);
+  color: var(--chrome-text);
+  border: 1px solid var(--chrome-border);
+}
+
+.btn-primary {
+  background: var(--chrome-accent);
+  border-color: var(--chrome-accent);
+  color: #06121e;
+  font-weight: 500;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--chrome-accent-hover);
+  border-color: var(--chrome-accent-hover);
+}
+
+.btn-secondary {
+  background: var(--chrome-bg-raised);
+  border: 1px solid var(--chrome-border-strong);
+  color: var(--chrome-text);
+}
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--chrome-text-muted);
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: var(--chrome-bg-raised);
+  color: var(--chrome-text);
+}
+
+.icon-btn.active {
+  background: var(--chrome-accent-soft);
+  border-color: var(--chrome-accent);
+  color: var(--chrome-accent);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: background-color 0.1s ease;
+}
+
+.row:hover {
+  background: var(--chrome-bg-raised);
+}
+
+.row.active {
+  background: var(--chrome-accent-soft);
+  border: 1px solid var(--chrome-accent);
+}
+
+.cell {
+  border-radius: var(--radius-sm);
+  transition: background-color 0.1s ease, border-color 0.1s ease;
+}
+
+.cell:hover {
+  background: var(--chrome-bg-raised);
+}
+
+.cell.active {
+  background: var(--chrome-accent-soft);
+  border-color: var(--chrome-accent);
+}
+
+/* Tabs */
+
+.tab-bar {
+  display: flex;
+  border-bottom: 1px solid var(--chrome-border);
+}
+
+.tab-button {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--chrome-text-muted);
+  padding: var(--space-2) var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.tab-button:hover:not(:disabled) {
+  background: var(--chrome-bg-raised);
+  color: var(--chrome-text);
+}
+
+.tab-button.active {
+  color: var(--chrome-accent);
+  border-bottom-color: var(--chrome-accent);
+}
+
+/* App shell layout */
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--chrome-bg-surface);
+  border-bottom: 1px solid var(--chrome-border);
+}
+
+.app-logo {
+  font-size: var(--text-lg);
+  font-weight: 500;
+  margin: 0;
+}
+
+.app-context-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  background: var(--chrome-bg-panel);
+  border-bottom: 1px solid var(--chrome-border);
+  font-size: var(--text-xs);
+  color: var(--chrome-text-muted);
+}
+
+.app-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.tool-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  background: var(--chrome-bg-panel);
+  border-right: 1px solid var(--chrome-border);
+}
+
+.tool-rail-divider {
+  width: 20px;
+  height: 1px;
+  background: var(--chrome-border);
+  margin: var(--space-1) 0;
+}
+
+.canvas-region {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  overflow: auto;
+}
+
+.swatch {
+  transition: transform 0.1s ease;
+}
+
+.swatch:hover {
+  transform: scale(1.1);
+}
+
+.side-panel {
+  width: 260px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--chrome-bg-panel);
+  border-left: 1px solid var(--chrome-border);
+  overflow: auto;
+}

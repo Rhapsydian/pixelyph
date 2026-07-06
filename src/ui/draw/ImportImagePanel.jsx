@@ -46,8 +46,8 @@ export function ImportImagePanel() {
   }
 
   return (
-    <div style={{ padding: '0.5rem', background: '#1e1e1e', color: '#eee', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-      <button onClick={() => fileInputRef.current?.click()} disabled={busy}>
+    <div className="panel" style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }}>
+      <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={busy}>
         {busy ? 'Importing...' : 'Import Image'}
       </button>
       <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFile} style={{ display: 'none' }} />
@@ -61,8 +61,8 @@ export function ImportImagePanel() {
         <input type="checkbox" checked={useExistingPalette} onChange={(e) => setUseExistingPalette(e.target.checked)} /> Match existing palette
       </label>
 
-      <span style={{ borderLeft: '1px solid #444', paddingLeft: '0.75rem' }}>
-        <button onClick={() => referenceInputRef.current?.click()}>Reference Image</button>
+      <span style={{ borderLeft: '1px solid var(--chrome-border)', paddingLeft: '0.75rem' }}>
+        <button className="btn" onClick={() => referenceInputRef.current?.click()}>Reference Image</button>
         <input ref={referenceInputRef} type="file" accept="image/*" onChange={handleReferenceFile} style={{ display: 'none' }} />
       </span>
       {referenceImage && (
@@ -78,7 +78,7 @@ export function ImportImagePanel() {
               onChange={(e) => setReferenceImageOpacity(Number(e.target.value))}
             />
           </label>
-          <button onClick={clearReferenceImage}>Clear Reference</button>
+          <button className="btn" onClick={clearReferenceImage}>Clear Reference</button>
         </>
       )}
     </div>

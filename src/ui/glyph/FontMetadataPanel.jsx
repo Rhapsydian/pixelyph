@@ -59,7 +59,7 @@ export function FontMetadataPanel() {
   }
 
   return (
-    <div style={{ padding: '0.5rem', background: '#1e1e1e', color: '#eee', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 260 }}>
+    <div className="panel">
       <strong>Font Metadata</strong>
       {FIELDS.map(({ key, label, type }) => (
         <label key={key} style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>

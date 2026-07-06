@@ -53,9 +53,9 @@ export function FontExportPanel() {
   }
 
   return (
-    <div style={{ padding: '0.5rem', background: '#1e1e1e', color: '#eee', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 260 }}>
+    <div className="panel">
       <strong>Export Font</strong>
-      {glyphSet.glyphs.size === 0 && <span style={{ color: '#888', fontSize: '0.85em' }}>Draw at least one glyph before exporting.</span>}
+      {glyphSet.glyphs.size === 0 && <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>Draw at least one glyph before exporting.</span>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {rows.map(({ key, label }) => (
           <label key={key} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -65,15 +65,15 @@ export function FontExportPanel() {
         ))}
       </div>
       {cssManifestNeedsAFontFile && (
-        <span style={{ color: '#e0b04d', fontSize: '0.8em' }}>
+        <span style={{ color: 'var(--chrome-warning)', fontSize: 'var(--text-xs)' }}>
           Check OTF or WOFF too — the generated CSS needs a font file to actually point at.
         </span>
       )}
-      <button onClick={handleExport} disabled={!anySelected || cssManifestNeedsAFontFile || exporting || glyphSet.glyphs.size === 0}>
+      <button className="btn btn-primary" onClick={handleExport} disabled={!anySelected || cssManifestNeedsAFontFile || exporting || glyphSet.glyphs.size === 0}>
         {exporting ? 'Exporting…' : 'Export'}
       </button>
       {woff2Warning && (
-        <span style={{ color: '#e0b04d', fontSize: '0.8em' }}>
+        <span style={{ color: 'var(--chrome-warning)', fontSize: 'var(--text-xs)' }}>
           WOFF2 compression didn't complete (timed out) — the other selected files were still exported; any demo HTML falls back to WOFF.
         </span>
       )}

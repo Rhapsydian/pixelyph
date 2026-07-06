@@ -16,11 +16,12 @@ import { useStore } from '../../state/store.js';
 import { CHARSET_PRESETS, CHARSET_PRESET_IDS, mergedPresetCodepoints } from '../../model/charsetPresets.js';
 import { wouldCollide } from '../../model/GlyphSet.js';
 import { GlyphThumbnail } from './GlyphThumbnail.jsx';
+import { CloseIcon } from '../icons.jsx';
 
 const CELL_BORDER = {
-  active:      { border: '1px solid #4da3ff', background: '#2d4a6b' },
-  hasGlyph:    { border: '1px solid #666',    background: 'transparent' },
-  pendingCreate: { border: '1px solid #c87820', background: '#2e1c00' },
+  active:      { border: '1px solid var(--chrome-accent)', background: 'var(--chrome-accent-soft)' },
+  hasGlyph:    { border: '1px solid var(--chrome-border-strong)', background: 'transparent' },
+  pendingCreate: { border: '1px solid var(--chrome-warning)', background: 'var(--chrome-bg-raised)' },
   empty:       { border: '1px solid transparent', background: 'transparent' },
 };
 
@@ -81,7 +82,7 @@ export function CharacterMapPanel() {
   const canCreate = parsedPreview != null && !glyphSet.glyphs.has(parsedPreview);
 
   return (
-    <div style={{ padding: '0.5rem', background: '#1e1e1e', color: '#eee', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 260 }}>
+    <div className="panel">
       <strong>Character Map</strong>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
         {CHARSET_PRESET_IDS.map((id) => (
@@ -91,10 +92,10 @@ export function CharacterMapPanel() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: 4,
-              background: presetIds.has(id) ? '#2d4a6b' : '#333',
-              border: presetIds.has(id) ? '1px solid #4da3ff' : '1px solid transparent',
+              background: presetIds.has(id) ? 'var(--chrome-accent-soft)' : 'var(--chrome-bg-raised)',
+              border: presetIds.has(id) ? '1px solid var(--chrome-accent)' : '1px solid transparent',
               padding: '0.25rem 0.5rem',
-              borderRadius: 4,
+              borderRadius: 'var(--radius-sm)',
               cursor: 'pointer',
             }}
           >
@@ -109,7 +110,7 @@ export function CharacterMapPanel() {
           Create
         </button>
       </form>
-      <p style={{ margin: 0, fontSize: '0.8em', color: '#888' }}>
+      <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--chrome-text-muted)' }}>
         Type a character or click a placeholder, then click Create to start drawing it.
       </p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxHeight: 320, overflow: 'auto' }}>
@@ -125,6 +126,7 @@ export function CharacterMapPanel() {
           return (
             <div
               key={codepoint}
+              className="cell"
               onClick={() => { setInput(String.fromCodePoint(codepoint)); if (glyph) selectGlyph(codepoint); }}
               onMouseEnter={() => setHoveredCodepoint(codepoint)}
               onMouseLeave={() => setHoveredCodepoint(null)}
@@ -133,7 +135,6 @@ export function CharacterMapPanel() {
                 position: 'relative',
                 cursor: 'pointer',
                 padding: 2,
-                borderRadius: 4,
                 ...cellStyle,
               }}
             >
@@ -151,20 +152,20 @@ export function CharacterMapPanel() {
                     position: 'absolute', top: 1, right: 1,
                     width: 14, height: 14,
                     padding: 0, lineHeight: '14px', fontSize: 10,
-                    background: '#c0392b', color: '#fff',
+                    background: 'var(--chrome-danger)', color: '#fff',
                     border: 'none', borderRadius: 2,
-                    cursor: 'pointer', display: 'flex',
+                    display: 'flex',
                     alignItems: 'center', justifyContent: 'center',
                   }}
                 >
-                  ×
+                  <CloseIcon size={9} />
                 </button>
               )}
             </div>
           );
         })}
         {codepoints.length === 0 && (
-          <span style={{ color: '#888', fontSize: '0.85em' }}>No preset selected — check one or more above, or use GlyphSetPanel to browse already-assigned glyphs.</span>
+          <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No preset selected — check one or more above, or use GlyphSetPanel to browse already-assigned glyphs.</span>
         )}
       </div>
     </div>

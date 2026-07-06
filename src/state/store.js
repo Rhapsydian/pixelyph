@@ -207,7 +207,6 @@ export const useStore = create((set, get) => {
     zoom: 16,
     pan: { x: 0, y: 0 },
     showGrid: true,
-    tilePreviewOpen: false,
 
     selection: null,
     floatingSelection: null,
@@ -219,7 +218,6 @@ export const useStore = create((set, get) => {
     setZoom: (zoom) => set({ zoom }),
     setPan: (pan) => set({ pan }),
     toggleGrid: () => set((s) => ({ showGrid: !s.showGrid })),
-    toggleTilePreview: () => set((s) => ({ tilePreviewOpen: !s.tilePreviewOpen })),
     setSelectionScope: (scope) => set({ selectionScope: scope }),
 
     // Working-session conveniences: persisted with the project, excluded from undo.

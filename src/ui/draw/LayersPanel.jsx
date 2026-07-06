@@ -5,6 +5,8 @@
 
 import { useState } from 'react';
 import { useStore } from '../../state/store.js';
+import { IconButton } from '../IconButton.jsx';
+import { EyeIcon, EyeOffIcon, LockIcon, UnlockIcon, MoveUpIcon, MoveDownIcon, TrashIcon, DuplicateIcon, MergeDownIcon, PlusIcon } from '../icons.jsx';
 
 function LayerRow({ layer, isActive, isBottom }) {
   const setActiveLayerId = useStore((s) => s.setActiveLayerId);
@@ -20,20 +22,23 @@ function LayerRow({ layer, isActive, isBottom }) {
   return (
     <div
       onClick={() => setActiveLayerId(layer.id)}
-      style={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        gap: 6,
-        padding: '0.4rem',
-        borderRadius: 4,
-        cursor: 'pointer',
-        background: isActive ? '#2d4a6b' : '#242424',
-        border: isActive ? '1px solid #4da3ff' : '1px solid #333',
-      }}
+      className={isActive ? 'row active' : 'row'}
+      style={{ flexWrap: 'wrap', padding: 'var(--space-2)', cursor: 'pointer' }}
     >
-      <input type="checkbox" checked={layer.visible} title="Visible" onClick={(e) => e.stopPropagation()} onChange={(e) => setLayerProps(layer.id, { visible: e.target.checked })} />
-      <input type="checkbox" checked={layer.locked} title="Locked" onClick={(e) => e.stopPropagation()} onChange={(e) => setLayerProps(layer.id, { locked: e.target.checked })} />
+      <span onClick={(e) => e.stopPropagation()} style={{ display: 'inline-flex' }}>
+        <IconButton
+          icon={layer.visible ? <EyeIcon /> : <EyeOffIcon />}
+          label={layer.visible ? 'Hide layer' : 'Show layer'}
+          active={layer.visible}
+          onClick={() => setLayerProps(layer.id, { visible: !layer.visible })}
+        />
+        <IconButton
+          icon={layer.locked ? <LockIcon /> : <UnlockIcon />}
+          label={layer.locked ? 'Unlock layer' : 'Lock layer'}
+          active={layer.locked}
+          onClick={() => setLayerProps(layer.id, { locked: !layer.locked })}
+        />
+      </span>
       <input
         value={name}
         onClick={(e) => e.stopPropagation()}
@@ -55,21 +60,11 @@ function LayerRow({ layer, isActive, isBottom }) {
         />
       </label>
       <span onClick={(e) => e.stopPropagation()} style={{ display: 'inline-flex', gap: 2 }}>
-        <button onClick={() => reorderLayer(layer.id, 1)} title="Move up">
-          ▲
-        </button>
-        <button onClick={() => reorderLayer(layer.id, -1)} title="Move down">
-          ▼
-        </button>
-        <button onClick={() => removeLayer(layer.id)} title="Delete layer">
-          ✕
-        </button>
-        <button onClick={() => duplicateLayer(layer.id)} title="Duplicate layer">
-          ⧉
-        </button>
-        <button onClick={() => mergeLayerDown(layer.id)} disabled={isBottom} title="Merge down (keeps the layer below's style)">
-          ⭳
-        </button>
+        <IconButton icon={<MoveUpIcon />} label="Move up" onClick={() => reorderLayer(layer.id, 1)} />
+        <IconButton icon={<MoveDownIcon />} label="Move down" onClick={() => reorderLayer(layer.id, -1)} />
+        <IconButton icon={<DuplicateIcon />} label="Duplicate layer" onClick={() => duplicateLayer(layer.id)} />
+        <IconButton icon={<MergeDownIcon />} label="Merge down (keeps the layer below's style)" disabled={isBottom} onClick={() => mergeLayerDown(layer.id)} />
+        <IconButton icon={<TrashIcon />} label="Delete layer" onClick={() => removeLayer(layer.id)} />
       </span>
     </div>
   );
@@ -84,12 +79,12 @@ export function LayersPanel() {
   if (canvas.tier !== 'advanced') return null;
 
   return (
-    <div style={{ padding: '0.5rem', background: '#1e1e1e', color: '#eee', display: 'flex', flexDirection: 'column', gap: 4, minWidth: 320 }}>
+    <div className="panel">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <strong>Layers</strong>
-        <button onClick={addLayer}>+ Add Layer</button>
+        <IconButton icon={<PlusIcon />} label="Add layer" onClick={addLayer} />
       </div>
-      {canvas.layers.length === 0 && <span style={{ color: '#888', fontSize: '0.85em' }}>No layers yet — add one to start painting.</span>}
+      {canvas.layers.length === 0 && <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No layers yet — add one to start painting.</span>}
       {canvas.layers
         .slice()
         .reverse()
