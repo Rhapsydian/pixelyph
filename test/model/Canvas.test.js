@@ -18,6 +18,7 @@ import {
   duplicateFrame,
   removeFrame,
   setActiveFrame,
+  setFrameDuration,
 } from '../../src/model/Canvas.js';
 
 test('colorAt reads the topmost (last) visible layer that owns a cell', () => {
@@ -426,4 +427,49 @@ test('addLayer creates a new layer with canvas.frameCount frames, not always 1',
   addFrame(canvas);
   const layer = addLayer(canvas, {});
   assert.equal(layer.frames.length, 3);
+});
+
+// --- Animation (Phase 7 follow-on): per-frame duration ---
+
+test('a new canvas starts with one frameDurations entry derived from the default frame rate', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  assert.deepEqual(canvas.frameDurations, [Math.round(1000 / canvas.frameRate)]);
+});
+
+test('addFrame inserts a default-duration entry into frameDurations at the same index as the new frame', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  setFrameDuration(canvas, 0, 250);
+  addFrame(canvas, 1); // insert after frame 0
+  assert.deepEqual(canvas.frameDurations, [250, Math.round(1000 / canvas.frameRate)]);
+});
+
+test('duplicateFrame copies the source frame\'s own duration, not the default', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  setFrameDuration(canvas, 0, 500);
+  duplicateFrame(canvas, 0);
+  assert.deepEqual(canvas.frameDurations, [500, 500]);
+});
+
+test('removeFrame removes the matching frameDurations entry, keeping it aligned with the remaining frames', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  addFrame(canvas); // frame 1
+  addFrame(canvas); // frame 2
+  setFrameDuration(canvas, 0, 100);
+  setFrameDuration(canvas, 1, 200);
+  setFrameDuration(canvas, 2, 300);
+  removeFrame(canvas, 1);
+  assert.deepEqual(canvas.frameDurations, [100, 300]);
+});
+
+test('setFrameDuration overrides one frame\'s duration, clamped to a 1ms floor, and no-ops out of range', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  addFrame(canvas);
+  setFrameDuration(canvas, 1, 400);
+  assert.deepEqual(canvas.frameDurations, [Math.round(1000 / canvas.frameRate), 400]);
+
+  setFrameDuration(canvas, 0, -50);
+  assert.equal(canvas.frameDurations[0], 1);
+
+  setFrameDuration(canvas, 5, 999); // out of range — no-op
+  assert.equal(canvas.frameDurations.length, 2);
 });

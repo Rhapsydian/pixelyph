@@ -39,10 +39,10 @@ Early development. Draw mode (both tiers, with frame-based animation), Glyph mod
 
 **Animation** — every layer carries a uniform number of frames (adding/duplicating/removing a frame does it across every layer at once, so they never drift out of sync), works in both tiers:
 
-- Frame strip: add, duplicate, delete, and click-to-select frames, each shown as a live thumbnail; a frame-rate control feeds every animated export
+- Frame strip: add, duplicate, delete, and click-to-select frames, each shown as a live thumbnail, with its own duration (milliseconds) editable per frame — a "default FPS" control sets the pace for newly-added frames only, it doesn't retroactively rescale existing ones
 - Onion skinning: a faded, color-tinted (reddish/bluish) preview of the adjacent frame(s) rendered behind the one actually being edited
-- Export a self-contained, looping **animated SVG** (one `<g>` per frame, stepped via a single shared CSS `@keyframes` rule with negative per-frame delays rather than one animation per frame)
-- Export a **sprite sheet**: a single-row PNG tiling every frame plus a JSON metadata sidecar (`{frames:[{x,y,w,h}], frameRate}`, TexturePacker/Aseprite-style), bundled as one `.zip`
+- Export a self-contained, looping **animated SVG** (one `<g>` per frame, each with its own CSS `@keyframes` rule sized to its own duration's share of the total cycle, offset by a negative delay equal to the cumulative duration of every frame before it — so frames can each run at a different speed, not just a uniform rate)
+- Export a **sprite sheet**: a single-row PNG tiling every frame plus a JSON metadata sidecar (`{frames:[{x,y,w,h,duration}]}`, TexturePacker/Aseprite-style — `duration` is per-frame, in milliseconds), bundled as one `.zip`
 - Export an **animated GIF** via [gifenc](https://github.com/mattdesl/gifenc) (pure JS, no native dependency — same reasoning as the font pipeline's WASM/pure-JS picks), with real GIF transparency for fully-transparent pixels
 - Both raster animation exports reuse the same single-frame `rasterizeFrame` rasterizer PNG/WebP export already uses, called once per animation frame
 

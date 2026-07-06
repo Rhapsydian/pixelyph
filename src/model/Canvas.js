@@ -50,13 +50,24 @@ export function createCanvas({ width, height, palette = [] }) {
     // activeLayerId) into that array — persisted, but excluded from undo.
     frameCount: 1,
     activeFrame: 0,
+    // `frameRate` is only the *default* pace used when a new frame is added
+    // (see defaultFrameDurationMs) — actual per-frame timing lives in
+    // frameDurations (ms), one entry per frame, kept the same length as
+    // frameCount exactly like every layer's `frames` array. Content, like
+    // frameCount, so both are undo-tracked (see store.js's contentSnapshot).
     frameRate: 12,
+    frameDurations: [Math.round(1000 / 12)],
   };
 }
 
 /** @returns {number} the frame index every paint/read operation should target — clamps defensively in case activeFrame ever drifts out of range (e.g. an older saved project). */
 function currentFrameIndex(canvas) {
   return Math.max(0, Math.min(canvas.activeFrame ?? 0, canvas.frameCount - 1));
+}
+
+/** @returns {number} the duration (ms) a newly-added blank frame gets, derived from the canvas's default frame rate. */
+function defaultFrameDurationMs(canvas) {
+  return Math.max(1, Math.round(1000 / canvas.frameRate));
 }
 
 /**
@@ -380,13 +391,16 @@ export function addFrame(canvas, index) {
   for (const layer of canvas.layers) {
     layer.frames.splice(insertAt, 0, { pixels: new Uint8Array(layer.width * layer.height) });
   }
+  canvas.frameDurations.splice(insertAt, 0, defaultFrameDurationMs(canvas));
   canvas.frameCount++;
   canvas.activeFrame = insertAt;
 }
 
 /**
  * Inserts a copy of frame `index` directly after it, in every layer, and
- * makes the copy active.
+ * makes the copy active. The copy's duration matches the source frame's
+ * (an exact duplicate, timing included) rather than resetting to the
+ * canvas's default.
  *
  * @param {object} canvas
  * @param {number} index
@@ -396,6 +410,7 @@ export function duplicateFrame(canvas, index) {
   for (const layer of canvas.layers) {
     layer.frames.splice(insertAt, 0, { pixels: layer.frames[index].pixels.slice() });
   }
+  canvas.frameDurations.splice(insertAt, 0, canvas.frameDurations[index]);
   canvas.frameCount++;
   canvas.activeFrame = insertAt;
 }
@@ -410,6 +425,7 @@ export function duplicateFrame(canvas, index) {
 export function removeFrame(canvas, index) {
   if (canvas.frameCount <= 1) return;
   for (const layer of canvas.layers) layer.frames.splice(index, 1);
+  canvas.frameDurations.splice(index, 1);
   canvas.frameCount--;
   canvas.activeFrame = Math.min(canvas.activeFrame, canvas.frameCount - 1);
 }
@@ -423,4 +439,20 @@ export function removeFrame(canvas, index) {
  */
 export function setActiveFrame(canvas, index) {
   canvas.activeFrame = Math.max(0, Math.min(index, canvas.frameCount - 1));
+}
+
+/**
+ * Overrides frame `index`'s own duration (milliseconds), independent of the
+ * canvas's default frame rate — the per-frame timing every animated export
+ * (animatedSvg.js/animatedRaster.js/spriteSheet.js) reads from directly.
+ * Clamped to a 1ms floor so no export ever has to divide by (or display) a
+ * zero-length frame.
+ *
+ * @param {object} canvas
+ * @param {number} index
+ * @param {number} durationMs
+ */
+export function setFrameDuration(canvas, index, durationMs) {
+  if (index < 0 || index >= canvas.frameCount) return;
+  canvas.frameDurations[index] = Math.max(1, Math.round(durationMs));
 }

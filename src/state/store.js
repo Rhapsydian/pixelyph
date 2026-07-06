@@ -31,6 +31,7 @@ import {
   duplicateFrame as duplicateFrameModel,
   removeFrame as removeFrameModel,
   setActiveFrame as setActiveFrameModel,
+  setFrameDuration as setFrameDurationModel,
 } from '../model/Canvas.js';
 import { mirrorPoints } from '../model/mirror.js';
 import { createHistory, pushSnapshot, undo as historyUndo, redo as historyRedo, canUndo as historyCanUndo, canRedo as historyCanRedo } from '../model/history.js';
@@ -59,11 +60,21 @@ import { slugify } from '../export/slugify.js';
 import { createZip } from '../export/zip.js';
 
 function contentSnapshot(canvas) {
-  // frameCount is artwork content (every layer's frames.length matches it) —
-  // included so undo correctly reverts an add/duplicate/remove-frame action,
-  // same as any other structural edit. activeFrame is excluded, same
-  // reasoning as activeLayerId below (a working-session pointer, not content).
-  return { layers: canvas.layers, width: canvas.width, height: canvas.height, palette: canvas.palette, tier: canvas.tier, frameCount: canvas.frameCount };
+  // frameCount/frameDurations are artwork content (every layer's
+  // frames.length matches frameCount; frameDurations is the authored
+  // per-frame timing) — included so undo correctly reverts an
+  // add/duplicate/remove-frame action or a duration edit, same as any other
+  // structural edit. activeFrame is excluded, same reasoning as
+  // activeLayerId below (a working-session pointer, not content).
+  return {
+    layers: canvas.layers,
+    width: canvas.width,
+    height: canvas.height,
+    palette: canvas.palette,
+    tier: canvas.tier,
+    frameCount: canvas.frameCount,
+    frameDurations: canvas.frameDurations,
+  };
 }
 
 function applyContentSnapshot(canvas, snapshot) {
@@ -73,6 +84,7 @@ function applyContentSnapshot(canvas, snapshot) {
   canvas.palette = snapshot.palette;
   canvas.tier = snapshot.tier;
   canvas.frameCount = snapshot.frameCount;
+  canvas.frameDurations = snapshot.frameDurations;
   // simpleTier.colorToLayerId is bookkeeping, not artwork — rebuild it from
   // the restored layers so it can't fall out of sync with what undo/redo just restored.
   canvas.simpleTier.colorToLayerId = new Map(canvas.layers.filter((l) => l.autoManaged).map((l) => [l.autoColor, l.id]));
@@ -275,11 +287,15 @@ export const useStore = create((set, get) => {
     },
 
     // --- Animation (Phase 7): frames ---
-    // add/duplicate/remove are committed actions (undo-tracked, like a
-    // resize or style change — see Canvas.js's addFrame/duplicateFrame/
-    // removeFrame for the "every layer stays in lockstep" invariant);
-    // setActiveFrame/setFrameRate are working-session pointer moves/playback
-    // settings, same as setActiveLayerId/setSymmetryMode above.
+    // add/duplicate/remove/setFrameDuration are committed actions (undo-
+    // tracked, like a resize or style change — see Canvas.js's
+    // addFrame/duplicateFrame/removeFrame for the "every layer stays in
+    // lockstep" invariant, and setFrameDuration for the per-frame timing
+    // every animated export reads); setActiveFrame/setFrameRate are
+    // working-session pointer moves/playback settings, same as
+    // setActiveLayerId/setSymmetryMode above — setFrameRate in particular
+    // only sets the *default* duration a newly-added frame gets, it doesn't
+    // retroactively rescale existing frames' durations.
     onionSkinEnabled: false,
     addFrame: (index) => {
       addFrameModel(get().canvas, index);
@@ -300,6 +316,10 @@ export const useStore = create((set, get) => {
     setFrameRate: (fps) => {
       get().canvas.frameRate = fps;
       touchCanvas();
+    },
+    setFrameDuration: (index, durationMs) => {
+      setFrameDurationModel(get().canvas, index, durationMs);
+      commit();
     },
     toggleOnionSkin: () => set((s) => ({ onionSkinEnabled: !s.onionSkinEnabled })),
 

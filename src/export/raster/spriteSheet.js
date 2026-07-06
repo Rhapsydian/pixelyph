@@ -1,13 +1,16 @@
 // Rasterizes every frame of an animation and tiles the results into one
 // single-row PNG sprite sheet, alongside a TexturePacker/Aseprite-style JSON
-// metadata sidecar ({frames:[{x,y,w,h}], frameRate}). Reuses rasterizeFrame
-// (the same single-frame SVG->canvas rasterizer PNG/WebP export already
-// uses) once per frame rather than a separate raster pipeline — each
-// frame's rasterized PNG is decoded back to an image and drawn onto one
-// shared canvas at its tile position.
+// metadata sidecar ({frames:[{x,y,w,h,duration}]} — `duration`, in
+// milliseconds, is per-frame rather than a single sheet-wide rate, matching
+// Aseprite's own JSON export convention). Reuses rasterizeFrame (the same
+// single-frame SVG->canvas rasterizer PNG/WebP export already uses) once
+// per frame rather than a separate raster pipeline — each frame's
+// rasterized PNG is decoded back to an image and drawn onto one shared
+// canvas at its tile position.
 //
-// computeSpriteSheetLayout is pure (no DOM) and separated out specifically
-// so the tile-position math is directly node --test-able; buildSpriteSheet
+// computeSpriteSheetLayout/mergeFrameDurations are pure (no DOM) and
+// separated out specifically so the tile-position math and the
+// duration-merge step are directly node --test-able; buildSpriteSheet
 // itself needs a real <canvas>/Image, so it's manual-tested like the rest
 // of this project's DOM-dependent raster code (rasterizeFrame.js itself).
 
@@ -29,6 +32,20 @@ export function computeSpriteSheetLayout(frameCount, frameWidth, frameHeight) {
     frames.push({ x: i * frameWidth, y: 0, w: frameWidth, h: frameHeight });
   }
   return { sheetWidth: frameWidth * frameCount, sheetHeight: frameHeight, frames };
+}
+
+/**
+ * Attaches each frame's own duration (ms) to its layout entry — the glue
+ * between the purely-geometric tile layout and the per-frame timing that
+ * lives on the canvas, kept as its own pure function so it's testable
+ * without needing a real canvas/DOM.
+ *
+ * @param {{x:number,y:number,w:number,h:number}[]} layoutFrames
+ * @param {number[]} durationsMs same length as layoutFrames
+ * @returns {{x:number,y:number,w:number,h:number,duration:number}[]}
+ */
+export function mergeFrameDurations(layoutFrames, durationsMs) {
+  return layoutFrames.map((frame, i) => ({ ...frame, duration: durationsMs[i] }));
 }
 
 function frameSvg(canvas, frameIndex) {
@@ -56,7 +73,7 @@ function loadImageFromBlob(blob) {
 /**
  * @param {object} canvas Canvas
  * @param {number} [scale] output size multiplier, same presets as PNG/WebP export
- * @returns {Promise<{ blob: Blob, metadata: { frames: object[], frameRate: number, width: number, height: number } }>}
+ * @returns {Promise<{ blob: Blob, metadata: { frames: object[], width: number, height: number } }>}
  */
 export async function buildSpriteSheet(canvas, scale = 1) {
   const frameWidth = canvas.width * scale;
@@ -79,5 +96,8 @@ export async function buildSpriteSheet(canvas, scale = 1) {
     sheetCanvas.toBlob((b) => (b ? resolve(b) : reject(new Error('buildSpriteSheet: canvas.toBlob produced no blob'))), 'image/png');
   });
 
-  return { blob, metadata: { frames: layout.frames, frameRate: canvas.frameRate, width: layout.sheetWidth, height: layout.sheetHeight } };
+  return {
+    blob,
+    metadata: { frames: mergeFrameDurations(layout.frames, canvas.frameDurations), width: layout.sheetWidth, height: layout.sheetHeight },
+  };
 }

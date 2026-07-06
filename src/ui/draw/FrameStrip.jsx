@@ -1,10 +1,12 @@
 // Draw mode only (glyphs never animate): a horizontal strip of per-frame
-// thumbnails — click to make a frame active, plus add/duplicate/delete and
-// a frame-rate control feeding the animated exports (animatedSvg.js/
-// spriteSheet.js/animatedRaster.js). Onion skinning is a separate toggle
-// here but rendered by SvgPixelEditor itself, since it needs to composite
-// into the live editing surface, not just this strip.
+// thumbnails — click to make a frame active, plus add/duplicate/delete, a
+// per-frame duration (ms) input, and a frame-rate control (the default
+// duration new frames get, not a retroactive rescale) feeding the animated
+// exports (animatedSvg.js/spriteSheet.js/animatedRaster.js). Onion skinning
+// is a separate toggle here but rendered by SvgPixelEditor itself, since it
+// needs to composite into the live editing surface, not just this strip.
 
+import { useEffect, useState } from 'react';
 import { useStore } from '../../state/store.js';
 import { composeFrameBody } from '../../export/svg/composeLayersSvg.js';
 
@@ -26,12 +28,64 @@ function FrameThumbnail({ canvas, frameIndex }) {
   );
 }
 
-export function FrameStrip() {
-  const canvas = useStore((s) => s.canvas);
+function FrameCard({ canvas, frameIndex, isActive, isOnlyFrame }) {
   const setActiveFrame = useStore((s) => s.setActiveFrame);
-  const addFrame = useStore((s) => s.addFrame);
   const duplicateFrame = useStore((s) => s.duplicateFrame);
   const removeFrame = useStore((s) => s.removeFrame);
+  const setFrameDuration = useStore((s) => s.setFrameDuration);
+
+  const committedDuration = canvas.frameDurations[frameIndex];
+  const [duration, setDuration] = useState(committedDuration);
+  // FrameCard is keyed by position (frameIndex), not a stable frame id — an
+  // add/duplicate/remove elsewhere in the strip can shift which actual frame
+  // a given position refers to without this component remounting, so local
+  // state has to be resynced whenever the committed value for *this
+  // position* changes, the same way GlyphSizeControl resyncs on
+  // activeCodepoint/glyph.width changes in App.jsx.
+  useEffect(() => {
+    setDuration(committedDuration);
+  }, [committedDuration]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+      <div
+        onClick={() => setActiveFrame(frameIndex)}
+        style={{
+          border: isActive ? '2px solid #4da3ff' : '1px solid #444',
+          borderRadius: 4,
+          cursor: 'pointer',
+          lineHeight: 0,
+        }}
+      >
+        <FrameThumbnail canvas={canvas} frameIndex={frameIndex} />
+      </div>
+      <span style={{ fontSize: '0.75em', color: '#888' }}>{frameIndex + 1}</span>
+      <label title="This frame's own duration, in milliseconds" style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '0.75em' }}>
+        <input
+          type="number"
+          min={1}
+          value={duration}
+          onChange={(e) => setDuration(Number(e.target.value))}
+          onBlur={() => duration !== committedDuration && setFrameDuration(frameIndex, duration)}
+          style={{ width: 44 }}
+        />
+        ms
+      </label>
+      <span style={{ display: 'flex', gap: 2 }}>
+        <button onClick={() => duplicateFrame(frameIndex)} title="Duplicate frame">
+          ⧉
+        </button>
+        <button onClick={() => removeFrame(frameIndex)} disabled={isOnlyFrame} title="Delete frame">
+          ✕
+        </button>
+      </span>
+    </div>
+  );
+}
+
+export function FrameStrip() {
+  const canvas = useStore((s) => s.canvas);
+  const addFrame = useStore((s) => s.addFrame);
   const setFrameRate = useStore((s) => s.setFrameRate);
   const onionSkinEnabled = useStore((s) => s.onionSkinEnabled);
   const toggleOnionSkin = useStore((s) => s.toggleOnionSkin);
@@ -41,8 +95,8 @@ export function FrameStrip() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
         <strong>Frames</strong>
         <button onClick={() => addFrame()}>+ Add Frame</button>
-        <label>
-          FPS:{' '}
+        <label title="The duration a newly-added frame gets — doesn't change existing frames' own durations">
+          Default FPS:{' '}
           <input
             type="number"
             min={1}
@@ -58,28 +112,13 @@ export function FrameStrip() {
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {Array.from({ length: canvas.frameCount }, (_, frameIndex) => (
-          <div key={frameIndex} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-            <div
-              onClick={() => setActiveFrame(frameIndex)}
-              style={{
-                border: frameIndex === canvas.activeFrame ? '2px solid #4da3ff' : '1px solid #444',
-                borderRadius: 4,
-                cursor: 'pointer',
-                lineHeight: 0,
-              }}
-            >
-              <FrameThumbnail canvas={canvas} frameIndex={frameIndex} />
-            </div>
-            <span style={{ fontSize: '0.75em', color: '#888' }}>{frameIndex + 1}</span>
-            <span style={{ display: 'flex', gap: 2 }}>
-              <button onClick={() => duplicateFrame(frameIndex)} title="Duplicate frame">
-                ⧉
-              </button>
-              <button onClick={() => removeFrame(frameIndex)} disabled={canvas.frameCount <= 1} title="Delete frame">
-                ✕
-              </button>
-            </span>
-          </div>
+          <FrameCard
+            key={frameIndex}
+            canvas={canvas}
+            frameIndex={frameIndex}
+            isActive={frameIndex === canvas.activeFrame}
+            isOnlyFrame={canvas.frameCount <= 1}
+          />
         ))}
       </div>
     </div>

@@ -70,13 +70,15 @@ export function serializeProject(canvas) {
       symmetryMode: canvas.symmetryMode,
       referenceImage: canvas.referenceImage ?? null,
       activeLayerId: canvas.activeLayerId ?? null,
-      // Animation (Phase 7): frameCount is artwork content (every layer's
-      // frames.length matches it); activeFrame/frameRate are working-session/
-      // playback conveniences persisted the same way symmetryMode/activeLayerId
-      // already are.
+      // Animation (Phase 7): frameCount/frameDurations are artwork content
+      // (every layer's frames.length matches frameCount; frameDurations is
+      // the authored per-frame timing every animated export reads);
+      // activeFrame/frameRate are working-session/playback conveniences
+      // persisted the same way symmetryMode/activeLayerId already are.
       frameCount: canvas.frameCount,
       activeFrame: canvas.activeFrame,
       frameRate: canvas.frameRate,
+      frameDurations: canvas.frameDurations,
       simpleTier: { colorToLayerId: Array.from(canvas.simpleTier.colorToLayerId.entries()) },
       layers: canvas.layers.map(serializeLayer),
     },
@@ -101,10 +103,14 @@ export function deserializeProject(doc) {
     activeLayerId: c.activeLayerId ?? null,
     // Fall back to single-frame defaults for projects saved before Phase 7 —
     // no version-migration step exists yet (see the plan's "explicitly
-    // deferred" note), so old files simply don't have these fields.
+    // deferred" note), so old files simply don't have these fields. Files
+    // saved after per-frame duration shipped but that still predate it
+    // (frameCount present, frameDurations absent) get a uniform duration
+    // array derived from frameRate instead.
     frameCount: c.frameCount ?? 1,
     activeFrame: c.activeFrame ?? 0,
     frameRate: c.frameRate ?? 12,
+    frameDurations: c.frameDurations ?? new Array(c.frameCount ?? 1).fill(Math.round(1000 / (c.frameRate ?? 12))),
     simpleTier: { colorToLayerId: new Map(c.simpleTier.colorToLayerId) },
     layers: c.layers.map(deserializeLayer),
   };

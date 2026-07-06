@@ -30,25 +30,27 @@ import { composeFrameBody } from '../svg/composeLayersSvg.js';
  * `oneBitAlpha` quantization gives pixel art's usual fully-transparent
  * background a real GIF transparent index rather than flattening it to an
  * opaque color; frames with no transparent pixels just skip that option.
+ * Each frame's own delay (ms) is per-frame, not a single rate for the whole
+ * animation — gifenc's `writeFrame` already takes `delay` per call, so a
+ * varying `durationsMs` array is exactly as cheap to encode as a uniform one.
  *
  * @param {(Uint8Array|Uint8ClampedArray)[]} rgbaFrames one flat RGBA buffer per frame, all the same width x height
- * @param {{ width: number, height: number, frameRate: number }} options
+ * @param {{ width: number, height: number, durationsMs: number[] }} options one duration per frame, same length as rgbaFrames
  * @returns {Uint8Array} a complete GIF file's bytes
  */
-export function encodeFramesAsGif(rgbaFrames, { width, height, frameRate }) {
-  const delay = Math.round(1000 / frameRate);
+export function encodeFramesAsGif(rgbaFrames, { width, height, durationsMs }) {
   const gif = GIFEncoder();
-  for (const rgba of rgbaFrames) {
+  rgbaFrames.forEach((rgba, i) => {
     const palette = quantize(rgba, 256, { format: 'rgba4444', oneBitAlpha: true });
     const index = applyPalette(rgba, palette, 'rgba4444');
     const transparentIndex = palette.findIndex((color) => color[3] === 0);
     gif.writeFrame(index, width, height, {
       palette,
-      delay,
+      delay: durationsMs[i],
       repeat: 0,
       ...(transparentIndex >= 0 ? { transparent: true, transparentIndex } : {}),
     });
-  }
+  });
   gif.finish();
   return gif.bytes();
 }
@@ -99,6 +101,6 @@ export async function buildAnimatedGif(canvas, scale = 1) {
     rgbaFrames.push(ctx.getImageData(0, 0, width, height).data);
   }
 
-  const bytes = encodeFramesAsGif(rgbaFrames, { width, height, frameRate: canvas.frameRate });
+  const bytes = encodeFramesAsGif(rgbaFrames, { width, height, durationsMs: canvas.frameDurations });
   return new Blob([bytes], { type: 'image/gif' });
 }

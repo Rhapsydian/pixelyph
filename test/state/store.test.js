@@ -118,3 +118,20 @@ test('addFrame/duplicateFrame/removeFrame are undo-tracked; setActiveFrame is a 
   useStore.getState().removeFrame(0);
   assert.equal(useStore.getState().canvas.frameCount, 1);
 });
+
+test('setFrameDuration is undo-tracked, like any other structural edit', () => {
+  const store = useStore.getState();
+  store.newProject('draw');
+  store.addFrame();
+  assert.equal(useStore.getState().canvas.frameDurations.length, 2);
+
+  const before = useStore.getState().canvas.frameDurations.slice();
+  store.setFrameDuration(1, 500);
+  assert.equal(useStore.getState().canvas.frameDurations[1], 500);
+
+  useStore.getState().undo();
+  assert.deepEqual(useStore.getState().canvas.frameDurations, before, 'undo reverted the duration change');
+
+  useStore.getState().redo();
+  assert.equal(useStore.getState().canvas.frameDurations[1], 500);
+});
