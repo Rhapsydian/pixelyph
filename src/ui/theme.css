@@ -16,7 +16,7 @@
   --chrome-bg-surface: #1a1a1a;
   --chrome-bg-panel: #1e1e1e;
   --chrome-bg-raised: #262626;
-  --chrome-bg-canvas-surround: #2a2a2a;
+  --chrome-bg-canvas-surround: #161616;
   --chrome-border: #333333;
   --chrome-border-strong: #4a4a4a;
   --chrome-text: #eaeaea;
@@ -73,6 +73,18 @@ textarea {
   font-family: inherit;
   font-size: var(--text-sm);
   color: var(--chrome-text);
+}
+
+/* Every <label> in this codebase pairs inline text with a form control
+   ("Zoom: <input>", "Symmetry: <select>", ...). Plain inline layout aligns
+   that text to the control's baseline, which reads fine at native control
+   heights but visibly floats once buttons/inputs/selects all become a
+   fixed --control-height (see below) — so labels get the same treatment
+   the few components that already set this explicitly were doing by hand. */
+label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 button {
@@ -368,7 +380,9 @@ input[type="range"] {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-3);
+  /* No bottom padding — the frame strip is the last child and should sit
+     flush against the bottom of the window, not floating above it. */
+  padding: var(--space-3) var(--space-3) 0;
 }
 
 .canvas-editor-area {

@@ -107,8 +107,9 @@ export function FrameStrip() {
           overflow: 'auto',
           minWidth: 0,
           background: 'var(--chrome-bg-panel)',
-          border: '1px solid var(--chrome-border)',
-          borderRadius: 'var(--radius-md)',
+          borderTop: '1px solid var(--chrome-border)',
+          borderLeft: '1px solid var(--chrome-border)',
+          borderRight: '1px solid var(--chrome-border)',
         }}
       >
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'nowrap', flexShrink: 0 }}>
