@@ -43,6 +43,8 @@ export function SvgPixelEditor() {
   const activeTool = useStore((s) => s.activeTool);
   const zoom = useStore((s) => s.zoom);
   const showGrid = useStore((s) => s.showGrid);
+  const pan = useStore((s) => s.pan);
+  const setViewportSize = useStore((s) => s.setViewportSize);
   const selection = useStore((s) => s.selection);
   const floatingSelection = useStore((s) => s.floatingSelection);
   const onionSkinEnabled = useStore((s) => s.onionSkinEnabled);
@@ -62,6 +64,7 @@ export function SvgPixelEditor() {
   const [tickCount, tick] = useState(0);
   const [preview, setPreview] = useState(null);
   const [cursorCell, setCursorCell] = useState(null);
+  const [viewportSize, setLocalViewportSize] = useState({ width: 0, height: 0 });
 
   const prevToolRef = useRef(activeTool);
   useEffect(() => {
@@ -146,6 +149,22 @@ export function SvgPixelEditor() {
     }
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
+  }, [doc]);
+
+  // Measures the visible viewport (the container that clips the SVG, now
+  // that native scrolling/scrollbars are disabled in favor of our own
+  // pan-driven positioning below) so both this component's centering math
+  // and ViewportPreview's minimap rectangle agree on the same size.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      setLocalViewportSize({ width, height });
+      setViewportSize({ width, height });
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [doc]);
 
   const ctx = useMemo(
@@ -260,6 +279,20 @@ export function SvgPixelEditor() {
   const pixelWidth = (doc?.width ?? 0) * zoom;
   const pixelHeight = (doc?.height ?? 0) * zoom;
 
+  // Panning replaces native container scrolling entirely (see
+  // canvas-editor-area's overflow:hidden) — when the zoomed canvas is
+  // smaller than the viewport it's centered; once it's larger, `pan`
+  // (persisted in the store so ViewportPreview's minimap can read/drag it)
+  // picks up where centering leaves off. Clamped here rather than written
+  // back to the store on every render, so a stale/out-of-range stored pan
+  // (e.g. after zooming out) never shows blank space past the canvas edge.
+  const maxPanX = Math.max(0, pixelWidth - viewportSize.width);
+  const maxPanY = Math.max(0, pixelHeight - viewportSize.height);
+  const clampedPanX = Math.max(0, Math.min(maxPanX, pan.x));
+  const clampedPanY = Math.max(0, Math.min(maxPanY, pan.y));
+  const offsetX = maxPanX > 0 ? -clampedPanX : (viewportSize.width - pixelWidth) / 2;
+  const offsetY = maxPanY > 0 ? -clampedPanY : (viewportSize.height - pixelHeight) / 2;
+
   // Same composeLayersBody used for export, injected verbatim — so the
   // editing surface can't drift from what actually gets exported (gradients,
   // stroke, filters included) without also failing here.
@@ -327,13 +360,13 @@ export function SvgPixelEditor() {
   }
 
   return (
-    <div ref={containerRef} style={{ overflow: 'auto', border: '1px solid var(--chrome-border-strong)', background: 'var(--chrome-bg-canvas-surround)', maxWidth: '100%', maxHeight: '70vh' }}>
+    <div ref={containerRef} style={{ position: 'absolute', inset: 0, overflow: 'hidden', border: '1px solid var(--chrome-border-strong)', background: 'var(--chrome-bg-canvas-surround)' }}>
       <svg
         ref={svgRef}
         width={pixelWidth}
         height={pixelHeight}
         viewBox={`0 0 ${doc.width} ${doc.height}`}
-        style={{ display: 'block', touchAction: 'none', cursor: 'crosshair' }}
+        style={{ position: 'absolute', left: offsetX, top: offsetY, display: 'block', touchAction: 'none', cursor: 'crosshair' }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}

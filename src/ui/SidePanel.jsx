@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../state/store.js';
 import { useResizeDrag } from './useResizeDrag.js';
+import { ViewportPreview } from './ViewportPreview.jsx';
 import { PaletteSimple } from './draw/PaletteSimple.jsx';
 import { ImportImagePanel } from './draw/ImportImagePanel.jsx';
 import { TilePreviewPanel } from './draw/TilePreviewPanel.jsx';
@@ -45,7 +46,7 @@ export function SidePanel() {
 
   const tabs = mode === 'draw' ? drawTabs(tier) : glyphTabs(glyphKind);
   const [activeTab, setActiveTab] = useState(tabs[0]?.id);
-  const [width, onHandlePointerDown] = useResizeDrag({ initial: 260, min: 200, max: 480, axis: 'x', invert: true });
+  const [width, onHandlePointerDown] = useResizeDrag({ initial: 280, min: 240, max: 480, axis: 'x', invert: true });
 
   useEffect(() => {
     if (!tabs.some((t) => t.id === activeTab)) setActiveTab(tabs[0]?.id);
@@ -58,6 +59,7 @@ export function SidePanel() {
     <div className="side-panel" style={{ width }}>
       <div className="resize-handle-col" onPointerDown={onHandlePointerDown} title="Drag to resize" />
       <div className="side-panel-content">
+        <ViewportPreview />
         <div className="tab-bar">
           {tabs.map((tab) => (
             <button

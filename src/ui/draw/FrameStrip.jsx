@@ -14,7 +14,10 @@ import { useResizeDrag } from '../useResizeDrag.js';
 import { PlayIcon, PauseIcon, PlusIcon, DuplicateIcon, TrashIcon } from '../icons.jsx';
 
 const THUMBNAIL_SIZE = 48;
-const MIN_HEIGHT = 140;
+// Tall enough for the controls row + one full row of frame cards (thumbnail
+// + index + duration input + action buttons) without triggering the panel's
+// own internal scrollbar at the default single-frame state.
+const MIN_HEIGHT = 230;
 
 function FrameThumbnail({ canvas, frameIndex }) {
   const { body, defs } = composeFrameBody(canvas, frameIndex);
@@ -96,9 +99,20 @@ export function FrameStrip() {
   return (
     <div className="canvas-region-stretch" style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
       <div className="resize-handle-row" onPointerDown={onHandlePointerDown} title="Drag to resize" />
-      <div className="panel" style={{ height, minHeight: MIN_HEIGHT, overflow: 'auto', minWidth: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-        <strong>Frames</strong>
+      <div
+        className="panel"
+        style={{
+          height,
+          minHeight: MIN_HEIGHT,
+          overflow: 'auto',
+          minWidth: 0,
+          background: 'var(--chrome-bg-panel)',
+          border: '1px solid var(--chrome-border)',
+          borderRadius: 'var(--radius-md)',
+        }}
+      >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'nowrap', flexShrink: 0 }}>
+        <strong style={{ flexShrink: 0 }}>Frames</strong>
         <IconButton
           icon={isPlaying ? <PauseIcon /> : <PlayIcon />}
           label={isPlaying ? 'Pause' : 'Play'}
@@ -107,7 +121,7 @@ export function FrameStrip() {
           onClick={togglePlayback}
         />
         <IconButton icon={<PlusIcon />} label="Add frame" onClick={() => addFrame()} />
-        <label title="The duration a newly-added frame gets — doesn't change existing frames' own durations">
+        <label title="The duration a newly-added frame gets — doesn't change existing frames' own durations" style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
           Default FPS:{' '}
           <input
             type="number"
@@ -118,7 +132,7 @@ export function FrameStrip() {
             style={{ width: 48 }}
           />
         </label>
-        <label title="Shows a faded, color-tinted preview of the adjacent frame(s) behind the current one">
+        <label title="Shows a faded, color-tinted preview of the adjacent frame(s) behind the current one" style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
           <input type="checkbox" checked={onionSkinEnabled} onChange={toggleOnionSkin} /> Onion skin
         </label>
       </div>

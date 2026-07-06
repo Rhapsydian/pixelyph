@@ -4,7 +4,8 @@
 // "Tool Bar" and "Context Bar" as separate panels). Holds everything that
 // depends on tier/tool/mode rather than tool identity itself (that's
 // ToolRail's job): tier toggle, shape-filled toggle, selection scope,
-// symmetry, zoom, grid, undo/redo.
+// symmetry, grid, undo/redo, and canvas/glyph resize. Zoom lives in
+// ViewportPreview (side panel) instead, alongside the minimap it drives.
 
 import { useEffect, useState } from 'react';
 import { useStore } from '../../state/store.js';
@@ -74,8 +75,6 @@ export function ContextBar() {
   const setShapeFilled = useStore((s) => s.setShapeFilled);
   const symmetryMode = useStore((s) => s.canvas.symmetryMode);
   const setSymmetryMode = useStore((s) => s.setSymmetryMode);
-  const zoom = useStore((s) => s.zoom);
-  const setZoom = useStore((s) => s.setZoom);
   const showGrid = useStore((s) => s.showGrid);
   const toggleGrid = useStore((s) => s.toggleGrid);
   const canUndo = useStore((s) => s.canUndo);
@@ -148,12 +147,6 @@ export function ContextBar() {
           </select>
         </label>
       )}
-
-      <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        Zoom:{' '}
-        <input type="range" min={4} max={48} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} />
-        {zoom}x
-      </label>
 
       <IconButton icon={<GridIcon />} label="Toggle grid" active={showGrid} onClick={toggleGrid} />
 

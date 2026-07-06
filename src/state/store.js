@@ -206,7 +206,8 @@ export const useStore = create((set, get) => {
     shapeFilled: false,
     zoom: 16,
     pan: { x: 0, y: 0 },
-    showGrid: true,
+    viewportSize: { width: 0, height: 0 },
+    showGrid: false,
 
     selection: null,
     floatingSelection: null,
@@ -217,6 +218,7 @@ export const useStore = create((set, get) => {
     setShapeFilled: (filled) => set({ shapeFilled: filled }),
     setZoom: (zoom) => set({ zoom }),
     setPan: (pan) => set({ pan }),
+    setViewportSize: (viewportSize) => set({ viewportSize }),
     toggleGrid: () => set((s) => ({ showGrid: !s.showGrid })),
     setSelectionScope: (scope) => set({ selectionScope: scope }),
 
