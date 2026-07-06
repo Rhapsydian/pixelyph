@@ -51,6 +51,13 @@ export function SvgPixelEditor() {
   const svgRef = useRef(null);
   const dragRef = useRef({ mode: null, start: null, origin: null });
   const isPointerDownRef = useRef(false);
+  // Set when a pointerDown arrives while the animation is playing — that
+  // gesture's whole job is to pause playback, not to paint, so pointerMove/
+  // pointerUp for it are suppressed too (isPointerDownRef stays false,
+  // which already makes handlePointerMove skip the tool's onPointerMove;
+  // this ref is the one extra bit handlePointerUp needs, since it otherwise
+  // calls the tool unconditionally).
+  const suppressGestureRef = useRef(false);
   const [tickCount, tick] = useState(0);
   const [preview, setPreview] = useState(null);
   const [cursorCell, setCursorCell] = useState(null);
@@ -195,14 +202,24 @@ export function SvgPixelEditor() {
 
   function handlePointerDown(evt) {
     evt.currentTarget.setPointerCapture(evt.pointerId);
+    const { x, y } = clientToCell(evt);
+    setCursorCell({ x, y });
+    // A click during playback is a "stop the animation" gesture, not a
+    // paint gesture — pause it and swallow the whole thing (down/move/up)
+    // rather than also painting into whatever frame happens to be active
+    // at that instant (which keeps changing every tick).
+    if (useStore.getState().isPlaying) {
+      useStore.getState().pauseAnimation();
+      suppressGestureRef.current = true;
+      return;
+    }
+    suppressGestureRef.current = false;
     isPointerDownRef.current = true;
     ctx.shiftKey = evt.shiftKey;
     // Captured once per gesture, not re-checked on move/up: evt.button only
     // reports the button that changed state, so it reads 0 on move events
     // even while the right button is held for the whole drag.
     ctx.erasing = evt.button === 2;
-    const { x, y } = clientToCell(evt);
-    setCursorCell({ x, y });
     tools[activeTool].onPointerDown(ctx, x, y);
   }
   function handlePointerMove(evt) {
@@ -215,6 +232,10 @@ export function SvgPixelEditor() {
   function handlePointerUp(evt) {
     isPointerDownRef.current = false;
     const { x, y } = clientToCell(evt);
+    if (suppressGestureRef.current) {
+      suppressGestureRef.current = false;
+      return;
+    }
     tools[activeTool].onPointerUp(ctx, x, y);
   }
 
