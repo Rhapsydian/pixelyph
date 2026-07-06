@@ -112,6 +112,7 @@ export function ContextBar() {
               className={tier === t ? 'btn active' : 'btn'}
               onClick={() => handleTierChange(t)}
               style={{ textTransform: 'capitalize', fontWeight: tier === t ? 500 : 400 }}
+              aria-pressed={tier === t}
             >
               {t}
             </button>

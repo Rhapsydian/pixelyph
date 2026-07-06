@@ -214,6 +214,17 @@ input[type="range"] {
   border: 1px solid var(--chrome-border);
 }
 
+.btn.active {
+  background: var(--chrome-accent-soft);
+  border-color: var(--chrome-accent);
+  color: var(--chrome-accent);
+}
+
+.btn.active:hover:not(:disabled) {
+  background: var(--chrome-accent-soft);
+  border-color: var(--chrome-accent-hover);
+}
+
 .btn-primary {
   background: var(--chrome-accent);
   border-color: var(--chrome-accent);

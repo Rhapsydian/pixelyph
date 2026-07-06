@@ -382,18 +382,6 @@ export function SvgPixelEditor() {
           <g opacity={0.35} style={{ filter: 'sepia(1) hue-rotate(140deg) saturate(4)' }} dangerouslySetInnerHTML={{ __html: onionSkin.next }} />
         )}
         <g dangerouslySetInnerHTML={{ __html: body }} />
-        {activeLayer && (
-          <rect
-            x={activeLayer.offset.x}
-            y={activeLayer.offset.y}
-            width={activeLayer.width}
-            height={activeLayer.height}
-            fill="none"
-            stroke="#ffcc4d"
-            strokeWidth={0.08}
-            strokeDasharray="0.24,0.16"
-          />
-        )}
         {preview && (
           <g opacity={0.6}>
             {preview.map((cell, i) => (
