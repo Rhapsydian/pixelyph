@@ -87,3 +87,24 @@ functions as an importable library and leaving any driver code to whoever
 wants it.
 
 **To resolve:** discuss and scope properly before building anything.
+
+## Explore: publishing a downloadable Windows installer
+
+**Not scoped — a discussion topic, not a planned feature.** `electron-builder`
+already produces a working NSIS installer locally (`npm run dist:win`, see
+Phase 6), but nothing builds or hosts one anywhere a README link could point
+to — there's no CI workflow that runs `electron-builder` and no GitHub
+Release (or other host) it publishes to.
+
+**What it would take:** a GitHub Actions workflow that runs on tag/push,
+builds via `electron-builder`, and attaches the `.exe` to a GitHub Release,
+then a README link to that release (mirroring the existing test-status
+badge pattern) rather than a raw file link.
+
+**Main tradeoff to weigh whenever this gets picked up:** ongoing CI
+maintenance plus committing to a versioning/tagging cadence, versus the
+project's current "early development" status where "clone and
+`npm run dist:win` yourself" is a perfectly reasonable interim answer.
+
+**To resolve:** revisit once the project is far enough along that shipping
+installable builds to non-developers actually makes sense.
