@@ -686,6 +686,7 @@ export const useStore = create((set, get) => {
     saveAnyProject: () => (get().mode === 'glyph' ? get().saveGlyphProject() : get().saveProject()),
     /** Opens a `.pixelyph` file and starts the matching project (kind-dispatching). */
     openAnyProject: async () => {
+      if (get().projectOpen && !window.confirm('Discard the current project and open another one?')) return;
       const result = await openFile('.pixelyph');
       if (!result) return;
       const text = await result.blob.text();

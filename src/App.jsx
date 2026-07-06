@@ -13,6 +13,7 @@ import { GlyphSetPanel } from './ui/glyph/GlyphSetPanel.jsx';
 import { FontMetadataPanel } from './ui/glyph/FontMetadataPanel.jsx';
 import { SpecimenPreviewPanel } from './ui/glyph/SpecimenPreviewPanel.jsx';
 import { FontExportPanel } from './ui/glyph/FontExportPanel.jsx';
+import { FileMenu } from './ui/FileMenu.jsx';
 import { CHARSET_PRESETS, CHARSET_PRESET_IDS } from './model/charsetPresets.js';
 
 const ANCHORS = ['top-left', 'top', 'top-right', 'left', 'center', 'right', 'bottom-left', 'bottom', 'bottom-right'];
@@ -60,37 +61,6 @@ function GlyphSizeControl() {
       Glyph width:
       <input type="number" min={1} max={256} value={nextWidth} onChange={(e) => setNextWidth(Number(e.target.value))} style={{ width: 56 }} />
       <button onClick={() => resizeActiveGlyph(nextWidth)}>Resize</button>
-    </span>
-  );
-}
-
-function ExportMenu() {
-  const mode = useStore((s) => s.mode);
-  const exportSvg = useStore((s) => s.exportSvg);
-  const exportRaster = useStore((s) => s.exportRaster);
-  const copySvg = useStore((s) => s.copySvg);
-  const exportGlyphSvg = useStore((s) => s.exportGlyphSvg);
-  const [scale, setScale] = useState(4);
-
-  return (
-    <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-      {mode === 'draw' ? (
-        <>
-          <button onClick={exportSvg}>Export SVG</button>
-          <select value={scale} onChange={(e) => setScale(Number(e.target.value))}>
-            {[1, 4, 8, 16].map((s) => (
-              <option key={s} value={s}>
-                {s}x
-              </option>
-            ))}
-          </select>
-          <button onClick={() => exportRaster('png', scale)}>Export PNG</button>
-          <button onClick={() => exportRaster('webp', scale)}>Export WebP</button>
-          <button onClick={copySvg}>Copy as SVG</button>
-        </>
-      ) : (
-        <button onClick={exportGlyphSvg}>Export Glyph SVG</button>
-      )}
     </span>
   );
 }
@@ -301,32 +271,17 @@ function StartupScreen() {
 export default function App() {
   const projectOpen = useStore((s) => s.projectOpen);
   const mode = useStore((s) => s.mode);
-  const saveAnyProject = useStore((s) => s.saveAnyProject);
-  const closeProject = useStore((s) => s.closeProject);
 
   if (!projectOpen) {
     return <StartupScreen />;
-  }
-
-  function handleNewProject() {
-    if (!window.confirm('Discard the current project and return to the start screen?')) return;
-    closeProject();
   }
 
   return (
     <main style={{ fontFamily: 'sans-serif', background: '#121212', color: '#eee', minHeight: '100vh' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', padding: '0.5rem 1rem', background: '#1a1a1a', borderBottom: '1px solid #333' }}>
         <h1 style={{ fontSize: '1.1rem', margin: 0 }}>Pixelyph</h1>
-        <span style={{ display: 'inline-flex', gap: 6 }}>
-          <button onClick={handleNewProject} style={{ background: '#333', color: '#eee', border: '1px solid #555', padding: '0.35rem 0.7rem', borderRadius: 4, cursor: 'pointer' }}>
-            New Project
-          </button>
-          <button onClick={saveAnyProject} style={{ background: '#4da3ff', color: '#fff', border: 'none', padding: '0.35rem 0.7rem', borderRadius: 4, cursor: 'pointer' }}>
-            Save Project
-          </button>
-        </span>
+        <FileMenu />
         {mode === 'draw' ? <CanvasSizeControl /> : <GlyphSizeControl />}
-        <ExportMenu />
       </header>
       <Toolbar />
       {mode === 'draw' ? (

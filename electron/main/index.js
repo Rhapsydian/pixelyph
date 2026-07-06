@@ -5,7 +5,7 @@
 // the whole UI — is the same code running in the web build; this file and
 // electron/preload/index.js are the only Electron-specific surface.
 
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
 import { join, extname, basename } from 'node:path';
 import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -95,6 +95,11 @@ ipcMain.handle('pixelyph:clear-autosave', async () => {
 });
 
 app.whenReady().then(() => {
+  // The app has its own DOM-based File menu (src/ui/FileMenu.jsx) so the
+  // same UI works identically in the web build, which has no native menu
+  // at all — Electron's default File/Edit/View/Window/Help menu bar would
+  // just be a second, inconsistent, and largely non-functional menu.
+  Menu.setApplicationMenu(null);
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
