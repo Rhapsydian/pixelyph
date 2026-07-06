@@ -278,10 +278,10 @@ export default function App() {
 
   return (
     <main style={{ fontFamily: 'sans-serif', background: '#121212', color: '#eee', minHeight: '100vh' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', padding: '0.5rem 1rem', background: '#1a1a1a', borderBottom: '1px solid #333' }}>
+      <header style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', padding: '0.5rem 1rem', background: '#1a1a1a', borderBottom: '1px solid #333' }}>
         <h1 style={{ fontSize: '1.1rem', margin: 0 }}>Pixelyph</h1>
         <FileMenu />
-        {mode === 'draw' ? <CanvasSizeControl /> : <GlyphSizeControl />}
+        <span style={{ marginLeft: 'auto' }}>{mode === 'draw' ? <CanvasSizeControl /> : <GlyphSizeControl />}</span>
       </header>
       <Toolbar />
       {mode === 'draw' ? (
