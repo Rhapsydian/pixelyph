@@ -16,6 +16,7 @@ Early development. Draw mode (both tiers), Glyph mode, project management (start
 **Draw mode** — a live SVG pixel editor, not a Canvas2D approximation: the editing surface is the same `composeLayersSvg` output that gets exported (gradients, stroke, and filters included), so what you see while drawing is exactly what you get.
 
 - Tools: pencil, eraser, bucket fill, eyedropper, line, rectangle, ellipse (both outline and filled), and a rectangular marquee selection with move/copy/paste — Enter commits a move in place, Escape cancels it, Ctrl+A/C/X/V select-all/copy/cut/paste (an app-internal clipboard)
+- Right-click erases instead of paints for pencil, bucket fill, line, rectangle, and ellipse — no need to switch to the eraser tool for a quick correction mid-stroke
 - Symmetry/mirror drawing (horizontal, vertical, or both), applied uniformly across every tool
 - Zoom, toggleable grid overlay, undo/redo
 - Checkerboard backdrop so an unpainted/transparent cell is never confused with one painted white
@@ -59,7 +60,7 @@ Early development. Draw mode (both tiers), Glyph mode, project management (start
 - Three choices: **New Project** (opens a wizard), **Existing Project** (file picker, kind-dispatching — opens the matching mode automatically), and **Continue Last Session** (only shown when IndexedDB has an autosave snapshot)
 - New Project wizard: Draw (mode choice only, uses standard defaults) or Glyph (mode + kind: characters/icons, family name, and initial charset preset for character sets)
 - Mode is chosen once at project creation — not toggled mid-session; opening a new project while one is open asks for confirmation first
-- **New Project** and **Save Project** buttons in the header replace the old mode-switcher toggle
+- A **File** dropdown menu in the header (New/Open/Save Project, plus the mode-appropriate export actions) replaces both the old mode-switcher toggle and, in the Electron build, the native OS menu bar — the same DOM menu renders identically in both, so there's exactly one implementation of "the file menu" instead of two
 
 Behind the UI, `src/model`, `src/export`, and `src/io/projectFile.js` (including `GlyphSet.js` and `charsetPresets.js`) are pure data/functions with no DOM dependency — the same style as pixelloom's own `trace.js`/`index.js` — and are covered by `node --test`.
 
@@ -68,6 +69,7 @@ Behind the UI, `src/model`, `src/export`, and `src/io/projectFile.js` (including
 - Save/Open dialogs are native OS file pickers (`electron/main/index.js`'s `dialog.showSaveDialog`/`showOpenDialog`) instead of the File System Access API or a download link
 - Autosave writes to a JSON file in the app's userData directory instead of IndexedDB
 - `electron/preload/index.js` exposes the narrow `window.pixelyph.{saveFile,openFile,writeAutosave,readAutosave,clearAutosave}` bridge those two files already expected
+- Electron's own native menu bar is disabled (`Menu.setApplicationMenu(null)`) in favor of the app's DOM-based File menu (see "Project management" above) — one menu implementation, not two
 - Packaged for Windows via `electron-builder` (NSIS installer); macOS/Linux targets are a config addition away, not attempted yet
 
 ## Development
