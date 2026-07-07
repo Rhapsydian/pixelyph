@@ -15,20 +15,20 @@ function loadImage(url) {
 
 /**
  * @param {string} svgMarkup a full <svg>...</svg> string (composeLayersSvg / pixelloom's gridToSvg)
- * @param {number} width unscaled, matching the SVG's viewBox
- * @param {number} height unscaled, matching the SVG's viewBox
- * @param {number} [scale] output size multiplier (1x/4x/8x/16x are the offered presets)
+ * @param {number} outWidth output pixel width — independent of `outHeight`, so a non-uniform
+ *   width/height pair stretches the art to fit rather than scaling uniformly (see rasterSize.js)
+ * @param {number} outHeight output pixel height
  * @param {'image/png'|'image/webp'} [mimeType]
  * @returns {Promise<Blob>}
  */
-export async function rasterizeFrame(svgMarkup, width, height, scale = 1, mimeType = 'image/png') {
+export async function rasterizeFrame(svgMarkup, outWidth, outHeight, mimeType = 'image/png') {
   const svgBlob = new Blob([svgMarkup], { type: 'image/svg+xml' });
   const url = URL.createObjectURL(svgBlob);
   try {
     const image = await loadImage(url);
     const canvas = document.createElement('canvas');
-    canvas.width = width * scale;
-    canvas.height = height * scale;
+    canvas.width = outWidth;
+    canvas.height = outHeight;
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = false; // hard pixel edges, not a blurred scale-up
     ctx.drawImage(image, 0, 0, canvas.width, canvas.height);

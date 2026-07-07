@@ -2,53 +2,138 @@
 // standalone Export top-level menu — a menu can't host a raster-scale
 // dropdown or an active-frame-vs-whole-animation choice without feeling like
 // a form crammed into a list, so those settings get an actual modal instead.
-// Mode-aware: Draw mode gets the format/scope/scale form below; Glyph mode
-// reuses FontExportPanel unmodified (its own checkboxes/Export button are
-// already a self-contained form) alongside a small "export just this one
-// glyph as SVG" action that used to be the *only* thing the old Export menu
-// offered in Glyph mode.
+// Mode-aware: Draw mode gets the checkbox form below (mirroring Glyph mode's
+// FontExportPanel: check several boxes, get one .zip if more than one file
+// results); Glyph mode reuses FontExportPanel unmodified alongside a small
+// "export just this one glyph as SVG" action that used to be the *only*
+// thing the old Export menu offered in Glyph mode.
 
 import { useState } from 'react';
 import { useStore } from '../state/store.js';
 import { Modal } from './Modal.jsx';
 import { FontExportPanel } from './glyph/FontExportPanel.jsx';
+import { LockIcon, UnlockIcon } from './icons.jsx';
+import { sizeFromScale, resizeLockedDimension } from '../export/raster/rasterSize.js';
 
 const RASTER_SCALES = [1, 4, 8, 16];
 
-function DrawExportForm({ onClose }) {
-  const frameCount = useStore((s) => s.canvas.frameCount);
-  const exportSvg = useStore((s) => s.exportSvg);
-  const exportRaster = useStore((s) => s.exportRaster);
-  const exportAnimatedSvg = useStore((s) => s.exportAnimatedSvg);
-  const exportSpriteSheet = useStore((s) => s.exportSpriteSheet);
-  const exportAnimatedGif = useStore((s) => s.exportAnimatedGif);
+const DRAW_CHECKBOX_ROWS = [
+  { key: 'svg', label: 'SVG (active frame)' },
+  { key: 'png', label: 'PNG (active frame)' },
+  { key: 'webp', label: 'WebP (active frame)' },
+];
+const ANIMATED_CHECKBOX_ROWS = [
+  { key: 'animatedSvg', label: 'Animated SVG (whole animation)' },
+  { key: 'spriteSheet', label: 'Sprite Sheet (PNG + JSON)' },
+  { key: 'spriteArchive', label: 'Sprite Archive (frames as separate files)' },
+  { key: 'gif', label: 'Animated GIF' },
+];
+const RASTER_KEYS = ['png', 'webp', 'spriteSheet', 'spriteArchive', 'gif'];
 
-  const isAnimated = frameCount > 1;
-  const [format, setFormat] = useState(/** @type {'svg'|'png'|'webp'|'gif'} */ ('svg'));
-  const [scope, setScope] = useState(/** @type {'active'|'animation'} */ ('active'));
-  const [scale, setScale] = useState(4);
+/** The "Advanced…" dialog: a custom uniform scale, or a specific resolution with an optional locked aspect ratio (unlocked stretches non-uniformly — vector art has no native resolution to distort). */
+function AdvancedRasterModal({ canvasWidth, canvasHeight, initialSize, onApply, onClose }) {
+  const [mode, setMode] = useState(/** @type {'scale'|'resolution'} */ ('scale'));
+  const [scale, setScale] = useState(Math.max(canvasWidth ? initialSize.width / canvasWidth : 1, 0.1));
+  const [width, setWidth] = useState(initialSize.width);
+  const [height, setHeight] = useState(initialSize.height);
+  const [lockAspect, setLockAspect] = useState(true);
+
+  function handleWidthChange(value) {
+    if (lockAspect) {
+      const next = resizeLockedDimension(canvasWidth, canvasHeight, 'width', value);
+      setWidth(next.width);
+      setHeight(next.height);
+    } else {
+      setWidth(value);
+    }
+  }
+  function handleHeightChange(value) {
+    if (lockAspect) {
+      const next = resizeLockedDimension(canvasWidth, canvasHeight, 'height', value);
+      setWidth(next.width);
+      setHeight(next.height);
+    } else {
+      setHeight(value);
+    }
+  }
+
+  function handleApply() {
+    onApply(mode === 'scale' ? sizeFromScale(canvasWidth, canvasHeight, scale) : { width, height });
+    onClose();
+  }
+
+  return (
+    <Modal title="Raster Export Size" onClose={onClose}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: 260 }}>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <input type="radio" checked={mode === 'scale'} onChange={() => setMode('scale')} /> Scale
+          </label>
+          <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <input type="radio" checked={mode === 'resolution'} onChange={() => setMode('resolution')} /> Specific resolution
+          </label>
+        </div>
+
+        {mode === 'scale' && (
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            Scale
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input type="number" min={0.1} step={0.5} value={scale} onChange={(e) => setScale(Math.max(0.1, Number(e.target.value)))} style={{ width: 80 }} />
+              <span>x</span>
+            </div>
+          </label>
+        )}
+
+        {mode === 'resolution' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              Width (px)
+              <input type="number" min={1} value={width} onChange={(e) => handleWidthChange(Number(e.target.value))} style={{ width: 100 }} />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              Height (px)
+              <input type="number" min={1} value={height} onChange={(e) => handleHeightChange(Number(e.target.value))} style={{ width: 100 }} />
+            </label>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input type="checkbox" checked={lockAspect} onChange={(e) => setLockAspect(e.target.checked)} />
+              {lockAspect ? <LockIcon size={16} /> : <UnlockIcon size={16} />}
+              Lock aspect ratio
+            </label>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleApply}>Apply</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function DrawExportForm({ onClose }) {
+  const canvas = useStore((s) => s.canvas);
+  const exportDrawAssets = useStore((s) => s.exportDrawAssets);
+
+  const isAnimated = canvas.frameCount > 1;
+  const [selected, setSelected] = useState({ svg: true, png: false, webp: false, animatedSvg: false, spriteSheet: false, spriteArchive: false, gif: false });
+  const [presetScale, setPresetScale] = useState(4);
+  const [customSize, setCustomSize] = useState(/** @type {{width:number,height:number}|null} */ (null));
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  // Only SVG and PNG have a real "whole animation" counterpart (animated
-  // SVG, sprite sheet) — WebP has no animated export path, and GIF *is*
-  // the animated export, so neither format needs the question at all.
-  const supportsScope = isAnimated && (format === 'svg' || format === 'png');
-  const isRaster = format !== 'svg';
+  const anySelected = Object.values(selected).some(Boolean);
+  const anyRasterSelected = RASTER_KEYS.some((key) => selected[key]);
+  const resolvedSize = customSize ?? sizeFromScale(canvas.width, canvas.height, presetScale);
+
+  function toggle(key) {
+    setSelected((s) => ({ ...s, [key]: !s[key] }));
+  }
 
   async function handleExport() {
     setExporting(true);
     try {
-      if (format === 'svg') {
-        if (supportsScope && scope === 'animation') await exportAnimatedSvg();
-        else await exportSvg();
-      } else if (format === 'png') {
-        if (supportsScope && scope === 'animation') await exportSpriteSheet(scale);
-        else await exportRaster('png', scale);
-      } else if (format === 'webp') {
-        await exportRaster('webp', scale);
-      } else if (format === 'gif') {
-        await exportAnimatedGif(scale);
-      }
+      await exportDrawAssets(selected, resolvedSize);
       onClose();
     } finally {
       setExporting(false);
@@ -56,41 +141,56 @@ function DrawExportForm({ onClose }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: 280 }}>
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        Format
-        <select value={format} onChange={(e) => setFormat(e.target.value)}>
-          <option value="svg">SVG</option>
-          <option value="png">PNG</option>
-          <option value="webp">WebP</option>
-          {isAnimated && <option value="gif">Animated GIF</option>}
-        </select>
-      </label>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: 300 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {DRAW_CHECKBOX_ROWS.map(({ key, label }) => (
+          <label key={key} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input type="checkbox" checked={Boolean(selected[key])} onChange={() => toggle(key)} />
+            {label}
+          </label>
+        ))}
+        {isAnimated && ANIMATED_CHECKBOX_ROWS.map(({ key, label }) => (
+          <label key={key} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input type="checkbox" checked={Boolean(selected[key])} onChange={() => toggle(key)} />
+            {label}
+          </label>
+        ))}
+      </div>
 
-      {supportsScope && (
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          Frames
-          <select value={scope} onChange={(e) => setScope(e.target.value)}>
-            <option value="active">Active frame only</option>
-            <option value="animation">Whole animation ({format === 'svg' ? 'animated SVG' : 'sprite sheet'})</option>
-          </select>
-        </label>
+      {anyRasterSelected && (
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
+            Raster size
+            <select
+              value={customSize ? '' : presetScale}
+              onChange={(e) => {
+                setCustomSize(null);
+                setPresetScale(Number(e.target.value));
+              }}
+            >
+              {customSize && <option value="">Custom: {customSize.width}×{customSize.height}px</option>}
+              {RASTER_SCALES.map((s) => (
+                <option key={s} value={s}>{s}x</option>
+              ))}
+            </select>
+          </label>
+          <button type="button" className="btn" onClick={() => setAdvancedOpen(true)}>Advanced…</button>
+        </div>
       )}
 
-      {isRaster && (
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          Raster scale
-          <select value={scale} onChange={(e) => setScale(Number(e.target.value))}>
-            {RASTER_SCALES.map((s) => (
-              <option key={s} value={s}>{s}x</option>
-            ))}
-          </select>
-        </label>
-      )}
-
-      <button className="btn btn-primary" onClick={handleExport} disabled={exporting} style={{ alignSelf: 'flex-end' }}>
+      <button className="btn btn-primary" onClick={handleExport} disabled={!anySelected || exporting} style={{ alignSelf: 'flex-end' }}>
         {exporting ? 'Exporting…' : 'Export'}
       </button>
+
+      {advancedOpen && (
+        <AdvancedRasterModal
+          canvasWidth={canvas.width}
+          canvasHeight={canvas.height}
+          initialSize={resolvedSize}
+          onApply={setCustomSize}
+          onClose={() => setAdvancedOpen(false)}
+        />
+      )}
     </div>
   );
 }

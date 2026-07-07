@@ -72,12 +72,11 @@ function loadImageFromBlob(blob) {
 
 /**
  * @param {object} canvas Canvas
- * @param {number} [scale] output size multiplier, same presets as PNG/WebP export
+ * @param {{ width: number, height: number }} [size] output pixel size for a single frame — defaults to the canvas's own unscaled size (1x)
  * @returns {Promise<{ blob: Blob, metadata: { frames: object[], width: number, height: number } }>}
  */
-export async function buildSpriteSheet(canvas, scale = 1) {
-  const frameWidth = canvas.width * scale;
-  const frameHeight = canvas.height * scale;
+export async function buildSpriteSheet(canvas, size = { width: canvas.width, height: canvas.height }) {
+  const { width: frameWidth, height: frameHeight } = size;
   const layout = computeSpriteSheetLayout(canvas.frameCount, frameWidth, frameHeight);
 
   const sheetCanvas = document.createElement('canvas');
@@ -87,7 +86,7 @@ export async function buildSpriteSheet(canvas, scale = 1) {
   ctx.imageSmoothingEnabled = false; // hard pixel edges, matching rasterizeFrame's own setting
 
   for (let i = 0; i < canvas.frameCount; i++) {
-    const frameBlob = await rasterizeFrame(frameSvg(canvas, i), canvas.width, canvas.height, scale, 'image/png');
+    const frameBlob = await rasterizeFrame(frameSvg(canvas, i), frameWidth, frameHeight, 'image/png');
     const image = await loadImageFromBlob(frameBlob);
     ctx.drawImage(image, layout.frames[i].x, layout.frames[i].y);
   }

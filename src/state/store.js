@@ -57,6 +57,7 @@ import { composeLayersSvg } from '../export/svg/composeLayersSvg.js';
 import { composeAnimatedSvg } from '../export/svg/animatedSvg.js';
 import { rasterizeFrame } from '../export/raster/rasterizeFrame.js';
 import { buildSpriteSheet } from '../export/raster/spriteSheet.js';
+import { buildSpriteArchive } from '../export/raster/spriteArchive.js';
 import { buildAnimatedGif } from '../export/raster/animatedRaster.js';
 import { copySvgToClipboard } from '../export/clipboard.js';
 import { serializeProject, deserializeProject, saveProjectToString, loadProjectFromString, serializeGlyphSetProject, deserializeGlyphSetProject, saveGlyphProjectToString, loadGlyphProjectFromString } from '../io/projectFile.js';
@@ -875,40 +876,67 @@ export const useStore = create((set, get) => {
     },
 
     // --- Export / project persistence ---
-    exportSvg: async () => {
-      const svg = composeLayersSvg(get().canvas);
-      await saveFile('artwork.svg', new Blob([svg], { type: 'image/svg+xml' }));
-    },
-    exportRaster: async (format, scale) => {
-      const { canvas } = get();
-      const svg = composeLayersSvg(canvas);
-      const mimeType = format === 'webp' ? 'image/webp' : 'image/png';
-      const blob = await rasterizeFrame(svg, canvas.width, canvas.height, scale, mimeType);
-      await saveFile(`artwork.${format}`, blob);
-    },
     copySvg: async () => {
       await copySvgToClipboard(composeLayersSvg(get().canvas));
     },
-    /** Self-contained looping animated SVG (Phase 7) — meaningful for any frame count, but only actually animates once frameCount > 1. */
-    exportAnimatedSvg: async () => {
-      const svg = composeAnimatedSvg(get().canvas);
-      await saveFile('animation.svg', new Blob([svg], { type: 'image/svg+xml' }));
-    },
-    /** PNG sprite sheet + JSON metadata sidecar, bundled as one .zip — same "one save dialog" pattern exportFont's multi-file case uses. */
-    exportSpriteSheet: async (scale = 1) => {
+    /**
+     * Builds whichever Draw-mode export artifacts are checked in the Export
+     * modal into one flat {name,data,type} file list — mirroring exportFont's
+     * shape exactly: more than one resulting file bundles into a single .zip
+     * (createZip), a single selected format saves directly. Sprite Sheet's
+     * PNG+JSON and Sprite Archive's per-frame PNGs+JSON are pushed as
+     * separate entries into this same flat list rather than pre-zipped, so
+     * e.g. checking Sprite Archive alongside SVG still produces one
+     * combined .zip instead of a zip-within-a-zip.
+     *
+     * `size` (already-resolved output pixel dimensions, see rasterSize.js)
+     * is only consulted by the raster-format rows — svg/animatedSvg ignore it.
+     *
+     * @param {{svg?: boolean, png?: boolean, webp?: boolean, animatedSvg?: boolean, spriteSheet?: boolean, spriteArchive?: boolean, gif?: boolean}} selected
+     * @param {{width: number, height: number}} size
+     */
+    exportDrawAssets: async (selected, size) => {
       const { canvas } = get();
-      const { blob, metadata } = await buildSpriteSheet(canvas, scale);
-      const pngBytes = new Uint8Array(await blob.arrayBuffer());
-      const jsonBytes = new TextEncoder().encode(JSON.stringify(metadata, null, 2));
-      const zipBytes = createZip([
-        { name: 'spritesheet.png', data: pngBytes },
-        { name: 'spritesheet.json', data: jsonBytes },
-      ]);
-      await saveFile('spritesheet.zip', new Blob([zipBytes], { type: 'application/zip' }));
-    },
-    exportAnimatedGif: async (scale = 1) => {
-      const blob = await buildAnimatedGif(get().canvas, scale);
-      await saveFile('animation.gif', blob);
+      const textEncoder = new TextEncoder();
+      const files = [];
+
+      if (selected.svg) {
+        files.push({ name: 'artwork.svg', data: textEncoder.encode(composeLayersSvg(canvas)), type: 'image/svg+xml' });
+      }
+      if (selected.png) {
+        const blob = await rasterizeFrame(composeLayersSvg(canvas), size.width, size.height, 'image/png');
+        files.push({ name: 'artwork.png', data: new Uint8Array(await blob.arrayBuffer()), type: 'image/png' });
+      }
+      if (selected.webp) {
+        const blob = await rasterizeFrame(composeLayersSvg(canvas), size.width, size.height, 'image/webp');
+        files.push({ name: 'artwork.webp', data: new Uint8Array(await blob.arrayBuffer()), type: 'image/webp' });
+      }
+      // Meaningful for any frame count, but only actually animates once frameCount > 1 (Phase 7).
+      if (selected.animatedSvg) {
+        files.push({ name: 'animation.svg', data: textEncoder.encode(composeAnimatedSvg(canvas)), type: 'image/svg+xml' });
+      }
+      if (selected.spriteSheet) {
+        const { blob, metadata } = await buildSpriteSheet(canvas, size);
+        files.push({ name: 'spritesheet.png', data: new Uint8Array(await blob.arrayBuffer()), type: 'image/png' });
+        files.push({ name: 'spritesheet.json', data: textEncoder.encode(JSON.stringify(metadata, null, 2)), type: 'application/json' });
+      }
+      if (selected.spriteArchive) {
+        const { files: archiveFiles, metadata } = await buildSpriteArchive(canvas, size);
+        for (const file of archiveFiles) files.push({ ...file, type: 'image/png' });
+        files.push({ name: 'frames.json', data: textEncoder.encode(JSON.stringify(metadata, null, 2)), type: 'application/json' });
+      }
+      if (selected.gif) {
+        const blob = await buildAnimatedGif(canvas, size);
+        files.push({ name: 'animation.gif', data: new Uint8Array(await blob.arrayBuffer()), type: 'image/gif' });
+      }
+
+      if (files.length > 1) {
+        const zipBytes = createZip(files.map(({ name, data }) => ({ name, data })));
+        await saveFile('artwork-export.zip', new Blob([zipBytes], { type: 'application/zip' }));
+      } else if (files.length === 1) {
+        const [{ name, data, type }] = files;
+        await saveFile(name, new Blob([data], { type }));
+      }
     },
     saveProject: async () => {
       const text = saveProjectToString(get().canvas);

@@ -79,12 +79,11 @@ function loadImageFromBlob(blob) {
 
 /**
  * @param {object} canvas Canvas
- * @param {number} [scale] output size multiplier, same presets as PNG/WebP export
+ * @param {{ width: number, height: number }} [size] output pixel size — defaults to the canvas's own unscaled size (1x)
  * @returns {Promise<Blob>} an `image/gif` blob
  */
-export async function buildAnimatedGif(canvas, scale = 1) {
-  const width = canvas.width * scale;
-  const height = canvas.height * scale;
+export async function buildAnimatedGif(canvas, size = { width: canvas.width, height: canvas.height }) {
+  const { width, height } = size;
 
   const drawCanvas = document.createElement('canvas');
   drawCanvas.width = width;
@@ -94,7 +93,7 @@ export async function buildAnimatedGif(canvas, scale = 1) {
 
   const rgbaFrames = [];
   for (let i = 0; i < canvas.frameCount; i++) {
-    const frameBlob = await rasterizeFrame(frameSvg(canvas, i), canvas.width, canvas.height, scale, 'image/png');
+    const frameBlob = await rasterizeFrame(frameSvg(canvas, i), width, height, 'image/png');
     const image = await loadImageFromBlob(frameBlob);
     ctx.clearRect(0, 0, width, height);
     ctx.drawImage(image, 0, 0);
