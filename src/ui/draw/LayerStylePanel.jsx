@@ -31,6 +31,19 @@ function FillEditor({ layer, updateLayerStyle }) {
   const fill = layer.style.fill;
   const kind = fillSelectKind(fill);
   const [editingFill, setEditingFill] = useState(false);
+  // Captured when the gradient editor opens, so Cancel can restore it — edits
+  // inside that modal apply live to the real layer fill via updateLayerStyle.
+  const [fillBeforeEdit, setFillBeforeEdit] = useState(null);
+
+  function openFillEditor() {
+    setFillBeforeEdit(fill);
+    setEditingFill(true);
+  }
+
+  function cancelFillEdit() {
+    updateLayerStyle(layer.id, { fill: fillBeforeEdit });
+    setEditingFill(false);
+  }
 
   function setKind(newKind) {
     if (newKind === 'none') updateLayerStyle(layer.id, { fill: null });
@@ -58,7 +71,7 @@ function FillEditor({ layer, updateLayerStyle }) {
         {kind === 'gradient' && (
           <button
             type="button"
-            onClick={() => setEditingFill(true)}
+            onClick={openFillEditor}
             style={{ width: 24, height: 24, padding: 0, border: 'none', background: 'none', display: 'flex', alignItems: 'center' }}
             title="Edit gradient"
           >
@@ -70,7 +83,12 @@ function FillEditor({ layer, updateLayerStyle }) {
       </div>
 
       {editingFill && kind === 'gradient' && (
-        <GradientEditorModal gradient={fill} onChange={(next) => updateLayerStyle(layer.id, { fill: next })} onClose={() => setEditingFill(false)} />
+        <GradientEditorModal
+          gradient={fill}
+          onChange={(next) => updateLayerStyle(layer.id, { fill: next })}
+          onCancel={cancelFillEdit}
+          onConfirm={() => setEditingFill(false)}
+        />
       )}
     </fieldset>
   );

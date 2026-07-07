@@ -1,10 +1,15 @@
 // The gradient-editing surface, shared by two callers with different commit
-// semantics: LayerStylePanel.jsx's FillEditor (editing a layer's actual
-// fill live — `onChange` applies immediately, `onClose` just dismisses) and
+// semantics: LayerStylePanel.jsx's FillEditor (editing a layer's actual fill
+// live — `onChange` applies immediately to the real layer) and
 // PalettePanel.jsx's FillsGroup "add a gradient" swatch (editing a local
-// draft — `onChange` only updates the draft, `onClose` is what commits it
-// to the palette). This component doesn't need to know which: it just
-// takes `gradient`/`onChange`/`onClose`.
+// draft — `onChange` only updates the draft). Either way, this modal's own
+// Cancel/Done footer is the same: `onCancel` backs out (Escape/backdrop
+// count as Cancel too — see the Modal onClose wiring below), `onConfirm`
+// keeps whatever's there. Each caller decides what "back out" actually means
+// for its own case (FillEditor reverts the live layer fill to what it was
+// before the modal opened; FillsGroup just drops the never-yet-committed
+// draft) — this component doesn't need to know which, it just calls
+// whichever callback matches the button pressed.
 //
 // Linear vs radial is a switch *inside* this modal (Style tab's Fill kind
 // select only offers one combined "Gradient" option) rather than two
@@ -18,10 +23,12 @@
 // its own height with a scrollbar once it grows long — deliberately, so a
 // long stop list scrolls itself rather than growing the modal or scrolling
 // the whole modal (see Modal.jsx's own `overflow: auto`, which this stays
-// well within by capping here first).
+// well within by capping here first). "+ Stop" lives with that list (core
+// editing content), not in the footer — it adds to what's being edited, it
+// isn't a way to close the dialog.
 
 import { useRef, useState } from 'react';
-import { Modal, ModalFooter } from './Modal.jsx';
+import { Modal, ModalActions } from './Modal.jsx';
 import { ColorAlphaInput } from './ColorAlphaInput.jsx';
 import { FillSwatch } from './FillSwatch.jsx';
 
@@ -94,7 +101,7 @@ function StopBar({ stops, selectedIndex, onSelect, onMoveStop }) {
   );
 }
 
-export function GradientEditorModal({ gradient, onChange, onClose }) {
+export function GradientEditorModal({ gradient, onChange, onCancel, onConfirm }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   function setType(type) {
@@ -119,7 +126,7 @@ export function GradientEditorModal({ gradient, onChange, onClose }) {
   }
 
   return (
-    <Modal title="Edit Gradient" onClose={onClose}>
+    <Modal title="Edit Gradient" onClose={onCancel}>
       <div style={{ width: MODAL_WIDTH, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <FillSwatch fill={gradient} size={40} title="Live preview" />
@@ -170,11 +177,10 @@ export function GradientEditorModal({ gradient, onChange, onClose }) {
             </span>
           ))}
         </div>
+
+        <button className="btn" onClick={addStop} style={{ alignSelf: 'flex-start' }}>+ Stop</button>
       </div>
-      <ModalFooter justify="space-between">
-        <button className="btn" onClick={addStop}>+ Stop</button>
-        <button className="btn" onClick={onClose}>Done</button>
-      </ModalFooter>
+      <ModalActions onCancel={onCancel} onConfirm={onConfirm} confirmLabel="Done" />
     </Modal>
   );
 }

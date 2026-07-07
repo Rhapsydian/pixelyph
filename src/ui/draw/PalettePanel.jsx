@@ -118,8 +118,12 @@ function FillsGroup() {
     if (window.confirm('Remove this gradient from the palette?')) removePaletteEntry('fills', entry.id);
   }
 
-  function closeAddGradient() {
-    if (draftGradient) addPaletteFill(draftGradient);
+  function cancelAddGradient() {
+    setDraftGradient(null);
+  }
+
+  function confirmAddGradient() {
+    addPaletteFill(draftGradient);
     setDraftGradient(null);
   }
 
@@ -148,7 +152,9 @@ function FillsGroup() {
         <DashedPlusSwatch title="Add a new gradient" onClick={() => setDraftGradient(DEFAULT_GRADIENT)} />
       </div>
 
-      {draftGradient && <GradientEditorModal gradient={draftGradient} onChange={setDraftGradient} onClose={closeAddGradient} />}
+      {draftGradient && (
+        <GradientEditorModal gradient={draftGradient} onChange={setDraftGradient} onCancel={cancelAddGradient} onConfirm={confirmAddGradient} />
+      )}
     </div>
   );
 }
