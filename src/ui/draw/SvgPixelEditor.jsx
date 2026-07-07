@@ -275,6 +275,9 @@ export function SvgPixelEditor() {
     }
     tools[activeTool].onPointerUp(ctx, x, y);
   }
+  function handlePointerLeave() {
+    setCursorCell(null); // hide the hover highlight once the pointer is no longer over the canvas
+  }
 
   const pixelWidth = (doc?.width ?? 0) * zoom;
   const pixelHeight = (doc?.height ?? 0) * zoom;
@@ -370,6 +373,7 @@ export function SvgPixelEditor() {
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerLeave}
         onContextMenu={(evt) => evt.preventDefault()}
       >
         <TransparencyBackground width={doc.width} height={doc.height} />
