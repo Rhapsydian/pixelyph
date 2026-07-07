@@ -40,6 +40,7 @@
 // draft and only commits on confirm).
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useStore } from '../state/store.js';
 import { Modal, ModalFooter } from './Modal.jsx';
 
 function clamp255(n) {
@@ -247,7 +248,7 @@ function ChannelRow({ label, value, max, unit = '', onChange }) {
   );
 }
 
-/** A traditional saturation/value + hue picker, built from scratch (not a native `<input type="color">` popup, which can't be restyled to match the app) and wrapped in the app's own modal chrome — a preview swatch, an optional Eyedropper (real `EyeDropper` API, feature-detected), and a Select button that closes the modal. Alpha isn't editable here; it's carried through unchanged from whatever the caller already had.
+/** A traditional saturation/value + hue picker, built from scratch (not a native `<input type="color">` popup, which can't be restyled to match the app) and wrapped in the app's own modal chrome — a preview swatch, an optional Eyedropper (real `EyeDropper` API, feature-detected), a Palette Colors section (the current project's own swatch list, one click away, separated from the SV/hue controls by a vertical divider), and a Select button that closes the modal. Alpha isn't editable here; it's carried through unchanged from whatever the caller already had.
  *
  * Hue is tracked as its own piece of local state (seeded once from the
  * incoming color) rather than re-derived from `rgbHex` on every render —
@@ -258,11 +259,17 @@ function ColorPickerModal({ rgbHex, onPick, onClose }) {
   const initial = parseColor(rgbHex) ?? { r: 0, g: 0, b: 0 };
   const [hsv, setHsv] = useState(() => rgbToHsv(initial.r, initial.g, initial.b));
   const [hiddenForEyedropper, setHiddenForEyedropper] = useState(false);
+  const paletteColors = useStore((s) => s.canvas.palette.colors);
 
   function commit(next) {
     setHsv(next);
     const { r, g, b } = hsvToRgb(next.h, next.s, next.v);
     onPick(r, g, b);
+  }
+
+  function selectPaletteColor(hex) {
+    const parsed = parseColor(hex);
+    if (parsed) commit(rgbToHsv(parsed.r, parsed.g, parsed.b));
   }
 
   async function handleEyedropper() {
@@ -279,13 +286,46 @@ function ColorPickerModal({ rgbHex, onPick, onClose }) {
   }
 
   const { r, g, b } = hsvToRgb(hsv.h, hsv.s, hsv.v);
+  const currentHex = composeColor(r, g, b, 1);
 
   return (
     <Modal title="Color Picker" onClose={onClose} hidden={hiddenForEyedropper}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
-        <SaturationValueBox hue={hsv.h} s={hsv.s} v={hsv.v} onChange={(s, v) => commit({ ...hsv, s, v })} />
-        <HueSlider hue={hsv.h} onChange={(h) => commit({ ...hsv, h })} />
-        <Swatch color={composeColor(r, g, b, 1)} size={32} />
+      <div style={{ display: 'flex', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
+          <SaturationValueBox hue={hsv.h} s={hsv.s} v={hsv.v} onChange={(s, v) => commit({ ...hsv, s, v })} />
+          <HueSlider hue={hsv.h} onChange={(h) => commit({ ...hsv, h })} />
+          <Swatch color={currentHex} size={32} />
+        </div>
+
+        <div style={{ borderRight: '1px solid var(--chrome-border)' }} />
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: 100 }}>
+          <strong style={{ fontSize: 'var(--text-xs)' }}>Palette Colors</strong>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignContent: 'flex-start' }}>
+            {paletteColors.map((color) => {
+              const parsed = parseColor(color);
+              const isActive = parsed && composeColor(parsed.r, parsed.g, parsed.b, 1) === currentHex;
+              return (
+                <button
+                  key={color}
+                  type="button"
+                  title={color}
+                  onClick={() => selectPaletteColor(color)}
+                  style={{
+                    width: 18,
+                    height: 18,
+                    padding: 0,
+                    background: color,
+                    border: isActive ? '2px solid var(--chrome-text)' : '1px solid var(--chrome-border-strong)',
+                  }}
+                />
+              );
+            })}
+            {paletteColors.length === 0 && (
+              <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No colors in the palette yet.</span>
+            )}
+          </div>
+        </div>
       </div>
       <ModalFooter>
         {typeof window !== 'undefined' && window.EyeDropper && (
