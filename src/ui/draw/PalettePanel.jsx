@@ -189,6 +189,7 @@ function StylesGroup() {
             style={{
               display: 'flex',
               alignItems: 'center',
+              justifyContent: 'flex-start',
               gap: 8,
               width: '100%',
               padding: '4px 6px',
