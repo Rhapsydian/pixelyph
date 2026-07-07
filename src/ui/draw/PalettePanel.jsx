@@ -2,40 +2,49 @@
 // (Phase 9) since it's no longer simple-tier-only: `Canvas.palette` was
 // always meant as "a shared swatch list, both tiers" (see the plan), and
 // this panel is where that's actually true now — three groups (Colors,
-// Gradients & Patterns, Styles), each independently add/remove/reorder/
-// clear-able, plus export/import of the whole palette as its own file.
+// Gradients, Styles — the palette's fills group was originally "Gradients
+// & Patterns," but pattern fills were removed, see BACKLOG.md), each
+// independently add-able. Right-click removes a single entry (with a
+// confirmation — deleting a swatch can't be undone from here); reordering/
+// renaming move to the dedicated "Manage Swatches" modal (Palette menu, or
+// the "Manage" button below) rather than living inline in this panel.
 //
 // Simple tier only ever shows the Colors group (nothing else has anything
 // to apply to in simple tier — a layer's color there is auto-managed per
 // paint color, not a per-layer style). Advanced tier shows all three;
 // clicking any swatch applies it to the active layer (colors set a solid
-// fill, fills clone a gradient/pattern into the fill, styles replace
-// fill+stroke+effects wholesale) via `applyPaletteEntryToActiveLayer`.
+// fill, gradients clone into the fill, styles replace fill+stroke+effects
+// wholesale) via `applyPaletteEntryToActiveLayer`.
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useStore } from '../../state/store.js';
 import { ColorAlphaInput } from '../ColorAlphaInput.jsx';
 import { FillSwatch } from '../FillSwatch.jsx';
-import { IconButton } from '../IconButton.jsx';
-import { ChevronDownIcon } from '../icons.jsx';
+import { GradientEditorModal } from '../GradientEditorModal.jsx';
 
-// icons.jsx has no left/right chevrons yet (only a down one, for selects) —
-// reusing MoveUpIcon/MoveDownIcon rotated reads oddly for a horizontal
-// swatch row, so these two are rotated ChevronDown variants instead.
-function ChevronLeftIcon(props) {
-  return <span style={{ display: 'inline-flex', transform: 'rotate(90deg)' }}><ChevronDownIcon {...props} /></span>;
-}
-function ChevronRightIcon(props) {
-  return <span style={{ display: 'inline-flex', transform: 'rotate(-90deg)' }}><ChevronDownIcon {...props} /></span>;
-}
+const DEFAULT_GRADIENT = { type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#ffffff' }, { offset: 1, color: '#000000' }] };
 
-function GroupToolbar({ selected, onMoveLeft, onMoveRight, onClear, clearLabel }) {
+function DashedPlusSwatch({ onClick, title }) {
   return (
-    <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-      <IconButton icon={<ChevronLeftIcon />} label="Move left" disabled={!selected} onClick={onMoveLeft} />
-      <IconButton icon={<ChevronRightIcon />} label="Move right" disabled={!selected} onClick={onMoveRight} />
-      <button className="btn" onClick={onClear}>{clearLabel}</button>
-    </span>
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      style={{
+        width: 24,
+        height: 24,
+        padding: 0,
+        border: '1px dashed var(--chrome-border-strong)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'var(--chrome-text-muted)',
+        fontSize: 'var(--text-sm)',
+        lineHeight: 1,
+      }}
+    >
+      +
+    </button>
   );
 }
 
@@ -45,14 +54,16 @@ function ColorsGroup({ tier }) {
   const setActiveColor = useStore((s) => s.setActiveColor);
   const addPaletteColor = useStore((s) => s.addPaletteColor);
   const removePaletteEntry = useStore((s) => s.removePaletteEntry);
-  const reorderPaletteEntry = useStore((s) => s.reorderPaletteEntry);
-  const clearPaletteGroup = useStore((s) => s.clearPaletteGroup);
   const applyPaletteEntryToActiveLayer = useStore((s) => s.applyPaletteEntryToActiveLayer);
   const [draftColor, setDraftColor] = useState('#000000');
 
   function selectColor(color) {
     setActiveColor(color);
     if (tier === 'advanced') applyPaletteEntryToActiveLayer('colors', color);
+  }
+
+  function confirmDelete(color) {
+    if (window.confirm(`Remove ${color} from the palette?`)) removePaletteEntry('colors', color);
   }
 
   return (
@@ -67,28 +78,28 @@ function ColorsGroup({ tier }) {
             onClick={() => selectColor(color)}
             onContextMenu={(e) => {
               e.preventDefault();
-              removePaletteEntry('colors', color);
+              confirmDelete(color);
             }}
             style={{
               width: 24,
               height: 24,
               background: color,
               border: activeColor === color ? '2px solid var(--chrome-text)' : '1px solid var(--chrome-border-strong)',
-              borderRadius: 'var(--radius-sm)',
+              borderRadius: 0,
               padding: 0,
             }}
           />
         ))}
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-        <ColorAlphaInput value={draftColor} onChange={setDraftColor} title="New color" />
-        <button className="btn" onClick={() => addPaletteColor(draftColor)}>Add</button>
-        <GroupToolbar
-          selected={colors.includes(activeColor)}
-          onMoveLeft={() => reorderPaletteEntry('colors', activeColor, -1)}
-          onMoveRight={() => reorderPaletteEntry('colors', activeColor, 1)}
-          onClear={() => clearPaletteGroup('colors')}
-          clearLabel="Clear colors"
+        <ColorAlphaInput
+          value={draftColor}
+          onChange={setDraftColor}
+          title="Add a new color"
+          renderSwatch={(props) => <DashedPlusSwatch {...props} title="Add a new color" />}
+          doneLabel="Select"
+          onDone={() => {
+            addPaletteColor(draftColor);
+            setDraftColor('#000000');
+          }}
         />
       </div>
     </div>
@@ -97,43 +108,47 @@ function ColorsGroup({ tier }) {
 
 function FillsGroup() {
   const fills = useStore((s) => s.canvas.palette.fills);
+  const addPaletteFill = useStore((s) => s.addPaletteFill);
   const removePaletteEntry = useStore((s) => s.removePaletteEntry);
-  const reorderPaletteEntry = useStore((s) => s.reorderPaletteEntry);
-  const clearPaletteGroup = useStore((s) => s.clearPaletteGroup);
   const applyPaletteEntryToActiveLayer = useStore((s) => s.applyPaletteEntryToActiveLayer);
   const [selected, setSelected] = useState(null);
+  const [draftGradient, setDraftGradient] = useState(null); // non-null while the "add" modal is open
+
+  function confirmDelete(entry) {
+    if (window.confirm('Remove this gradient from the palette?')) removePaletteEntry('fills', entry.id);
+  }
+
+  function closeAddGradient() {
+    if (draftGradient) addPaletteFill(draftGradient);
+    setDraftGradient(null);
+  }
 
   return (
     <div>
-      <strong>Gradients &amp; patterns</strong>
+      <strong>Gradients</strong>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, margin: '4px 0' }}>
         {fills.map((entry) => (
           <button
             key={entry.id}
             type="button"
-            title={entry.type}
+            title={entry.name || entry.type}
             onClick={() => {
               setSelected(entry.id);
               applyPaletteEntryToActiveLayer('fills', entry.id);
             }}
             onContextMenu={(e) => {
               e.preventDefault();
-              removePaletteEntry('fills', entry.id);
+              confirmDelete(entry);
             }}
-            style={{ padding: 0, border: selected === entry.id ? '2px solid var(--chrome-text)' : 'none', borderRadius: 'var(--radius-sm)', lineHeight: 0 }}
+            style={{ width: 24, height: 24, padding: 0, border: `2px solid ${selected === entry.id ? 'var(--chrome-text)' : 'transparent'}`, lineHeight: 0 }}
           >
-            <FillSwatch fill={entry} size={24} title={entry.type} />
+            <FillSwatch fill={entry} size={24} title={entry.name || entry.type} />
           </button>
         ))}
-        {fills.length === 0 && <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>Save a gradient (Style tab) or paste a pattern to build this list.</span>}
+        <DashedPlusSwatch title="Add a new gradient" onClick={() => setDraftGradient(DEFAULT_GRADIENT)} />
       </div>
-      <GroupToolbar
-        selected={fills.some((f) => f.id === selected)}
-        onMoveLeft={() => reorderPaletteEntry('fills', selected, -1)}
-        onMoveRight={() => reorderPaletteEntry('fills', selected, 1)}
-        onClear={() => clearPaletteGroup('fills')}
-        clearLabel="Clear gradients & patterns"
-      />
+
+      {draftGradient && <GradientEditorModal gradient={draftGradient} onChange={setDraftGradient} onClose={closeAddGradient} />}
     </div>
   );
 }
@@ -141,10 +156,12 @@ function FillsGroup() {
 function StylesGroup() {
   const styles = useStore((s) => s.canvas.palette.styles);
   const removePaletteEntry = useStore((s) => s.removePaletteEntry);
-  const reorderPaletteEntry = useStore((s) => s.reorderPaletteEntry);
-  const clearPaletteGroup = useStore((s) => s.clearPaletteGroup);
   const applyPaletteEntryToActiveLayer = useStore((s) => s.applyPaletteEntryToActiveLayer);
   const [selected, setSelected] = useState(null);
+
+  function confirmDelete(entry) {
+    if (window.confirm('Remove this saved style from the palette?')) removePaletteEntry('styles', entry.id);
+  }
 
   return (
     <div>
@@ -154,55 +171,42 @@ function StylesGroup() {
           <button
             key={entry.id}
             type="button"
-            title={`Saved style${entry.stroke ? ' (with stroke)' : ''}${entry.effects?.length ? `, ${entry.effects.length} effect(s)` : ''}`}
+            title={entry.name || `Saved style${entry.stroke ? ' (with stroke)' : ''}${entry.effects?.length ? `, ${entry.effects.length} effect(s)` : ''}`}
             onClick={() => {
               setSelected(entry.id);
               applyPaletteEntryToActiveLayer('styles', entry.id);
             }}
             onContextMenu={(e) => {
               e.preventDefault();
-              removePaletteEntry('styles', entry.id);
+              confirmDelete(entry);
             }}
             style={{
+              width: 24,
+              height: 24,
               padding: 0,
-              border: selected === entry.id ? '2px solid var(--chrome-text)' : `2px solid ${entry.stroke?.color ?? 'transparent'}`,
-              borderRadius: 'var(--radius-sm)',
+              border: `2px solid ${selected === entry.id ? 'var(--chrome-text)' : (entry.stroke?.color ?? 'transparent')}`,
               lineHeight: 0,
             }}
           >
-            <FillSwatch fill={entry.fill} size={24} title="Saved style" />
+            <FillSwatch fill={entry.fill} size={24} title={entry.name || 'Saved style'} />
           </button>
         ))}
         {styles.length === 0 && <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>Save a layer's fill+stroke+effects from the Style tab to build this list.</span>}
       </div>
-      <GroupToolbar
-        selected={styles.some((s) => s.id === selected)}
-        onMoveLeft={() => reorderPaletteEntry('styles', selected, -1)}
-        onMoveRight={() => reorderPaletteEntry('styles', selected, 1)}
-        onClear={() => clearPaletteGroup('styles')}
-        clearLabel="Clear styles"
-      />
     </div>
   );
 }
 
 export function PalettePanel() {
   const tier = useStore((s) => s.canvas.tier);
-  const importLospecPalette = useStore((s) => s.importLospecPalette);
-  const importPixelyphPalette = useStore((s) => s.importPixelyphPalette);
-  const exportPalette = useStore((s) => s.exportPalette);
-  const fileInputRef = useRef(null);
-
-  async function handleImportFile(evt) {
-    const file = evt.target.files?.[0];
-    if (!file) return;
-    const text = await file.text();
-    if (!importPixelyphPalette(text)) importLospecPalette(text);
-    evt.target.value = '';
-  }
+  const setManageSwatchesOpen = useStore((s) => s.setManageSwatchesOpen);
 
   return (
     <div className="panel" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ color: 'var(--chrome-text-muted)', fontStyle: 'italic', fontSize: 'var(--text-xs)' }}>
+        Right-click a swatch to remove it (with confirmation).
+      </div>
+
       <ColorsGroup tier={tier} />
 
       {tier === 'advanced' && (
@@ -210,16 +214,12 @@ export function PalettePanel() {
           <FillsGroup />
           <StylesGroup />
           <div style={{ color: 'var(--chrome-text-muted)', fontStyle: 'italic', fontSize: 'var(--text-xs)' }}>
-            Save a fill or a whole style to this palette from the Style tab's "Save to palette"/"Save style" buttons.
+            Save a fill or a whole style to this palette using the arrow-to-palette icon button in the Style tab.
           </div>
         </>
       )}
 
-      <div style={{ display: 'flex', gap: 6, borderTop: '1px solid var(--chrome-border)', paddingTop: 8 }}>
-        <button className="btn" onClick={() => fileInputRef.current?.click()}>Import palette</button>
-        <input ref={fileInputRef} type="file" accept=".hex,.txt,.json" onChange={handleImportFile} style={{ display: 'none' }} />
-        <button className="btn" onClick={exportPalette}>Export palette</button>
-      </div>
+      <button className="btn" onClick={() => setManageSwatchesOpen(true)} style={{ alignSelf: 'flex-start' }}>Manage…</button>
     </div>
   );
 }

@@ -9,22 +9,14 @@ export function escapeAttr(value) {
 }
 
 /**
- * @param {string|object|null} fill Fill — solid color string, gradient/pattern object, or null
- * @param {string} gradientId a per-layer id, so multiple layers' gradients/patterns don't collide in one shared <defs>
+ * @param {string|object|null} fill Fill — solid color string, gradient object, or null
+ * @param {string} gradientId a per-layer id, so multiple layers' gradients don't collide in one shared <defs>
  * @returns {{ attr: string, def: string }} `attr` goes in a `fill="..."` attribute; `def` is an
- *   optional <linearGradient>/<radialGradient>/<pattern> to place in <defs> ('' if fill is solid/none)
+ *   optional <linearGradient>/<radialGradient> to place in <defs> ('' if fill is solid/none)
  */
 export function serializeFill(fill, gradientId) {
   if (fill == null) return { attr: 'none', def: '' };
   if (typeof fill === 'string') return { attr: fill, def: '' };
-  if (fill.type === 'pattern') {
-    // `content` is raw, user-pasted markup for the inside of the <pattern>
-    // element (authoring a pattern visually is out of scope — see the
-    // plan's Palette data model note) — passed through verbatim, not
-    // escaped, since it's meant to be markup, not text.
-    const def = `<pattern id="${gradientId}" patternUnits="userSpaceOnUse" width="${fill.width}" height="${fill.height}">${fill.content}</pattern>`;
-    return { attr: `url(#${gradientId})`, def };
-  }
   const stops = fill.stops.map((s) => `<stop offset="${s.offset}" stop-color="${escapeAttr(s.color)}"/>`).join('');
   if (fill.type === 'linear-gradient') {
     // Unit vector at `angle` degrees (0 = left-to-right), centered in objectBoundingBox

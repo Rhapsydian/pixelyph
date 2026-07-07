@@ -114,6 +114,11 @@ export function paintCell(canvas, x, y, color) {
   const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
   if (!layer || layer.locked) return;
   const frameIndex = currentFrameIndex(canvas);
+  // A layer hidden in the currently-active frame is effectively locked for
+  // that frame — same "can't be edited" contract `locked` already has,
+  // just scoped to whichever frame you're actually looking at (a layer can
+  // be hidden in frame 2 and visible, paintable, in frame 3).
+  if (!layer.frames[frameIndex].visible) return;
   if (color) {
     growToInclude(layer, x, y);
     set({ width: layer.width, height: layer.height, pixels: layer.frames[frameIndex].pixels }, x - layer.offset.x, y - layer.offset.y, 1);
@@ -186,11 +191,10 @@ export function duplicateLayer(canvas, layerId) {
   if (index < 0) return null;
   const original = canvas.layers[index];
   const copy = createLayer({ name: `${original.name} copy`, width: original.width, height: original.height, offset: original.offset });
-  copy.visible = original.visible;
   copy.locked = original.locked;
   copy.opacity = original.opacity;
   copy.style = cloneLayerStyle(original.style);
-  copy.frames = original.frames.map((frame) => ({ pixels: frame.pixels.slice() }));
+  copy.frames = original.frames.map((frame) => ({ pixels: frame.pixels.slice(), visible: frame.visible }));
   canvas.layers.splice(index + 1, 0, copy);
   canvas.activeLayerId = copy.id;
   return copy;
@@ -200,9 +204,10 @@ export function duplicateLayer(canvas, layerId) {
  * Merges a layer into the one directly below it in the stack (a "merge
  * down"): pixel data from both is combined (boolean OR, in canvas space —
  * they can have different offsets/sizes) into one grid sized to bound both.
- * The result keeps the *bottom* layer's id/name/style/visible/locked/
- * opacity — matching how Photoshop/Aseprite's own "Merge Down" resolves
- * which layer's settings survive — and the top layer is removed. No-ops if
+ * The result keeps the *bottom* layer's id/name/style/locked/opacity, and
+ * each merged frame keeps the bottom layer's own per-frame visibility —
+ * matching how Photoshop/Aseprite's own "Merge Down" resolves which
+ * layer's settings survive — and the top layer is removed. No-ops if
  * `layerId` is already the bottom-most layer (nothing to merge into).
  *
  * @param {object} canvas
@@ -223,7 +228,7 @@ export function mergeLayerDown(canvas, layerId) {
   // uniform frameCount (see the invariant addFrame/duplicateFrame/removeFrame
   // maintain), so frame 0 of the merged layer combines frame 0 of each
   // source layer, frame 1 combines frame 1, and so on.
-  const frames = bottom.frames.map((_, frameIndex) => {
+  const frames = bottom.frames.map((bottomFrame, frameIndex) => {
     const pixels = new Uint8Array(width * height);
     for (const layer of [bottom, top]) {
       const frame = layer.frames[frameIndex];
@@ -236,7 +241,7 @@ export function mergeLayerDown(canvas, layerId) {
         }
       }
     }
-    return { pixels };
+    return { pixels, visible: bottomFrame.visible };
   });
   bottom.offset = { x: minX, y: minY };
   bottom.width = width;
@@ -294,7 +299,7 @@ export function topVisibleLayerAt(canvas, x, y) {
   const frameIndex = currentFrameIndex(canvas);
   for (let i = canvas.layers.length - 1; i >= 0; i--) {
     const layer = canvas.layers[i];
-    if (!layer.visible) continue;
+    if (!layer.frames[frameIndex].visible) continue;
     const lx = x - layer.offset.x;
     const ly = y - layer.offset.y;
     if (lx < 0 || ly < 0 || lx >= layer.width || ly >= layer.height) continue;
@@ -365,6 +370,7 @@ export function resizeCanvas(canvas, newWidth, newHeight, anchor = 'top-left') {
     if (wasFullCanvas) {
       layer.frames = layer.frames.map((frame) => ({
         pixels: resizeAt({ width: layer.width, height: layer.height, pixels: frame.pixels }, newWidth, newHeight, deltaX, deltaY).pixels,
+        visible: frame.visible,
       }));
       layer.width = newWidth;
       layer.height = newHeight;
@@ -391,7 +397,7 @@ export function colorAt(canvas, x, y) {
   const frameIndex = currentFrameIndex(canvas);
   for (let i = canvas.layers.length - 1; i >= 0; i--) {
     const layer = canvas.layers[i];
-    if (!layer.visible) continue;
+    if (!layer.frames[frameIndex].visible) continue;
     const lx = x - layer.offset.x;
     const ly = y - layer.offset.y;
     if (lx < 0 || ly < 0 || lx >= layer.width || ly >= layer.height) continue;
@@ -416,7 +422,7 @@ export function colorAt(canvas, x, y) {
 export function addFrame(canvas, index) {
   const insertAt = index ?? currentFrameIndex(canvas) + 1;
   for (const layer of canvas.layers) {
-    layer.frames.splice(insertAt, 0, { pixels: new Uint8Array(layer.width * layer.height) });
+    layer.frames.splice(insertAt, 0, { pixels: new Uint8Array(layer.width * layer.height), visible: true });
   }
   canvas.frameDurations.splice(insertAt, 0, defaultFrameDurationMs(canvas));
   canvas.frameCount++;
@@ -427,7 +433,7 @@ export function addFrame(canvas, index) {
  * Inserts a copy of frame `index` directly after it, in every layer, and
  * makes the copy active. The copy's duration matches the source frame's
  * (an exact duplicate, timing included) rather than resetting to the
- * canvas's default.
+ * canvas's default; each layer's per-frame visibility copies the same way.
  *
  * @param {object} canvas
  * @param {number} index
@@ -435,7 +441,7 @@ export function addFrame(canvas, index) {
 export function duplicateFrame(canvas, index) {
   const insertAt = index + 1;
   for (const layer of canvas.layers) {
-    layer.frames.splice(insertAt, 0, { pixels: layer.frames[index].pixels.slice() });
+    layer.frames.splice(insertAt, 0, { pixels: layer.frames[index].pixels.slice(), visible: layer.frames[index].visible });
   }
   canvas.frameDurations.splice(insertAt, 0, canvas.frameDurations[index]);
   canvas.frameCount++;
@@ -482,4 +488,21 @@ export function setActiveFrame(canvas, index) {
 export function setFrameDuration(canvas, index, durationMs) {
   if (index < 0 || index >= canvas.frameCount) return;
   canvas.frameDurations[index] = Math.max(1, Math.round(durationMs));
+}
+
+/**
+ * Sets whether `layerId` is visible in frame `frameIndex` specifically —
+ * visibility is per-frame (see Layer.js), so hiding a layer in one frame
+ * leaves it untouched in every other frame. The LayersPanel eye icon calls
+ * this with `canvas.activeFrame`.
+ *
+ * @param {object} canvas
+ * @param {string} layerId
+ * @param {number} frameIndex
+ * @param {boolean} visible
+ */
+export function setLayerFrameVisibility(canvas, layerId, frameIndex, visible) {
+  const layer = canvas.layers.find((l) => l.id === layerId);
+  if (!layer || frameIndex < 0 || frameIndex >= layer.frames.length) return;
+  layer.frames[frameIndex].visible = visible;
 }

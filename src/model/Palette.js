@@ -120,6 +120,25 @@ export function reorderEntry(palette, group, key, direction) {
 }
 
 /**
+ * Renames a fills/styles entry (colors have no separate name from their
+ * hex value, so this no-ops for the 'colors' group) — the Manage Swatches
+ * modal's rename field. Reassigns the group's array (not an in-place
+ * mutation) for the same reactivity reason every other write here does.
+ *
+ * @param {object} palette
+ * @param {'colors'|'fills'|'styles'} group
+ * @param {string} key entry id
+ * @param {string} name
+ */
+export function renameEntry(palette, group, key, name) {
+  if (group === 'colors') return;
+  const arr = groupArray(palette, group);
+  const next = arr.map((entry) => (entry.id === key ? { ...entry, name } : entry));
+  if (group === 'fills') palette.fills = next;
+  else palette.styles = next;
+}
+
+/**
  * @param {object} palette
  * @param {'colors'|'fills'|'styles'} group
  */

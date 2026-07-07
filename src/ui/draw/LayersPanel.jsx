@@ -1,7 +1,10 @@
 // Advanced tier only: add/remove/reorder/select layers, and per-layer
 // visible/locked/opacity. Rendered top-to-bottom in the panel
 // (canvas.layers is back-to-front, so the panel reverses it for display —
-// same convention most layer-panel tools use).
+// same convention most layer-panel tools use). Visibility is per-*frame*
+// (Layer.js) — the eye icon shows/hides a layer only in whichever frame is
+// currently active, so different frames of the same animation can have
+// different layers hidden.
 //
 // Move up/down, duplicate, merge down, and delete act on the active layer
 // from one toolbar at the top (Phase 9) rather than per-row buttons — a
@@ -14,14 +17,14 @@ import { useEffect, useState } from 'react';
 import { useStore } from '../../state/store.js';
 import { composeFrameBody } from '../../export/svg/composeLayersSvg.js';
 import { IconButton } from '../IconButton.jsx';
-import { PercentSlider } from '../PercentSlider.jsx';
 import { EyeIcon, EyeOffIcon, LockIcon, UnlockIcon, MoveUpIcon, MoveDownIcon, TrashIcon, DuplicateIcon, MergeDownIcon, PlusIcon } from '../icons.jsx';
 
 const THUMBNAIL_SIZE = 28;
 
-/** A live preview of just this one layer's own content+style, reusing composeFrameBody (export/svg/composeLayersSvg.js) the same way FrameStrip.jsx's FrameThumbnail does for whole-frame previews — full-canvas viewBox, so an offset layer previews in its real canvas position. */
+/** A live preview of just this one layer's own content+style, reusing composeFrameBody (export/svg/composeLayersSvg.js) the same way FrameStrip.jsx's FrameThumbnail does for whole-frame previews — full-canvas viewBox, so an offset layer previews in its real canvas position. Forces every frame's `visible` to true on the copy passed in: composeLayersBody filters out invisible-in-this-frame layers (correct for the actual canvas render), but a thumbnail should always show what's on the layer regardless of its visibility toggle. */
 function LayerThumbnail({ canvas, layer }) {
-  const { body, defs } = composeFrameBody({ ...canvas, layers: [layer] }, canvas.activeFrame);
+  const alwaysVisible = { ...layer, frames: layer.frames.map((frame) => ({ ...frame, visible: true })) };
+  const { body, defs } = composeFrameBody({ ...canvas, layers: [alwaysVisible] }, canvas.activeFrame);
   const defsHtml = defs.length ? `<defs>${defs.join('')}</defs>` : '';
   return (
     <svg
@@ -39,11 +42,22 @@ function LayerThumbnail({ canvas, layer }) {
 function LayerRow({ canvas, layer, isActive }) {
   const setActiveLayerId = useStore((s) => s.setActiveLayerId);
   const setLayerProps = useStore((s) => s.setLayerProps);
+  const setLayerFrameVisibility = useStore((s) => s.setLayerFrameVisibility);
 
   const [name, setName] = useState(layer.name);
-  const [opacity, setOpacity] = useState(layer.opacity);
+  const [opacityPercent, setOpacityPercent] = useState(Math.round(layer.opacity * 100));
   useEffect(() => setName(layer.name), [layer.id, layer.name]);
-  useEffect(() => setOpacity(layer.opacity), [layer.id, layer.opacity]);
+  useEffect(() => setOpacityPercent(Math.round(layer.opacity * 100)), [layer.id, layer.opacity]);
+
+  function commitOpacity() {
+    const clamped = Math.max(0, Math.min(100, opacityPercent));
+    setOpacityPercent(clamped);
+    setLayerProps(layer.id, { opacity: clamped / 100 });
+  }
+
+  // Visibility is per-frame (Layer.js) — this row only ever shows/toggles
+  // it for whichever frame is currently active.
+  const visibleInActiveFrame = layer.frames[canvas.activeFrame]?.visible ?? true;
 
   return (
     <div
@@ -54,10 +68,10 @@ function LayerRow({ canvas, layer, isActive }) {
       <LayerThumbnail canvas={canvas} layer={layer} />
       <span onClick={(e) => e.stopPropagation()} style={{ display: 'inline-flex' }}>
         <IconButton
-          icon={layer.visible ? <EyeIcon /> : <EyeOffIcon />}
-          label={layer.visible ? 'Hide layer' : 'Show layer'}
-          active={layer.visible}
-          onClick={() => setLayerProps(layer.id, { visible: !layer.visible })}
+          icon={visibleInActiveFrame ? <EyeIcon /> : <EyeOffIcon />}
+          label={visibleInActiveFrame ? 'Hide layer in this frame' : 'Show layer in this frame'}
+          active={visibleInActiveFrame}
+          onClick={() => setLayerFrameVisibility(layer.id, !visibleInActiveFrame)}
         />
         <IconButton
           icon={layer.locked ? <LockIcon /> : <UnlockIcon />}
@@ -67,15 +81,26 @@ function LayerRow({ canvas, layer, isActive }) {
         />
       </span>
       <input
+        type="text"
         value={name}
         onClick={(e) => e.stopPropagation()}
         onChange={(e) => setName(e.target.value)}
         onBlur={() => name !== layer.name && setLayerProps(layer.id, { name })}
         style={{ width: 90 }}
       />
-      <span onClick={(e) => e.stopPropagation()}>
-        <PercentSlider value={opacity} onChange={setOpacity} onCommit={(v) => setLayerProps(layer.id, { opacity: v })} title="Opacity" />
-      </span>
+      <label onClick={(e) => e.stopPropagation()} title="Opacity" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <input
+          type="number"
+          min={0}
+          max={100}
+          value={opacityPercent}
+          onChange={(e) => setOpacityPercent(Number(e.target.value))}
+          onBlur={commitOpacity}
+          onKeyDown={(e) => e.key === 'Enter' && commitOpacity()}
+          style={{ width: 48 }}
+        />
+        <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>%</span>
+      </label>
     </div>
   );
 }

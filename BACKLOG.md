@@ -130,3 +130,52 @@ under a collapsible named group touches several things at once:
 **To resolve:** scope properly in its own planning session if/when it's
 picked up — likely bigger than a slice of whatever phase is running at
 the time.
+
+## SVG pattern fills — built, then removed; more complex than it looked
+
+**Not scoped.** Phase 9 briefly added a `pattern` fill kind (alongside
+solid/gradient) — a raw-pasted-SVG-markup `<pattern>` def, tiled at a
+user-set size — with its own Fill-editor UI, a "Gradients & Patterns"
+palette group, and model/export support (`serializeFill`'s `pattern`
+branch, `Layer.style.fill`'s pattern shape). After actually using it, the
+"paste raw markup" approach turned out to be a poor fit: there's no
+authoring or preview affordance for *building* a pattern (only editing one
+you already have markup for elsewhere), no validation that pasted content
+is even valid SVG, and no good way to keep a pattern's tile size sensible
+relative to the layer/canvas grid it's applied to. The whole feature was
+removed — not just hidden — rather than ship a half-satisfying stopgap:
+`serializeFill`'s pattern branch, the Fill editor's pattern option and its
+editing modal, and the palette's pattern group are all gone; the palette
+group is back to plain "Gradients."
+
+**To resolve:** if patterns come back, they need real authoring — likely
+a small tile-drawing surface (reusing the pixel-grid editing primitives
+already in `src/model`) rather than a paste-a-string textarea — scoped as
+its own planning session, not a slice of a larger phase.
+
+## Canvas and layer axis flipping
+
+**Not scoped.** Flip the whole canvas, or a single layer, horizontally
+and/or vertically.
+
+## Whole-image and layer 90° rotations
+
+**Not scoped.** Rotate the whole canvas, or a single layer, in 90°
+increments.
+
+## Demo projects
+
+**Not scoped.** Ship a few sample `.pixelyph` projects (draw and glyph) so
+new users have something to open and explore instead of a blank canvas.
+
+## Electron automated GitHub build setup
+
+**Not scoped.** CI (GitHub Actions) to build and publish Electron
+installers automatically on tag/release — overlaps with, and would likely
+subsume, the "publishing a downloadable Windows installer" item above.
+
+## App hosting website with user manual
+
+**Not scoped.** A hosted web build of the app, paired with a user manual /
+docs site, so people can try or use Pixelyph without cloning and running it
+locally.

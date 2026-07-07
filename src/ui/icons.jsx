@@ -251,3 +251,39 @@ export function ChevronDownIcon(props) {
     </Svg>
   );
 }
+
+/** An arrow pointing into a paint palette (thumb-hole blob + a few dabs of color) — "send this to the shared palette," used by both "Save style" and "Save to palette." The arrowhead (tip at x=5) and the palette blob (left edge at x=8.5) are deliberately kept apart with a real gap between them — an earlier version had the tip overlapping the blob's edge, reading as one smudged shape at small sizes. */
+export function SaveToPaletteIcon(props) {
+  return (
+    <Svg {...props}>
+      <path d="M1 10h2" />
+      <path d="M2.5 7.5 5 10l-2.5 2.5" />
+      <path d="M18.5 10a5 4.5 0 1 1-10 0 5 4.5 0 0 1 10 0Z" />
+      <circle cx="12" cy="7.8" r="1" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="9.5" r="1" fill="currentColor" stroke="none" />
+      <circle cx="12.5" cy="12" r="1" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
+export function FullscreenIcon(props) {
+  return (
+    <Svg {...props}>
+      <path d="M7 3H4a1 1 0 0 0-1 1v3" />
+      <path d="M13 3h3a1 1 0 0 1 1 1v3" />
+      <path d="M7 17H4a1 1 0 0 1-1-1v-3" />
+      <path d="M13 17h3a1 1 0 0 0 1-1v-3" />
+    </Svg>
+  );
+}
+
+export function FullscreenExitIcon(props) {
+  return (
+    <Svg {...props}>
+      <path d="M3 7V4a1 1 0 0 1 1-1h3" />
+      <path d="M17 7V4a1 1 0 0 0-1-1h-3" />
+      <path d="M3 13v3a1 1 0 0 0 1 1h3" />
+      <path d="M17 13v3a1 1 0 0 1-1 1h-3" />
+    </Svg>
+  );
+}

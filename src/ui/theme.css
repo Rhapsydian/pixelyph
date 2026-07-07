@@ -196,6 +196,13 @@ input[type="range"] {
   background: transparent;
   border: none;
   padding: 0;
+  /* A flex item's default min-width is `auto` (its content's intrinsic
+     size), not 0 — inside a `flex: 1` row (e.g. the color popover's R/G/B/A
+     sliders) that lets a range input's own intrinsic width refuse to shrink
+     below its browser default, overflowing the row's actual container.
+     Explicit 0 lets flex-shrink/flex-basis do their job everywhere a range
+     slider shares a row with other controls. */
+  min-width: 0;
 }
 
 /* Shared component classes */

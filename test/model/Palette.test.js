@@ -8,6 +8,7 @@ import {
   addStyle,
   removeEntry,
   reorderEntry,
+  renameEntry,
   clearGroup,
   serializePaletteFile,
   parsePaletteFile,
@@ -91,6 +92,17 @@ test('reorderEntry works on fills/styles by id, same neighbor-swap shape', () =>
   const b = addFill(palette, { type: 'linear-gradient', angle: 90, stops: [] });
   reorderEntry(palette, 'fills', a.id, 1);
   assert.deepEqual(palette.fills.map((f) => f.id), [b.id, a.id]);
+});
+
+test('renameEntry sets a name on a fills/styles entry, and is a no-op on colors (a color has no separate name from its hex value)', () => {
+  const palette = createPalette();
+  const fill = addFill(palette, { type: 'linear-gradient', angle: 0, stops: [] });
+  renameEntry(palette, 'fills', fill.id, 'Sunset');
+  assert.equal(palette.fills[0].name, 'Sunset');
+
+  addColor(palette, '#ff0000');
+  renameEntry(palette, 'colors', '#ff0000', 'Red');
+  assert.deepEqual(palette.colors, ['#ff0000']);
 });
 
 test('clearGroup empties only the targeted group', () => {

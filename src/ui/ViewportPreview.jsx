@@ -28,7 +28,7 @@ export function ViewportPreview() {
   const zoomControl = (
     <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
       Zoom:{' '}
-      <input type="range" min={4} max={48} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} style={{ flex: 1 }} />
+      <input type="range" min={1} max={48} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} style={{ flex: 1 }} />
       <span style={{ minWidth: 32, textAlign: 'right' }}>{zoom}x</span>
     </label>
   );

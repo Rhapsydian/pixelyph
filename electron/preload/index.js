@@ -25,4 +25,7 @@ contextBridge.exposeInMainWorld('pixelyph', {
   readAutosave: () => ipcRenderer.invoke('pixelyph:read-autosave'),
 
   clearAutosave: () => ipcRenderer.invoke('pixelyph:clear-autosave'),
+
+  /** @param {string} url */
+  openExternal: (url) => ipcRenderer.invoke('pixelyph:open-external', url),
 });

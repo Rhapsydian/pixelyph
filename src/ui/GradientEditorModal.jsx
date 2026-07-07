@@ -1,0 +1,181 @@
+// The gradient-editing surface, shared by two callers with different commit
+// semantics: LayerStylePanel.jsx's FillEditor (editing a layer's actual
+// fill live — `onChange` applies immediately, `onClose` just dismisses) and
+// PalettePanel.jsx's FillsGroup "add a gradient" swatch (editing a local
+// draft — `onChange` only updates the draft, `onClose` is what commits it
+// to the palette). This component doesn't need to know which: it just
+// takes `gradient`/`onChange`/`onClose`.
+//
+// Linear vs radial is a switch *inside* this modal (Style tab's Fill kind
+// select only offers one combined "Gradient" option) rather than two
+// separate fill kinds a user has to already know to pick between.
+//
+// The stop bar (a horizontal strip showing the gradient's colors left-to-
+// right by offset, regardless of the gradient's own angle — same
+// convention every other gradient-editing tool uses) has small draggable
+// tabs, one per stop, for repositioning by drag; the stop list below it
+// (offset/color/remove per row) is the precise-entry alternative and caps
+// its own height with a scrollbar once it grows long — deliberately, so a
+// long stop list scrolls itself rather than growing the modal or scrolling
+// the whole modal (see Modal.jsx's own `overflow: auto`, which this stays
+// well within by capping here first).
+
+import { useRef, useState } from 'react';
+import { Modal } from './Modal.jsx';
+import { ColorAlphaInput } from './ColorAlphaInput.jsx';
+import { FillSwatch } from './FillSwatch.jsx';
+
+const MODAL_WIDTH = 340;
+const STOP_LIST_MAX_HEIGHT = 160;
+
+function clamp01(n) {
+  return Math.max(0, Math.min(1, n));
+}
+
+function StopBar({ stops, selectedIndex, onSelect, onMoveStop }) {
+  const ref = useRef(null);
+
+  function offsetFromEvent(e) {
+    const rect = ref.current.getBoundingClientRect();
+    return rect.width === 0 ? 0 : clamp01((e.clientX - rect.left) / rect.width);
+  }
+
+  // Always a left-to-right linear gradient built from the stop list,
+  // regardless of whether the fill itself is set to linear or radial — a
+  // stop-position bar reads the same way in either mode, same convention
+  // every other gradient-editing tool uses (the actual angle/shape is
+  // previewed separately, via the swatch next to the type select).
+  const gradientCss = `linear-gradient(to right, ${stops
+    .slice()
+    .sort((a, b) => a.offset - b.offset)
+    .map((s) => `${s.color} ${s.offset * 100}%`)
+    .join(', ')})`;
+
+  return (
+    <div style={{ position: 'relative', width: MODAL_WIDTH - 16, marginBottom: 14 }}>
+      <div
+        ref={ref}
+        style={{
+          width: '100%',
+          height: 28,
+          border: '1px solid var(--chrome-border-strong)',
+          background: gradientCss,
+        }}
+      />
+      {stops.map((stop, i) => (
+        <div
+          key={i}
+          onPointerDown={(e) => {
+            e.currentTarget.setPointerCapture(e.pointerId);
+            onSelect(i);
+          }}
+          onPointerMove={(e) => {
+            if (e.buttons !== 1) return;
+            onMoveStop(i, offsetFromEvent(e));
+          }}
+          title={`Stop ${i + 1}: drag to reposition`}
+          style={{
+            position: 'absolute',
+            left: `${stop.offset * 100}%`,
+            top: '100%',
+            marginTop: 2,
+            width: 0,
+            height: 0,
+            borderLeft: '6px solid transparent',
+            borderRight: '6px solid transparent',
+            borderBottom: `8px solid ${i === selectedIndex ? 'var(--chrome-accent)' : 'var(--chrome-text)'}`,
+            transform: 'translateX(-50%)',
+            cursor: 'ew-resize',
+            touchAction: 'none',
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+export function GradientEditorModal({ gradient, onChange, onClose }) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  function setType(type) {
+    if (type === gradient.type) return;
+    if (type === 'linear-gradient') onChange({ type: 'linear-gradient', angle: 0, stops: gradient.stops });
+    else onChange({ type: 'radial-gradient', cx: 0.5, cy: 0.5, r: 0.5, stops: gradient.stops });
+  }
+
+  function updateStop(index, patch) {
+    const stops = gradient.stops.map((s, i) => (i === index ? { ...s, ...patch } : s));
+    onChange({ ...gradient, stops });
+  }
+
+  function addStop() {
+    onChange({ ...gradient, stops: [...gradient.stops, { offset: 1, color: '#ffffff' }] });
+  }
+
+  function removeStop(index) {
+    if (gradient.stops.length <= 2) return;
+    onChange({ ...gradient, stops: gradient.stops.filter((_, i) => i !== index) });
+    setSelectedIndex((cur) => Math.min(cur, gradient.stops.length - 2));
+  }
+
+  return (
+    <Modal title="Edit Gradient" onClose={onClose}>
+      <div style={{ width: MODAL_WIDTH, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <FillSwatch fill={gradient} size={40} title="Live preview" />
+          <select value={gradient.type} onChange={(e) => setType(e.target.value)}>
+            <option value="linear-gradient">Linear</option>
+            <option value="radial-gradient">Radial</option>
+          </select>
+          {gradient.type === 'linear-gradient' && (
+            <label>
+              Angle: <input type="number" value={gradient.angle} onChange={(e) => onChange({ ...gradient, angle: Number(e.target.value) })} style={{ width: 60 }} />°
+            </label>
+          )}
+          {gradient.type === 'radial-gradient' && (
+            <span style={{ display: 'inline-flex', gap: 8 }}>
+              <label>
+                cx: <input type="number" step={0.05} value={gradient.cx} onChange={(e) => onChange({ ...gradient, cx: Number(e.target.value) })} style={{ width: 50 }} />
+              </label>
+              <label>
+                cy: <input type="number" step={0.05} value={gradient.cy} onChange={(e) => onChange({ ...gradient, cy: Number(e.target.value) })} style={{ width: 50 }} />
+              </label>
+              <label>
+                r: <input type="number" step={0.05} value={gradient.r} onChange={(e) => onChange({ ...gradient, r: Number(e.target.value) })} style={{ width: 50 }} />
+              </label>
+            </span>
+          )}
+        </div>
+
+        <StopBar stops={gradient.stops} selectedIndex={selectedIndex} onSelect={setSelectedIndex} onMoveStop={(i, offset) => updateStop(i, { offset })} />
+
+        <div style={{ maxHeight: STOP_LIST_MAX_HEIGHT, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {gradient.stops.map((stop, i) => (
+            <span
+              key={i}
+              onClick={() => setSelectedIndex(i)}
+              style={{
+                display: 'inline-flex',
+                gap: 4,
+                alignItems: 'center',
+                padding: 2,
+                border: i === selectedIndex ? '1px solid var(--chrome-accent)' : '1px solid transparent',
+              }}
+            >
+              <input type="number" min={0} max={1} step={0.05} value={stop.offset} onChange={(e) => updateStop(i, { offset: clamp01(Number(e.target.value)) })} style={{ width: 50 }} />
+              <ColorAlphaInput value={stop.color} onChange={(next) => updateStop(i, { color: next })} title="Stop color and opacity" />
+              <button onClick={() => removeStop(i)} disabled={gradient.stops.length <= 2}>
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <button className="btn" onClick={addStop}>+ Stop</button>
+          <button className="btn" onClick={onClose}>Done</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}

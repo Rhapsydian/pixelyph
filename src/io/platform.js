@@ -80,3 +80,19 @@ export async function openFile(accept) {
     input.click();
   });
 }
+
+/**
+ * Opens `url` in the user's actual default browser — a new tab on the web
+ * (where the app is already running inside one), or the OS browser from
+ * Electron (`shell.openExternal` over IPC, not a second BrowserWindow
+ * loading the URL inside the app itself).
+ *
+ * @param {string} url
+ */
+export function openExternalUrl(url) {
+  if (isElectron()) {
+    window.pixelyph.openExternal(url);
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}

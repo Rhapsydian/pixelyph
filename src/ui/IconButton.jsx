@@ -3,7 +3,7 @@
 // disabled wiring, and the `.icon-btn` class's hover/active/focus states —
 // every tool/frame/layer icon button behaves identically through this.
 
-export function IconButton({ icon, label, active = false, disabled = false, onClick, onContextMenu }) {
+export function IconButton({ icon, label, active = false, disabled = false, onClick, onContextMenu, style }) {
   return (
     <button
       type="button"
@@ -14,6 +14,7 @@ export function IconButton({ icon, label, active = false, disabled = false, onCl
       disabled={disabled}
       onClick={onClick}
       onContextMenu={onContextMenu}
+      style={style}
     >
       {icon}
     </button>

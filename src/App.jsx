@@ -8,6 +8,14 @@ import { SvgPixelEditor } from './ui/draw/SvgPixelEditor.jsx';
 import { FrameStrip } from './ui/draw/FrameStrip.jsx';
 import { GlyphGridEditor } from './ui/glyph/GlyphGridEditor.jsx';
 import { SpecimenPreviewPanel } from './ui/glyph/SpecimenPreviewPanel.jsx';
+import { ManageSwatchesModal } from './ui/ManageSwatchesModal.jsx';
+import { ExportModal } from './ui/ExportModal.jsx';
+import { ImportImageModal } from './ui/ImportImageModal.jsx';
+import { ReferenceImageModal } from './ui/ReferenceImageModal.jsx';
+import { AboutModal } from './ui/AboutModal.jsx';
+import { IconButton } from './ui/IconButton.jsx';
+import { FullscreenIcon, FullscreenExitIcon } from './ui/icons.jsx';
+import { useFullscreen } from './ui/useFullscreen.js';
 import { CHARSET_PRESETS, CHARSET_PRESET_IDS } from './model/charsetPresets.js';
 
 // --- New Project wizard ---
@@ -190,6 +198,7 @@ function StartupScreen() {
 export default function App() {
   const projectOpen = useStore((s) => s.projectOpen);
   const mode = useStore((s) => s.mode);
+  const [isFullscreen, toggleFullscreen] = useFullscreen();
 
   if (!projectOpen) {
     return <StartupScreen />;
@@ -200,6 +209,13 @@ export default function App() {
       <header className="app-header">
         <h1 className="app-logo">Pixelyph</h1>
         <MenuBar />
+        <IconButton
+          icon={isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
+          label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+          active={isFullscreen}
+          onClick={toggleFullscreen}
+          style={{ marginLeft: 'auto' }}
+        />
       </header>
       <ContextBar />
       <div className="app-workspace">
@@ -212,6 +228,15 @@ export default function App() {
         </main>
         <SidePanel />
       </div>
+      {mode === 'draw' && (
+        <>
+          <ManageSwatchesModal />
+          <ImportImageModal />
+          <ReferenceImageModal />
+        </>
+      )}
+      <ExportModal />
+      <AboutModal />
     </div>
   );
 }

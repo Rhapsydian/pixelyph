@@ -7,7 +7,17 @@ import { createGlyphSet } from './GlyphSet.js';
 
 export const DEFAULT_WIDTH = 16;
 export const DEFAULT_HEIGHT = 16;
-export const DEFAULT_PALETTE = ['#000000', '#ffffff', '#7f2b2b', '#2b6f39', '#2b4d7f', '#e0b04d'];
+// The PICO-8 fantasy-console palette — a well-known, deliberately limited
+// 16-color set that's a reasonable default starting point for pixel art
+// regardless of what the final piece needs — plus a true white right after
+// black, since PICO-8's own palette has no pure #FFFFFF (its lightest tone,
+// #FFF1E8, is an off-white cream).
+export const DEFAULT_PALETTE = [
+  '#000000', '#FFFFFF', '#1D2B53', '#7E2553', '#008751',
+  '#AB5236', '#5F574F', '#C2C3C7', '#FFF1E8',
+  '#FF004D', '#FFA300', '#FFEC27', '#00E436',
+  '#29ADFF', '#83769C', '#FF77A8', '#FFCCAA',
+];
 export const DEFAULT_INITIAL_CHARSET_PRESET = 'basic-latin';
 
 /** Creates the initial Canvas for a new Draw-mode project with standard defaults. */

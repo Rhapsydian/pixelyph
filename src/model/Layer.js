@@ -13,15 +13,21 @@ function makeId() {
 }
 
 /**
- * @typedef {{ pixels: Uint8Array }} Frame
+ * @typedef {{ pixels: Uint8Array, visible: boolean }} Frame
  * @typedef {{ fill: string|object|null, stroke?: object, effects: object[] }} LayerStyle
  * @typedef {{
- *   id: string, name: string, visible: boolean, locked: boolean, opacity: number,
+ *   id: string, name: string, locked: boolean, opacity: number,
  *   offset: { x: number, y: number }, width: number, height: number,
  *   style: LayerStyle, frames: Frame[],
  *   autoManaged?: boolean, autoColor?: string,
  * }} Layer
  */
+// Visibility is per-*frame* (Frame.visible), not a single per-Layer
+// boolean — different frames of the same animation can show or hide the
+// same layer independently (a layer that only exists in frames 3–5, say).
+// `locked` and `opacity` stay layer-level; only visibility varies frame to
+// frame. See Canvas.js's paintCell for the "hidden in the active frame
+// behaves as locked" enforcement this enables.
 
 /**
  * @param {{ name?: string, width: number, height: number, fill?: string,
@@ -33,14 +39,13 @@ export function createLayer({ name = 'Layer', width, height, fill = '#000000', o
   return {
     id: makeId(),
     name,
-    visible: true,
     locked: false,
     opacity: 1,
     offset: { x: offset.x, y: offset.y },
     width,
     height,
     style: { fill, effects: [] },
-    frames: Array.from({ length: frameCount }, () => ({ pixels: new Uint8Array(width * height) })),
+    frames: Array.from({ length: frameCount }, () => ({ pixels: new Uint8Array(width * height), visible: true })),
     ...(autoManaged !== undefined ? { autoManaged } : {}),
     ...(autoColor !== undefined ? { autoColor } : {}),
   };
@@ -75,6 +80,7 @@ export function growToInclude(layer, x, y) {
   const padY = layer.offset.y - minY;
   layer.frames = layer.frames.map((frame) => ({
     pixels: resizeAt({ width: layer.width, height: layer.height, pixels: frame.pixels }, newWidth, newHeight, padX, padY).pixels,
+    visible: frame.visible,
   }));
   layer.offset = { x: minX, y: minY };
   layer.width = newWidth;

@@ -25,31 +25,33 @@ function serializeLayer(layer) {
   return {
     id: layer.id,
     name: layer.name,
-    visible: layer.visible,
     locked: layer.locked,
     opacity: layer.opacity,
     offset: layer.offset,
     width: layer.width,
     height: layer.height,
     style: layer.style,
-    frames: layer.frames.map((frame) => ({ pixels: bytesToBase64(frame.pixels) })),
+    frames: layer.frames.map((frame) => ({ pixels: bytesToBase64(frame.pixels), visible: frame.visible })),
     ...(layer.autoManaged !== undefined ? { autoManaged: layer.autoManaged } : {}),
     ...(layer.autoColor !== undefined ? { autoColor: layer.autoColor } : {}),
   };
 }
 
 function deserializeLayer(layer) {
+  // Pre-per-frame-visibility saves had one `visible` boolean for the whole
+  // layer instead of one per frame — used as every frame's initial value
+  // when a loaded frame doesn't have its own `visible` field yet.
+  const legacyVisible = layer.visible ?? true;
   return {
     id: layer.id,
     name: layer.name,
-    visible: layer.visible,
     locked: layer.locked,
     opacity: layer.opacity,
     offset: layer.offset,
     width: layer.width,
     height: layer.height,
     style: layer.style,
-    frames: layer.frames.map((frame) => ({ pixels: base64ToBytes(frame.pixels) })),
+    frames: layer.frames.map((frame) => ({ pixels: base64ToBytes(frame.pixels), visible: frame.visible ?? legacyVisible })),
     ...(layer.autoManaged !== undefined ? { autoManaged: layer.autoManaged } : {}),
     ...(layer.autoColor !== undefined ? { autoColor: layer.autoColor } : {}),
   };

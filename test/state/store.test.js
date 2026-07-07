@@ -111,6 +111,19 @@ test('palette actions (add/remove/reorder/clear) are undo-tracked, same as any o
   assert.deepEqual(useStore.getState().canvas.palette.colors, []);
 });
 
+test('renamePaletteEntry sets a name on a fills entry, undo-tracked', () => {
+  const store = useStore.getState();
+  store.newProject('draw');
+  store.addPaletteFill({ type: 'linear-gradient', angle: 0, stops: [] });
+  const fill = useStore.getState().canvas.palette.fills[0];
+
+  store.renamePaletteEntry('fills', fill.id, 'Sunset');
+  assert.equal(useStore.getState().canvas.palette.fills[0].name, 'Sunset');
+
+  useStore.getState().undo();
+  assert.equal(useStore.getState().canvas.palette.fills[0].name, undefined);
+});
+
 test('applyPaletteEntryToActiveLayer: a saved fill (gradient) clones onto the active layer\'s fill, independent of the palette entry afterward', () => {
   const store = useStore.getState();
   store.newProject('draw');

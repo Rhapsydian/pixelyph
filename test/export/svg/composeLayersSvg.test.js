@@ -27,12 +27,30 @@ test('multiple colors produce one <g><path> pair per auto-managed layer', () => 
   assert.match(svg, /fill="#00ff00"/);
 });
 
-test('a hidden layer is excluded from the composed output', () => {
+test('a layer hidden in the active frame is excluded from the composed output', () => {
   const canvas = createCanvas({ width: 1, height: 1 });
   paintCell(canvas, 0, 0, '#ff0000');
-  canvas.layers[0].visible = false;
+  canvas.layers[0].frames[0].visible = false;
   const svg = composeLayersSvg(canvas);
   assert.ok(!svg.includes('<path'));
+});
+
+test('a layer\'s visibility is independent per frame — hidden in one, visible in another', () => {
+  const canvas = createCanvas({ width: 1, height: 1 });
+  canvas.tier = 'advanced';
+  addLayer(canvas, { name: 'A' });
+  paintCell(canvas, 0, 0, 'x');
+  addFrame(canvas); // frame 1, active
+  paintCell(canvas, 0, 0, 'x');
+  canvas.layers[0].frames[0].visible = false; // hide only in frame 0
+
+  assert.ok(!composeLayersSvg({ ...canvas, activeFrame: 0 }).includes('<path'));
+  assert.ok(composeLayersSvg({ ...canvas, activeFrame: 1 }).includes('<path'));
+
+  setActiveFrame(canvas, 0);
+  assert.equal(canvas.layers[0].frames[canvas.activeFrame].visible, false);
+  setActiveFrame(canvas, 1);
+  assert.equal(canvas.layers[0].frames[canvas.activeFrame].visible, true);
 });
 
 test('non-default opacity is emitted on the wrapping <g>', () => {

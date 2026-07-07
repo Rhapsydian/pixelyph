@@ -45,7 +45,6 @@ export function composeLayersBody(canvas) {
   const defs = [];
   const usedIds = new Set();
   const body = canvas.layers
-    .filter((layer) => layer.visible)
     .map((layer) => {
       // Renders whichever frame is active — the editing surface always shows
       // "the current frame," and single-frame exports (SVG/PNG/WebP) are a
@@ -53,6 +52,12 @@ export function composeLayersBody(canvas) {
       // (Phase 7) render every frame separately instead of calling this once.
       const frameIndex = Math.max(0, Math.min(canvas.activeFrame ?? 0, layer.frames.length - 1));
       const frame = layer.frames[frameIndex];
+      return { layer, frameIndex, frame };
+    })
+    // Visibility is per-frame (Layer.js) — a layer hidden in *this* frame
+    // is skipped even though it might be visible in others.
+    .filter(({ frame }) => frame.visible)
+    .map(({ layer, frame }) => {
       const d = gridToPath(frame.pixels, layer.width, layer.height);
       if (!d) return '';
       const elementId = uniqueLayerElementId(layer.name, usedIds);

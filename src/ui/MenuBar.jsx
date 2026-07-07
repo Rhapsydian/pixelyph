@@ -1,7 +1,15 @@
-// Standard desktop-style menu bar (File / Edit / Export), replacing the
-// single bundled "File ▾" dropdown. Behaves like a native menu bar: click a
-// top-level menu to open it; while one is open, hovering a sibling
-// top-level button switches directly to it; click-outside or Escape closes.
+// Standard desktop-style menu bar (File / Edit / Palette / Window / Help),
+// replacing the single bundled "File ▾" dropdown. Behaves like a native menu
+// bar: click a top-level menu to open it; while one is open, hovering a
+// sibling top-level button switches directly to it; click-outside or Escape
+// closes.
+//
+// Export used to be its own top-level menu; it's now a single "Export…" item
+// under File that opens ExportModal.jsx — a raster-scale dropdown and an
+// active-frame-vs-whole-animation choice don't fit naturally as inline menu
+// rows. Import Image / Reference Image moved here from a side-panel tab for
+// the same reason as Export: settings, not permanent screen real estate —
+// each opens its own modal (ImportImageModal.jsx / ReferenceImageModal.jsx).
 //
 // The Edit menu's real payoff: Cut/Copy/Paste/Select All/Deselect/Commit
 // Move already work today, but only via keydown handling in
@@ -14,6 +22,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../state/store.js';
+import { useFullscreen } from './useFullscreen.js';
+import { openExternalUrl } from '../io/platform.js';
+
+const REPO_URL = 'https://github.com/Rhapsydian/pixelyph';
 
 function MenuItem({ label, shortcut, onClick, disabled }) {
   return (
@@ -43,10 +55,6 @@ function MenuItem({ label, shortcut, onClick, disabled }) {
 
 function MenuDivider() {
   return <div style={{ borderTop: '1px solid var(--chrome-border)', margin: '0.25rem 0' }} />;
-}
-
-function MenuRow({ children }) {
-  return <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.3rem 0.6rem', color: 'var(--chrome-text-muted)' }}>{children}</div>;
 }
 
 function Menu({ id, label, openMenu, setOpenMenu, children }) {
@@ -93,14 +101,15 @@ export function MenuBar() {
   const closeProject = useStore((s) => s.closeProject);
   const saveAnyProject = useStore((s) => s.saveAnyProject);
   const openAnyProject = useStore((s) => s.openAnyProject);
-  const exportSvg = useStore((s) => s.exportSvg);
-  const exportRaster = useStore((s) => s.exportRaster);
   const copySvg = useStore((s) => s.copySvg);
-  const exportGlyphSvg = useStore((s) => s.exportGlyphSvg);
-  const exportAnimatedSvg = useStore((s) => s.exportAnimatedSvg);
-  const exportSpriteSheet = useStore((s) => s.exportSpriteSheet);
-  const exportAnimatedGif = useStore((s) => s.exportAnimatedGif);
-  const frameCount = useStore((s) => s.canvas.frameCount);
+  const importLospecPalette = useStore((s) => s.importLospecPalette);
+  const importPixelyphPalette = useStore((s) => s.importPixelyphPalette);
+  const exportPalette = useStore((s) => s.exportPalette);
+  const setManageSwatchesOpen = useStore((s) => s.setManageSwatchesOpen);
+  const setExportModalOpen = useStore((s) => s.setExportModalOpen);
+  const setImportImageModalOpen = useStore((s) => s.setImportImageModalOpen);
+  const setReferenceImageModalOpen = useStore((s) => s.setReferenceImageModalOpen);
+  const setAboutModalOpen = useStore((s) => s.setAboutModalOpen);
 
   const canUndo = useStore((s) => s.canUndo);
   const canRedo = useStore((s) => s.canRedo);
@@ -118,8 +127,17 @@ export function MenuBar() {
   const dropFloatingSelection = useStore((s) => s.dropFloatingSelection);
 
   const [openMenu, setOpenMenu] = useState(/** @type {string|null} */ (null));
-  const [scale, setScale] = useState(4);
+  const [isFullscreen, toggleFullscreen] = useFullscreen();
   const rootRef = useRef(null);
+  const paletteFileInputRef = useRef(null);
+
+  async function handleImportPaletteFile(evt) {
+    const file = evt.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    if (!importPixelyphPalette(text)) importLospecPalette(text);
+    evt.target.value = '';
+  }
 
   useEffect(() => {
     if (!openMenu) return;
@@ -162,6 +180,15 @@ export function MenuBar() {
         <MenuItem label="New Project…" onClick={runAndClose(handleNewProject)} />
         <MenuItem label="Open Project…" onClick={runAndClose(openAnyProject)} />
         <MenuItem label="Save Project" onClick={runAndClose(saveAnyProject)} />
+        {mode === 'draw' && (
+          <>
+            <MenuDivider />
+            <MenuItem label="Import Image…" onClick={runAndClose(() => setImportImageModalOpen(true))} />
+            <MenuItem label="Reference Image…" onClick={runAndClose(() => setReferenceImageModalOpen(true))} />
+          </>
+        )}
+        <MenuDivider />
+        <MenuItem label="Export…" onClick={runAndClose(() => setExportModalOpen(true))} />
       </Menu>
 
       <Menu id="edit" label="Edit" openMenu={openMenu} setOpenMenu={setOpenMenu}>
@@ -175,35 +202,31 @@ export function MenuBar() {
         <MenuItem label="Select all" shortcut="Ctrl+A" onClick={runAndClose(selectAll)} />
         <MenuItem label="Deselect" shortcut="Esc" disabled={!hasSelection} onClick={runAndClose(handleDeselect)} />
         <MenuItem label="Commit move" shortcut="Enter" disabled={!floatingSelection} onClick={runAndClose(dropFloatingSelection)} />
+        {mode === 'draw' && (
+          <>
+            <MenuDivider />
+            <MenuItem label="Copy SVG (for Illustrator, Inkscape, etc.)" onClick={runAndClose(copySvg)} />
+          </>
+        )}
       </Menu>
 
-      <Menu id="export" label="Export" openMenu={openMenu} setOpenMenu={setOpenMenu}>
-        {mode === 'draw' ? (
-          <>
-            <MenuItem label="Export SVG" onClick={runAndClose(exportSvg)} />
-            <MenuRow>
-              Raster scale
-              <select value={scale} onChange={(e) => setScale(Number(e.target.value))}>
-                {[1, 4, 8, 16].map((s) => (
-                  <option key={s} value={s}>{s}x</option>
-                ))}
-              </select>
-            </MenuRow>
-            <MenuItem label="Export PNG" onClick={runAndClose(() => exportRaster('png', scale))} />
-            <MenuItem label="Export WebP" onClick={runAndClose(() => exportRaster('webp', scale))} />
-            <MenuItem label="Copy as SVG" onClick={runAndClose(copySvg)} />
-            {frameCount > 1 && (
-              <>
-                <MenuDivider />
-                <MenuItem label="Export animated SVG" onClick={runAndClose(exportAnimatedSvg)} />
-                <MenuItem label="Export sprite sheet (.zip)" onClick={runAndClose(() => exportSpriteSheet(scale))} />
-                <MenuItem label="Export animated GIF" onClick={runAndClose(() => exportAnimatedGif(scale))} />
-              </>
-            )}
-          </>
-        ) : (
-          <MenuItem label="Export glyph SVG" onClick={runAndClose(exportGlyphSvg)} />
-        )}
+      {mode === 'draw' && (
+        <Menu id="palette" label="Palette" openMenu={openMenu} setOpenMenu={setOpenMenu}>
+          <MenuItem label="Manage Swatches…" onClick={runAndClose(() => setManageSwatchesOpen(true))} />
+          <MenuDivider />
+          <MenuItem label="Import Palette…" onClick={runAndClose(() => paletteFileInputRef.current?.click())} />
+          <MenuItem label="Export Palette" onClick={runAndClose(exportPalette)} />
+        </Menu>
+      )}
+      <input ref={paletteFileInputRef} type="file" accept=".hex,.txt,.json" onChange={handleImportPaletteFile} style={{ display: 'none' }} />
+
+      <Menu id="window" label="Window" openMenu={openMenu} setOpenMenu={setOpenMenu}>
+        <MenuItem label={isFullscreen ? 'Exit Fullscreen' : 'Toggle Fullscreen'} onClick={runAndClose(toggleFullscreen)} />
+      </Menu>
+
+      <Menu id="help" label="Help" openMenu={openMenu} setOpenMenu={setOpenMenu}>
+        <MenuItem label="About Pixelyph" onClick={runAndClose(() => setAboutModalOpen(true))} />
+        <MenuItem label="Visit on GitHub" onClick={runAndClose(() => openExternalUrl(REPO_URL))} />
       </Menu>
     </div>
   );

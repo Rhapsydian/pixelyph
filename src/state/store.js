@@ -32,6 +32,7 @@ import {
   removeFrame as removeFrameModel,
   setActiveFrame as setActiveFrameModel,
   setFrameDuration as setFrameDurationModel,
+  setLayerFrameVisibility as setLayerFrameVisibilityModel,
   cloneLayerStyle,
   cloneFillValue,
 } from '../model/Canvas.js';
@@ -45,6 +46,7 @@ import {
   addStyle as addPaletteStyleModel,
   removeEntry as removePaletteEntryModel,
   reorderEntry as reorderPaletteEntryModel,
+  renameEntry as renamePaletteEntryModel,
   clearGroup as clearPaletteGroupModel,
   serializePaletteFile,
   parsePaletteFile,
@@ -319,6 +321,11 @@ export const useStore = create((set, get) => {
       Object.assign(layer, patch);
       commit();
     },
+    /** Visibility is per-frame (Layer.js) — this toggles it for whichever frame is currently active, leaving every other frame's visibility for this layer untouched. */
+    setLayerFrameVisibility: (layerId, visible) => {
+      setLayerFrameVisibilityModel(get().canvas, layerId, get().canvas.activeFrame, visible);
+      commit();
+    },
     updateLayerStyle: (layerId, patch) => {
       const layer = get().canvas.layers.find((l) => l.id === layerId);
       if (!layer) return;
@@ -456,6 +463,10 @@ export const useStore = create((set, get) => {
       reorderPaletteEntryModel(get().canvas.palette, group, key, direction);
       commit();
     },
+    renamePaletteEntry: (group, key, name) => {
+      renamePaletteEntryModel(get().canvas.palette, group, key, name);
+      commit();
+    },
     clearPaletteGroup: (group) => {
       clearPaletteGroupModel(get().canvas.palette, group);
       commit();
@@ -499,6 +510,23 @@ export const useStore = create((set, get) => {
       const text = serializePaletteFile(get().canvas.palette);
       await saveFile('palette.pixelyph-palette.json', new Blob([text], { type: 'application/json' }));
     },
+    // Working-session UI state (like activeTool/selection above) — not
+    // undo-tracked, opened from both the Palette menu and the Palette
+    // panel's own "Manage" button.
+    manageSwatchesOpen: false,
+    setManageSwatchesOpen: (open) => set({ manageSwatchesOpen: open }),
+
+    // Same pattern for the other menu-driven modals: Export (File menu, both
+    // modes), Import Image / Reference Image (File menu, draw mode), About
+    // (Help menu).
+    exportModalOpen: false,
+    setExportModalOpen: (open) => set({ exportModalOpen: open }),
+    importImageModalOpen: false,
+    setImportImageModalOpen: (open) => set({ importImageModalOpen: open }),
+    referenceImageModalOpen: false,
+    setReferenceImageModalOpen: (open) => set({ referenceImageModalOpen: open }),
+    aboutModalOpen: false,
+    setAboutModalOpen: (open) => set({ aboutModalOpen: open }),
 
     // --- Project lifecycle (Phase 4) ---
 

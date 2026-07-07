@@ -5,7 +5,7 @@
 // the whole UI — is the same code running in the web build; this file and
 // electron/preload/index.js are the only Electron-specific surface.
 
-import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron';
 import { join, extname, basename } from 'node:path';
 import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -92,6 +92,12 @@ ipcMain.handle('pixelyph:read-autosave', async () => {
 
 ipcMain.handle('pixelyph:clear-autosave', async () => {
   if (existsSync(autosavePath())) await unlink(autosavePath());
+});
+
+// Help menu's "Visit on GitHub" — opens the user's actual default browser,
+// not a second BrowserWindow loading the URL inside the app itself.
+ipcMain.handle('pixelyph:open-external', async (_event, url) => {
+  await shell.openExternal(url);
 });
 
 app.whenReady().then(() => {

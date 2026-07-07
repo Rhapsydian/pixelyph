@@ -19,6 +19,7 @@ import {
   removeFrame,
   setActiveFrame,
   setFrameDuration,
+  setLayerFrameVisibility,
   cloneLayerStyle,
   cloneFillValue,
 } from '../../src/model/Canvas.js';
@@ -156,7 +157,7 @@ test('topVisibleLayerAt finds the topmost visible layer covering a cell, skippin
   const b = addLayer(canvas, { name: 'B' });
   paintCell(canvas, 0, 0, '#0f0');
   assert.equal(topVisibleLayerAt(canvas, 0, 0), b);
-  b.visible = false;
+  b.frames[0].visible = false;
   assert.equal(topVisibleLayerAt(canvas, 0, 0), a);
   assert.equal(topVisibleLayerAt(canvas, 1, 1), null);
 });
@@ -240,37 +241,39 @@ test('duplicateLayer returns null for an unknown layer id', () => {
   assert.equal(duplicateLayer(canvas, 'nope'), null);
 });
 
-test('duplicateLayer copies a pattern fill independently (regression: cloneFillValue must not assume every object fill has .stops, like a gradient does)', () => {
+test('duplicateLayer copies a gradient fill independently', () => {
   const canvas = createCanvas({ width: 2, height: 2 });
   canvas.tier = 'advanced';
-  const original = addLayer(canvas, { name: 'Patterned' });
-  original.style.fill = { type: 'pattern', content: '<rect width="1" height="1"/>', width: 4, height: 4 };
+  const original = addLayer(canvas, { name: 'Gradient' });
+  original.style.fill = { type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] };
 
   const copy = duplicateLayer(canvas, original.id);
   assert.deepEqual(copy.style.fill, original.style.fill);
   assert.notEqual(copy.style.fill, original.style.fill);
 
-  copy.style.fill.content = '<circle/>';
-  assert.equal(original.style.fill.content, '<rect width="1" height="1"/>');
+  copy.style.fill.stops[0].color = '#123456';
+  assert.equal(original.style.fill.stops[0].color, '#fff');
 });
 
-test('cloneFillValue clones a gradient\'s stops independently, passes patterns/solids/null through with no nested structure to clone', () => {
+test('cloneFillValue clones a gradient\'s stops independently, and passes any fill without its own .stops array through as a shallow copy', () => {
   const gradient = { type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#fff' }] };
   const clonedGradient = cloneFillValue(gradient);
   assert.deepEqual(clonedGradient, gradient);
   clonedGradient.stops[0].color = '#000';
   assert.equal(gradient.stops[0].color, '#fff');
 
-  const pattern = { type: 'pattern', content: '<rect/>', width: 2, height: 2 };
-  assert.deepEqual(cloneFillValue(pattern), pattern);
-  assert.notEqual(cloneFillValue(pattern), pattern);
+  // Any future object fill kind with no nested array like a gradient's
+  // stops still round-trips safely as a shallow copy.
+  const flatFill = { type: 'future-kind', value: 42 };
+  assert.deepEqual(cloneFillValue(flatFill), flatFill);
+  assert.notEqual(cloneFillValue(flatFill), flatFill);
 
   assert.equal(cloneFillValue('#ff0000'), '#ff0000');
   assert.equal(cloneFillValue(null), null);
 });
 
-test('cloneLayerStyle handles every fill kind (solid/gradient/pattern/none) without throwing', () => {
-  for (const fill of ['#ff0000', { type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#fff' }] }, { type: 'pattern', content: '<rect/>', width: 2, height: 2 }, null]) {
+test('cloneLayerStyle handles every fill kind (solid/gradient/none) without throwing', () => {
+  for (const fill of ['#ff0000', { type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#fff' }] }, null]) {
     const style = { fill, stroke: undefined, effects: [] };
     assert.deepEqual(cloneLayerStyle(style), style);
   }
@@ -380,6 +383,47 @@ test('duplicateFrame copies every layer\'s frame at index, inserting the copy ri
   assert.equal(layer.frames[1].pixels[0], 1);
   // independent buffers — mutating the copy doesn't affect the original
   layer.frames[1].pixels[0] = 0;
+  assert.equal(layer.frames[0].pixels[0], 1);
+});
+
+test('addFrame\'s new frame defaults to visible; duplicateFrame\'s copy carries over the source frame\'s visibility', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas, {});
+  layer.frames[0].visible = false;
+
+  addFrame(canvas); // frame 1
+  assert.equal(layer.frames[1].visible, true, 'a newly-added frame defaults to visible regardless of other frames');
+
+  duplicateFrame(canvas, 0); // copies frame 0 (hidden) to index 1
+  assert.equal(layer.frames[1].visible, false, 'duplicateFrame copies the source frame\'s own visibility');
+});
+
+test('setLayerFrameVisibility toggles visibility for one frame only, leaving other frames of the same layer untouched', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas, {});
+  addFrame(canvas); // frame 1
+
+  setLayerFrameVisibility(canvas, layer.id, 0, false);
+  assert.equal(layer.frames[0].visible, false);
+  assert.equal(layer.frames[1].visible, true);
+
+  setLayerFrameVisibility(canvas, layer.id, 1, false);
+  assert.equal(layer.frames[1].visible, false);
+});
+
+test('paintCell no-ops on a layer hidden in the active frame (same "can\'t be edited" contract as locked), and paints normally once shown again', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas, {});
+  setLayerFrameVisibility(canvas, layer.id, 0, false);
+
+  paintCell(canvas, 0, 0, 'x');
+  assert.ok(layer.frames[0].pixels.every((v) => v === 0), 'hidden-in-this-frame blocks painting, like a locked layer');
+
+  setLayerFrameVisibility(canvas, layer.id, 0, true);
+  paintCell(canvas, 0, 0, 'x');
   assert.equal(layer.frames[0].pixels[0], 1);
 });
 
