@@ -170,26 +170,30 @@ function StartupScreen() {
 
   if (screen === 'wizard') {
     return (
-      <main className="app-shell" style={{ alignItems: 'center', justifyContent: 'center' }}>
-        <NewProjectWizard onBack={() => setScreen('main')} />
-      </main>
+      <div className="startup-overlay">
+        <div className="startup-overlay__panel">
+          <NewProjectWizard onBack={() => setScreen('main')} />
+        </div>
+      </div>
     );
   }
 
   return (
-    <main className="app-shell" style={{ alignItems: 'center', justifyContent: 'center', gap: '2.5rem' }}>
-      <h1 style={{ fontSize: 'var(--text-xl)', margin: 0, letterSpacing: '0.05em' }}>Pixelyph</h1>
-      <p style={{ color: 'var(--chrome-text-muted)', margin: 0 }}>SVG pixel art &amp; font design tool</p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'center' }}>
-        <button className="btn btn-primary" style={{ minWidth: 200 }} onClick={() => setScreen('wizard')}>New Project</button>
-        <button className="btn btn-primary" style={{ minWidth: 200 }} onClick={handleOpen}>Existing Project…</button>
-        {autosaveDoc ? (
-          <button className="btn btn-primary" style={{ minWidth: 200 }} onClick={handleContinue}>Continue Last Session</button>
-        ) : (
-          <button className="btn" style={{ minWidth: 200 }} disabled title="No autosaved session found">Continue Last Session</button>
-        )}
+    <div className="startup-overlay">
+      <div className="startup-overlay__panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2.5rem', padding: '3rem 2.5rem' }}>
+        <h1 style={{ fontSize: 'var(--text-xl)', margin: 0, letterSpacing: '0.05em' }}>Pixelyph</h1>
+        <p style={{ color: 'var(--chrome-text-muted)', margin: 0 }}>SVG pixel art &amp; font design tool</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'center' }}>
+          <button className="btn btn-primary" style={{ minWidth: 200 }} onClick={() => setScreen('wizard')}>New Project</button>
+          <button className="btn btn-primary" style={{ minWidth: 200 }} onClick={handleOpen}>Existing Project…</button>
+          {autosaveDoc ? (
+            <button className="btn btn-primary" style={{ minWidth: 200 }} onClick={handleContinue}>Continue Last Session</button>
+          ) : (
+            <button className="btn" style={{ minWidth: 200 }} disabled title="No autosaved session found">Continue Last Session</button>
+          )}
+        </div>
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -200,43 +204,46 @@ export default function App() {
   const mode = useStore((s) => s.mode);
   const [isFullscreen, toggleFullscreen] = useFullscreen();
 
-  if (!projectOpen) {
-    return <StartupScreen />;
-  }
-
+  // The editor shell renders even when no project is "open" (the store
+  // always has a live default canvas — see state/store.js's initialCanvas)
+  // so the startup screen / New Project wizard can overlay a dimmed,
+  // inert version of it instead of replacing the whole tree.
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <h1 className="app-logo">Pixelyph</h1>
-        <MenuBar />
-        <IconButton
-          icon={isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
-          label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-          active={isFullscreen}
-          onClick={toggleFullscreen}
-          style={{ marginLeft: 'auto' }}
-        />
-      </header>
-      <ContextBar />
-      <div className="app-workspace">
-        <ToolRail />
-        <main className="canvas-region">
-          <div className="canvas-editor-area">
-            {mode === 'draw' ? <SvgPixelEditor /> : <GlyphGridEditor />}
-          </div>
-          {mode === 'draw' ? <FrameStrip /> : <SpecimenPreviewPanel />}
-        </main>
-        <SidePanel />
+    <>
+      <div className={projectOpen ? 'app-shell' : 'app-shell app-shell--dimmed'}>
+        <header className="app-header">
+          <h1 className="app-logo">Pixelyph</h1>
+          <MenuBar />
+          <IconButton
+            icon={isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
+            label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            active={isFullscreen}
+            onClick={toggleFullscreen}
+            style={{ marginLeft: 'auto' }}
+          />
+        </header>
+        <ContextBar />
+        <div className="app-workspace">
+          <ToolRail />
+          <main className="canvas-region">
+            <div className="canvas-editor-area">
+              {mode === 'draw' ? <SvgPixelEditor /> : <GlyphGridEditor />}
+            </div>
+            {mode === 'draw' ? <FrameStrip /> : <SpecimenPreviewPanel />}
+          </main>
+          <SidePanel />
+        </div>
+        {mode === 'draw' && (
+          <>
+            <ManageSwatchesModal />
+            <ImportImageModal />
+            <ReferenceImageModal />
+          </>
+        )}
+        <ExportModal />
+        <AboutModal />
       </div>
-      {mode === 'draw' && (
-        <>
-          <ManageSwatchesModal />
-          <ImportImageModal />
-          <ReferenceImageModal />
-        </>
-      )}
-      <ExportModal />
-      <AboutModal />
-    </div>
+      {!projectOpen && <StartupScreen />}
+    </>
   );
 }
