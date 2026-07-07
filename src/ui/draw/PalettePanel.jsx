@@ -172,7 +172,7 @@ function StylesGroup() {
   return (
     <div>
       <strong>Styles</strong>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, margin: '4px 0' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, margin: '4px 0' }}>
         {styles.map((entry) => (
           <button
             key={entry.id}
@@ -187,14 +187,32 @@ function StylesGroup() {
               confirmDelete(entry);
             }}
             style={{
-              width: 24,
-              height: 24,
-              padding: 0,
-              border: `2px solid ${selected === entry.id ? 'var(--chrome-text)' : (entry.stroke?.color ?? 'transparent')}`,
-              lineHeight: 0,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              width: '100%',
+              padding: '4px 6px',
+              textAlign: 'left',
+              background: selected === entry.id ? 'var(--chrome-bg-raised)' : 'transparent',
+              border: `1px solid ${selected === entry.id ? 'var(--chrome-text)' : 'transparent'}`,
+              borderRadius: 'var(--radius-sm)',
             }}
           >
-            <FillSwatch fill={entry.fill} size={24} title={entry.name || 'Saved style'} />
+            <span
+              style={{
+                width: 24,
+                height: 24,
+                flexShrink: 0,
+                boxSizing: 'border-box',
+                border: `2px solid ${entry.stroke?.color ?? 'transparent'}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <FillSwatch fill={entry.fill} size={20} title={entry.name || 'Saved style'} />
+            </span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.name || '(unnamed)'}</span>
           </button>
         ))}
         {styles.length === 0 && <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>Save a layer's fill+stroke+effects from the Style tab to build this list.</span>}
