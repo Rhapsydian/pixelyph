@@ -21,7 +21,7 @@
 // well within by capping here first).
 
 import { useRef, useState } from 'react';
-import { Modal } from './Modal.jsx';
+import { Modal, ModalFooter } from './Modal.jsx';
 import { ColorAlphaInput } from './ColorAlphaInput.jsx';
 import { FillSwatch } from './FillSwatch.jsx';
 
@@ -170,12 +170,11 @@ export function GradientEditorModal({ gradient, onChange, onClose }) {
             </span>
           ))}
         </div>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <button className="btn" onClick={addStop}>+ Stop</button>
-          <button className="btn" onClick={onClose}>Done</button>
-        </div>
       </div>
+      <ModalFooter justify="space-between">
+        <button className="btn" onClick={addStop}>+ Stop</button>
+        <button className="btn" onClick={onClose}>Done</button>
+      </ModalFooter>
     </Modal>
   );
 }

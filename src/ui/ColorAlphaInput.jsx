@@ -40,7 +40,7 @@
 // draft and only commits on confirm).
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Modal } from './Modal.jsx';
+import { Modal, ModalFooter } from './Modal.jsx';
 
 function clamp255(n) {
   return Math.max(0, Math.min(255, Math.round(n)));
@@ -287,12 +287,12 @@ function ColorPickerModal({ rgbHex, onPick, onClose }) {
         <HueSlider hue={hsv.h} onChange={(h) => commit({ ...hsv, h })} />
         <Swatch color={composeColor(r, g, b, 1)} size={32} />
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+      <ModalFooter>
         {typeof window !== 'undefined' && window.EyeDropper && (
-          <button type="button" className="btn" onClick={handleEyedropper}>Eyedropper</button>
+          <button type="button" className="btn" onClick={handleEyedropper} style={{ marginRight: 'auto' }}>Eyedropper</button>
         )}
-        <button type="button" className="btn" onClick={onClose} style={{ marginLeft: 'auto' }}>Select</button>
-      </div>
+        <button type="button" className="btn" onClick={onClose}>Select</button>
+      </ModalFooter>
     </Modal>
   );
 }

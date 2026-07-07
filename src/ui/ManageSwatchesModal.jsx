@@ -8,7 +8,7 @@
 // now scoped to this dedicated management view) and delete.
 
 import { useStore } from '../state/store.js';
-import { Modal } from './Modal.jsx';
+import { Modal, ModalFooter } from './Modal.jsx';
 import { FillSwatch } from './FillSwatch.jsx';
 import { IconButton } from './IconButton.jsx';
 import { ChevronDownIcon, TrashIcon } from './icons.jsx';
@@ -145,7 +145,9 @@ export function ManageSwatchesModal() {
         <FillsSection />
         <StylesSection />
       </div>
-      <button className="btn" onClick={() => setOpen(false)} style={{ alignSelf: 'flex-end' }}>Done</button>
+      <ModalFooter>
+        <button className="btn" onClick={() => setOpen(false)}>Done</button>
+      </ModalFooter>
     </Modal>
   );
 }

@@ -8,7 +8,7 @@
 
 import { useRef, useState } from 'react';
 import { useStore } from '../state/store.js';
-import { Modal } from './Modal.jsx';
+import { Modal, ModalActions } from './Modal.jsx';
 
 export function ImportImageModal() {
   const open = useStore((s) => s.importImageModalOpen);
@@ -48,11 +48,14 @@ export function ImportImageModal() {
           <input type="checkbox" checked={useExistingPalette} onChange={(e) => setUseExistingPalette(e.target.checked)} />
           Match existing palette
         </label>
-        <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()} disabled={busy} style={{ alignSelf: 'flex-start' }}>
-          {busy ? 'Importing…' : 'Choose Image…'}
-        </button>
         <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFile} style={{ display: 'none' }} />
       </div>
+      <ModalActions
+        onCancel={() => setOpen(false)}
+        onConfirm={() => fileInputRef.current?.click()}
+        confirmLabel={busy ? 'Importing…' : 'Choose Image…'}
+        confirmDisabled={busy}
+      />
     </Modal>
   );
 }

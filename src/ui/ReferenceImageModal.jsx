@@ -7,7 +7,7 @@
 
 import { useRef } from 'react';
 import { useStore } from '../state/store.js';
-import { Modal } from './Modal.jsx';
+import { Modal, ModalFooter } from './Modal.jsx';
 import { PercentSlider } from './PercentSlider.jsx';
 
 function readAsDataUrl(file) {
@@ -57,6 +57,9 @@ export function ReferenceImageModal() {
           </>
         )}
       </div>
+      <ModalFooter>
+        <button className="btn" onClick={() => setOpen(false)}>Close</button>
+      </ModalFooter>
     </Modal>
   );
 }

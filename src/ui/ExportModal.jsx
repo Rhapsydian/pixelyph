@@ -10,7 +10,7 @@
 
 import { useState } from 'react';
 import { useStore } from '../state/store.js';
-import { Modal, ModalActions } from './Modal.jsx';
+import { Modal, ModalActions, ModalFooter } from './Modal.jsx';
 import { FontExportPanel } from './glyph/FontExportPanel.jsx';
 import { LockIcon, UnlockIcon } from './icons.jsx';
 import { sizeFromScale, resizeLockedDimension } from '../export/raster/rasterSize.js';
@@ -218,9 +218,12 @@ function DrawExportForm({ onClose }) {
         <button type="button" className="btn" disabled={!anyRasterSelected} onClick={() => setAdvancedOpen(true)}>Advanced…</button>
       </div>
 
-      <button className="btn btn-primary" onClick={handleExport} disabled={!anySelected || exporting} style={{ alignSelf: 'flex-end' }}>
-        {exporting ? 'Exporting…' : 'Export'}
-      </button>
+      <ModalActions
+        onCancel={onClose}
+        onConfirm={handleExport}
+        confirmLabel={exporting ? 'Exporting…' : 'Export'}
+        confirmDisabled={!anySelected || exporting}
+      />
 
       {advancedOpen && (
         <AdvancedRasterModal
@@ -235,7 +238,7 @@ function DrawExportForm({ onClose }) {
   );
 }
 
-function GlyphExportForm() {
+function GlyphExportForm({ onClose }) {
   const activeCodepoint = useStore((s) => s.activeCodepoint);
   const exportGlyphSvg = useStore((s) => s.exportGlyphSvg);
 
@@ -249,6 +252,9 @@ function GlyphExportForm() {
       </div>
       <div style={{ borderTop: '1px solid var(--chrome-border)' }} />
       <FontExportPanel />
+      <ModalFooter>
+        <button className="btn" onClick={onClose}>Close</button>
+      </ModalFooter>
     </div>
   );
 }
@@ -260,9 +266,11 @@ export function ExportModal() {
 
   if (!open) return null;
 
+  const onClose = () => setOpen(false);
+
   return (
-    <Modal title="Export" onClose={() => setOpen(false)}>
-      {mode === 'glyph' ? <GlyphExportForm /> : <DrawExportForm onClose={() => setOpen(false)} />}
+    <Modal title="Export" onClose={onClose}>
+      {mode === 'glyph' ? <GlyphExportForm onClose={onClose} /> : <DrawExportForm onClose={onClose} />}
     </Modal>
   );
 }

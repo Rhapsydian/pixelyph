@@ -4,7 +4,7 @@
 // were asked for as distinct entries.
 
 import { useStore } from '../state/store.js';
-import { Modal } from './Modal.jsx';
+import { Modal, ModalFooter } from './Modal.jsx';
 import pkg from '../../package.json';
 
 export function AboutModal() {
@@ -18,8 +18,10 @@ export function AboutModal() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 280 }}>
         <p style={{ margin: 0 }}>{pkg.description}</p>
         <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>Version {pkg.version}</span>
-        <button className="btn" onClick={() => setOpen(false)} style={{ alignSelf: 'flex-end' }}>Close</button>
       </div>
+      <ModalFooter>
+        <button className="btn" onClick={() => setOpen(false)}>Close</button>
+      </ModalFooter>
     </Modal>
   );
 }
