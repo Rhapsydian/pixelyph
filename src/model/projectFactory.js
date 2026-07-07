@@ -43,7 +43,7 @@ export const DEFAULT_FILLS = [
 export const DEFAULT_STYLES = [
   {
     id: 'default-style-outlined', name: 'Outlined', fill: '#FFFFFF',
-    stroke: { color: '#000000', width: 0.15, linejoin: 'round' },
+    stroke: { color: '#000000', width: 0.15, linejoin: 'round' }, effects: [],
   },
   {
     id: 'default-style-drop-shadow', name: 'Drop Shadow', fill: '#FFFFFF',

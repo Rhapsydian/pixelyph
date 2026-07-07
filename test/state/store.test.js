@@ -159,6 +159,23 @@ test('applyPaletteEntryToActiveLayer: a saved style replaces fill+stroke+effects
   assert.equal(appliedStyle.effects.length, 1);
 });
 
+test('applyPaletteEntryToActiveLayer: every default palette style (projectFactory.js\'s DEFAULT_STYLES) applies without throwing', () => {
+  // Regression test: DEFAULT_STYLES's "Outlined" entry originally omitted
+  // `effects`, which cloneLayerStyle (Canvas.js) requires as an array (it
+  // calls .map() on it unconditionally) — applying that style silently threw
+  // and never reached the layer at all.
+  const store = useStore.getState();
+  store.newProject('draw');
+  store.setTier('advanced');
+  const layer = useStore.getState().canvas.layers[0];
+
+  for (const styleEntry of useStore.getState().canvas.palette.styles) {
+    assert.doesNotThrow(() => store.applyPaletteEntryToActiveLayer('styles', styleEntry.id));
+    const appliedStyle = useStore.getState().canvas.layers.find((l) => l.id === layer.id).style;
+    assert.equal(appliedStyle.fill, styleEntry.fill, `${styleEntry.name} should actually apply its fill`);
+  }
+});
+
 test('importPixelyphPalette replaces the whole palette (colors + fills + styles); importLospecPalette only replaces colors', () => {
   const store = useStore.getState();
   store.newProject('draw');

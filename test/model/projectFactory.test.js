@@ -52,6 +52,12 @@ test('every default style has a non-null fill (applying a style replaces fill+st
   }
 });
 
+test('every default style has an effects array (Layer.js\'s LayerStyle shape requires it — cloneLayerStyle calls .map() on it unconditionally, so a missing effects field throws when the style is applied)', () => {
+  for (const style of DEFAULT_STYLES) {
+    assert.ok(Array.isArray(style.effects), `${style.name} should have an effects array, got ${style.effects}`);
+  }
+});
+
 // --- buildGlyphDocument ---
 
 test('buildGlyphDocument defaults to character kind', () => {
