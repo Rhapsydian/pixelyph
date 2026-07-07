@@ -1,9 +1,11 @@
-// Like spriteSheet.js, but each frame is rasterized to its own standalone PNG
-// file instead of tiled into one sheet image — for pipelines that want
-// individual frame files rather than a tile atlas. Sibling to spriteSheet.js/
-// animatedRaster.js, reusing the same small frameSvg/loadImageFromBlob shape
-// each of those already duplicates rather than introducing a new shared-helper
-// module for a third copy.
+// Like spriteSheet.js, but each frame is exported as its own standalone file
+// instead of tiled into one sheet image — for pipelines that want individual
+// frame files rather than a tile atlas. Two variants: buildSpriteArchive
+// (PNG, rasterized like spriteSheet.js/animatedRaster.js) and
+// buildSpriteArchiveSvg (real per-frame SVG markup, no rasterization at all).
+// Sibling to spriteSheet.js/animatedRaster.js, reusing the same small
+// frameSvg shape each of those already duplicates rather than introducing a
+// new shared-helper module for a third copy.
 
 import { rasterizeFrame } from './rasterizeFrame.js';
 import { composeFrameBody } from '../svg/composeLayersSvg.js';
@@ -16,11 +18,12 @@ import { composeFrameBody } from '../svg/composeLayersSvg.js';
  * @param {number} index
  * @param {number} frameCount
  * @param {string} [baseName]
+ * @param {string} [ext]
  * @returns {string}
  */
-export function frameFileName(index, frameCount, baseName = 'frame') {
+export function frameFileName(index, frameCount, baseName = 'frame', ext = 'png') {
   const width = String(Math.max(0, frameCount - 1)).length;
-  return `${baseName}-${String(index).padStart(width, '0')}.png`;
+  return `${baseName}-${String(index).padStart(width, '0')}.${ext}`;
 }
 
 function frameSvg(canvas, frameIndex) {
@@ -43,6 +46,29 @@ export async function buildSpriteArchive(canvas, size = { width: canvas.width, h
     const blob = await rasterizeFrame(frameSvg(canvas, i), width, height, 'image/png');
     const name = frameFileName(i, canvas.frameCount);
     files.push({ name, data: new Uint8Array(await blob.arrayBuffer()) });
+    frames.push({ file: name, duration: canvas.frameDurations[i] });
+  }
+
+  return { files, metadata: { frames } };
+}
+
+/**
+ * Same per-frame archive as buildSpriteArchive, but each frame is its own
+ * standalone SVG (composeFrameBody's markup, matching every other single-
+ * frame SVG export in this app) instead of a rasterized PNG — fully
+ * synchronous, no canvas/Image round-trip needed since SVG is already text.
+ *
+ * @param {object} canvas Canvas
+ * @returns {{ files: {name: string, data: Uint8Array}[], metadata: { frames: {file: string, duration: number}[] } }}
+ */
+export function buildSpriteArchiveSvg(canvas) {
+  const textEncoder = new TextEncoder();
+  const files = [];
+  const frames = [];
+
+  for (let i = 0; i < canvas.frameCount; i++) {
+    const name = frameFileName(i, canvas.frameCount, 'frame', 'svg');
+    files.push({ name, data: textEncoder.encode(frameSvg(canvas, i)) });
     frames.push({ file: name, duration: canvas.frameDurations[i] });
   }
 

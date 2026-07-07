@@ -57,7 +57,7 @@ import { composeLayersSvg } from '../export/svg/composeLayersSvg.js';
 import { composeAnimatedSvg } from '../export/svg/animatedSvg.js';
 import { rasterizeFrame } from '../export/raster/rasterizeFrame.js';
 import { buildSpriteSheet } from '../export/raster/spriteSheet.js';
-import { buildSpriteArchive } from '../export/raster/spriteArchive.js';
+import { buildSpriteArchive, buildSpriteArchiveSvg } from '../export/raster/spriteArchive.js';
 import { buildAnimatedGif } from '../export/raster/animatedRaster.js';
 import { copySvgToClipboard } from '../export/clipboard.js';
 import { serializeProject, deserializeProject, saveProjectToString, loadProjectFromString, serializeGlyphSetProject, deserializeGlyphSetProject, saveGlyphProjectToString, loadGlyphProjectFromString } from '../io/projectFile.js';
@@ -884,15 +884,20 @@ export const useStore = create((set, get) => {
      * modal into one flat {name,data,type} file list — mirroring exportFont's
      * shape exactly: more than one resulting file bundles into a single .zip
      * (createZip), a single selected format saves directly. Sprite Sheet's
-     * PNG+JSON and Sprite Archive's per-frame PNGs+JSON are pushed as
+     * PNG+JSON and Sprite Archive's per-frame files+JSON are pushed as
      * separate entries into this same flat list rather than pre-zipped, so
      * e.g. checking Sprite Archive alongside SVG still produces one
-     * combined .zip instead of a zip-within-a-zip.
+     * combined .zip instead of a zip-within-a-zip. Sprite Archive's PNG and
+     * SVG variants are independent flags (spriteArchivePng/spriteArchiveSvg)
+     * since the Export modal lets both be checked at once — their metadata
+     * sidecars are named frames-png.json/frames-svg.json so they never
+     * collide when both are exported together.
      *
      * `size` (already-resolved output pixel dimensions, see rasterSize.js)
-     * is only consulted by the raster-format rows — svg/animatedSvg ignore it.
+     * is only consulted by the raster-format rows — svg/animatedSvg/
+     * spriteArchiveSvg are vector, so they ignore it.
      *
-     * @param {{svg?: boolean, png?: boolean, webp?: boolean, animatedSvg?: boolean, spriteSheet?: boolean, spriteArchive?: boolean, gif?: boolean}} selected
+     * @param {{svg?: boolean, png?: boolean, webp?: boolean, animatedSvg?: boolean, spriteSheet?: boolean, spriteArchivePng?: boolean, spriteArchiveSvg?: boolean, gif?: boolean}} selected
      * @param {{width: number, height: number}} size
      */
     exportDrawAssets: async (selected, size) => {
@@ -920,10 +925,15 @@ export const useStore = create((set, get) => {
         files.push({ name: 'spritesheet.png', data: new Uint8Array(await blob.arrayBuffer()), type: 'image/png' });
         files.push({ name: 'spritesheet.json', data: textEncoder.encode(JSON.stringify(metadata, null, 2)), type: 'application/json' });
       }
-      if (selected.spriteArchive) {
+      if (selected.spriteArchivePng) {
         const { files: archiveFiles, metadata } = await buildSpriteArchive(canvas, size);
         for (const file of archiveFiles) files.push({ ...file, type: 'image/png' });
-        files.push({ name: 'frames.json', data: textEncoder.encode(JSON.stringify(metadata, null, 2)), type: 'application/json' });
+        files.push({ name: 'frames-png.json', data: textEncoder.encode(JSON.stringify(metadata, null, 2)), type: 'application/json' });
+      }
+      if (selected.spriteArchiveSvg) {
+        const { files: archiveFiles, metadata } = buildSpriteArchiveSvg(canvas);
+        for (const file of archiveFiles) files.push({ ...file, type: 'image/svg+xml' });
+        files.push({ name: 'frames-svg.json', data: textEncoder.encode(JSON.stringify(metadata, null, 2)), type: 'application/json' });
       }
       if (selected.gif) {
         const blob = await buildAnimatedGif(canvas, size);
