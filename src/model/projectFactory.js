@@ -20,9 +20,48 @@ export const DEFAULT_PALETTE = [
 ];
 export const DEFAULT_INITIAL_CHARSET_PRESET = 'basic-latin';
 
+// A few starter gradients/styles so the Palette panel isn't empty in those
+// groups on a fresh project — fixed string ids (not Palette.js's makeId()
+// counter) since these are static constants, not runtime-created entries.
+export const DEFAULT_FILLS = [
+  {
+    id: 'default-fill-sunset', type: 'linear-gradient', angle: 90, name: 'Sunset',
+    stops: [{ offset: 0, color: '#FFA300' }, { offset: 0.5, color: '#FF004D' }, { offset: 1, color: '#7E2553' }],
+  },
+  {
+    id: 'default-fill-ocean', type: 'linear-gradient', angle: 90, name: 'Ocean',
+    stops: [{ offset: 0, color: '#83E8FF' }, { offset: 0.5, color: '#29ADFF' }, { offset: 1, color: '#1D2B53' }],
+  },
+  {
+    id: 'default-fill-glow-radial', type: 'radial-gradient', cx: 0.5, cy: 0.5, r: 0.5, name: 'Radial Glow',
+    stops: [{ offset: 0, color: '#FFF1E8' }, { offset: 1, color: '#FFEC27' }],
+  },
+];
+// Every fill here is non-null since applying a style replaces a layer's
+// fill+stroke+effects wholesale (state/store.js's applyPaletteEntryToActiveLayer)
+// — a null fill would clear whatever the user already had.
+export const DEFAULT_STYLES = [
+  {
+    id: 'default-style-outlined', name: 'Outlined', fill: '#FFFFFF',
+    stroke: { color: '#000000', width: 0.15, linejoin: 'round' },
+  },
+  {
+    id: 'default-style-drop-shadow', name: 'Drop Shadow', fill: '#FFFFFF',
+    effects: [{ type: 'drop-shadow', dx: 0.3, dy: 0.3, blur: 0.2, color: '#000000', opacity: 0.6 }],
+  },
+  {
+    id: 'default-style-glow', name: 'Glow', fill: '#FFEC27',
+    effects: [{ type: 'drop-shadow', dx: 0, dy: 0, blur: 0.4, color: '#FFEE88', opacity: 0.9 }],
+  },
+];
+
 /** Creates the initial Canvas for a new Draw-mode project with standard defaults. */
 export function buildDrawDocument() {
-  return createCanvas({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT, palette: DEFAULT_PALETTE });
+  return createCanvas({
+    width: DEFAULT_WIDTH,
+    height: DEFAULT_HEIGHT,
+    palette: { colors: DEFAULT_PALETTE, fills: DEFAULT_FILLS, styles: DEFAULT_STYLES },
+  });
 }
 
 /**

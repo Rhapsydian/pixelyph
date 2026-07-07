@@ -4,6 +4,8 @@ import {
   DEFAULT_WIDTH,
   DEFAULT_HEIGHT,
   DEFAULT_PALETTE,
+  DEFAULT_FILLS,
+  DEFAULT_STYLES,
   DEFAULT_INITIAL_CHARSET_PRESET,
   buildDrawDocument,
   buildGlyphDocument,
@@ -27,6 +29,27 @@ test('buildDrawDocument produces independent canvases each call', () => {
   const b = buildDrawDocument();
   a.palette.colors.push('#ff0000');
   assert.equal(b.palette.colors.length, DEFAULT_PALETTE.length, 'palettes should be independent arrays');
+});
+
+test('buildDrawDocument uses the standard default fills and styles', () => {
+  const canvas = buildDrawDocument();
+  assert.deepEqual(canvas.palette.fills, DEFAULT_FILLS);
+  assert.deepEqual(canvas.palette.styles, DEFAULT_STYLES);
+});
+
+test('buildDrawDocument produces independent fills/styles arrays each call', () => {
+  const a = buildDrawDocument();
+  const b = buildDrawDocument();
+  a.palette.fills.push({ id: 'extra-fill', type: 'linear-gradient' });
+  a.palette.styles.push({ id: 'extra-style', fill: '#123456' });
+  assert.equal(b.palette.fills.length, DEFAULT_FILLS.length, 'fills should be independent arrays');
+  assert.equal(b.palette.styles.length, DEFAULT_STYLES.length, 'styles should be independent arrays');
+});
+
+test('every default style has a non-null fill (applying a style replaces fill+stroke+effects wholesale)', () => {
+  for (const style of DEFAULT_STYLES) {
+    assert.ok(style.fill, `${style.name} should have a non-null fill`);
+  }
 });
 
 // --- buildGlyphDocument ---

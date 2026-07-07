@@ -115,13 +115,13 @@ test('renamePaletteEntry sets a name on a fills entry, undo-tracked', () => {
   const store = useStore.getState();
   store.newProject('draw');
   store.addPaletteFill({ type: 'linear-gradient', angle: 0, stops: [] });
-  const fill = useStore.getState().canvas.palette.fills[0];
+  const fill = useStore.getState().canvas.palette.fills.at(-1);
 
   store.renamePaletteEntry('fills', fill.id, 'Sunset');
-  assert.equal(useStore.getState().canvas.palette.fills[0].name, 'Sunset');
+  assert.equal(useStore.getState().canvas.palette.fills.find((f) => f.id === fill.id).name, 'Sunset');
 
   useStore.getState().undo();
-  assert.equal(useStore.getState().canvas.palette.fills[0].name, undefined);
+  assert.equal(useStore.getState().canvas.palette.fills.find((f) => f.id === fill.id).name, undefined);
 });
 
 test('applyPaletteEntryToActiveLayer: a saved fill (gradient) clones onto the active layer\'s fill, independent of the palette entry afterward', () => {
@@ -131,7 +131,7 @@ test('applyPaletteEntryToActiveLayer: a saved fill (gradient) clones onto the ac
   const layer = useStore.getState().canvas.layers[0];
 
   store.addPaletteFill({ type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] });
-  const fillEntry = useStore.getState().canvas.palette.fills[0];
+  const fillEntry = useStore.getState().canvas.palette.fills.at(-1);
 
   store.applyPaletteEntryToActiveLayer('fills', fillEntry.id);
   const appliedFill = useStore.getState().canvas.layers.find((l) => l.id === layer.id).style.fill;
@@ -150,7 +150,7 @@ test('applyPaletteEntryToActiveLayer: a saved style replaces fill+stroke+effects
   store.updateLayerStyle(layer.id, { fill: '#111111' });
 
   store.addPaletteStyle({ fill: '#abcdef', stroke: { color: '#000000', width: 0.2 }, effects: [{ type: 'blur', stdDeviation: 0.3 }] });
-  const styleEntry = useStore.getState().canvas.palette.styles[0];
+  const styleEntry = useStore.getState().canvas.palette.styles.at(-1);
 
   store.applyPaletteEntryToActiveLayer('styles', styleEntry.id);
   const appliedStyle = useStore.getState().canvas.layers.find((l) => l.id === layer.id).style;

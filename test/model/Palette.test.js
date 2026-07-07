@@ -35,6 +35,18 @@ test('normalizePalette handles a missing/undefined palette', () => {
   assert.deepEqual(normalizePalette(undefined), { colors: [], fills: [], styles: [] });
 });
 
+test('normalizePalette copies fills/styles arrays rather than aliasing the input, so two canvases built from the same input constant stay independent', () => {
+  const sharedFills = [{ id: 'fill-1', type: 'linear-gradient' }];
+  const sharedStyles = [{ id: 'style-1', fill: '#000000' }];
+  const a = normalizePalette({ colors: [], fills: sharedFills, styles: sharedStyles });
+  const b = normalizePalette({ colors: [], fills: sharedFills, styles: sharedStyles });
+  a.fills.push({ id: 'fill-2', type: 'radial-gradient' });
+  a.styles.push({ id: 'style-2', fill: '#ffffff' });
+  assert.equal(b.fills.length, 1, 'mutating a.fills should not affect b.fills');
+  assert.equal(b.styles.length, 1, 'mutating a.styles should not affect b.styles');
+  assert.equal(sharedFills.length, 1, 'mutating a.fills should not affect the original shared input array');
+});
+
 test('addColor dedupes by exact string value', () => {
   const palette = createPalette();
   addColor(palette, '#ff0000');

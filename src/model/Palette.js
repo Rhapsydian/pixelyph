@@ -32,7 +32,11 @@ export function normalizePalette(input) {
   // reordering/clearing one canvas's colors would mutate every other
   // canvas (and the constant itself) sharing that reference.
   if (Array.isArray(input)) return { colors: [...input], fills: [], styles: [] };
-  return { colors: input.colors ?? [], fills: input.fills ?? [], styles: input.styles ?? [] };
+  // Same reasoning as the array branch above — copy fills/styles arrays too,
+  // not just colors, or every canvas built from the same input (e.g.
+  // projectFactory.js's DEFAULT_FILLS/DEFAULT_STYLES constants) would share
+  // one array reference.
+  return { colors: input.colors ?? [], fills: input.fills ? [...input.fills] : [], styles: input.styles ? [...input.styles] : [] };
 }
 
 /**
