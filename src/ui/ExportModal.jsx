@@ -10,7 +10,7 @@
 
 import { useState } from 'react';
 import { useStore } from '../state/store.js';
-import { Modal } from './Modal.jsx';
+import { Modal, ModalActions } from './Modal.jsx';
 import { FontExportPanel } from './glyph/FontExportPanel.jsx';
 import { LockIcon, UnlockIcon } from './icons.jsx';
 import { sizeFromScale, resizeLockedDimension } from '../export/raster/rasterSize.js';
@@ -67,7 +67,7 @@ function AdvancedRasterModal({ canvasWidth, canvasHeight, initialSize, onApply, 
 
   return (
     <Modal title="Raster Export Size" onClose={onClose}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: 260 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, width: 260 }}>
         <div style={{ display: 'flex', gap: 12 }}>
           <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             <input type="radio" checked={mode === 'scale'} onChange={() => setMode('scale')} /> Scale
@@ -86,7 +86,7 @@ function AdvancedRasterModal({ canvasWidth, canvasHeight, initialSize, onApply, 
         )}
 
         {mode === 'resolution' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 Width (px)
@@ -106,10 +106,7 @@ function AdvancedRasterModal({ canvasWidth, canvasHeight, initialSize, onApply, 
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleApply}>Apply</button>
-        </div>
+        <ModalActions onCancel={onClose} onConfirm={handleApply} confirmLabel="Apply" />
       </div>
     </Modal>
   );

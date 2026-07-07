@@ -55,3 +55,27 @@ export function Modal({ title, onClose, children, hidden = false }) {
     </div>
   );
 }
+
+/**
+ * Standard cancel/confirm footer — a horizontal divider separating it from
+ * the rest of the modal's content, cancel on the left, confirm on the right.
+ * `alignSelf: 'stretch'` so it spans the modal's full width even when the
+ * modal's own content column is centered (see AdvancedRasterModal).
+ */
+export function ModalActions({ onCancel, onConfirm, cancelLabel = 'Cancel', confirmLabel = 'Confirm', confirmDisabled = false }) {
+  return (
+    <div
+      style={{
+        alignSelf: 'stretch',
+        display: 'flex',
+        justifyContent: 'space-between',
+        gap: 8,
+        borderTop: '1px solid var(--chrome-border)',
+        paddingTop: 10,
+      }}
+    >
+      <button className="btn" onClick={onCancel}>{cancelLabel}</button>
+      <button className="btn btn-primary" onClick={onConfirm} disabled={confirmDisabled}>{confirmLabel}</button>
+    </div>
+  );
+}
