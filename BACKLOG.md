@@ -9,15 +9,19 @@ blocking issue is fixed); and open ideas flagged for later discussion
 rather than acted on immediately. Review this list once all
 currently-planned phases are complete.
 
-## IN PROGRESS: Layer/Frame/Grid model redesign — Session 0 done, Session 1 next
+## IN PROGRESS: Layer/Frame/Grid model redesign — Sessions 0-2 done, Session 3 next
 
 **This is the next `/dev-session` for this project.** Check out (or
 confirm you're already on) the `layer-frame-grid-redesign` branch —
 **not** `main` — before doing anything else, then kick off straight into
-implementing Session 1 (Model layer, below) rather than asking what to
-work on. The scope is fully specified in `docs/data-model.md`; there's
-nothing left to discuss in plan-mode kickoff beyond confirming the user's
-ready to start Session 1.
+implementing Session 3 (UI, below) rather than asking what to work on. The
+scope is fully specified in `docs/data-model.md`'s section 4 (wireframes);
+there's nothing left to discuss in plan-mode kickoff beyond confirming the
+user's ready to start Session 3. Note that `state/store.js` isn't named in
+the phase breakdown below but will very likely need real changes too —
+it's the glue between the UI and `Canvas.js`, and already has 4 tests
+skipped from Session 1 (`test/state/store.test.js`) because it directly
+touches the retired `simpleTier`/`layer.style`/`layer.offset` fields.
 
 **Branch:** `layer-frame-grid-redesign` (pushed to remote). This migration
 spans several sessions and leaves the app genuinely broken partway through
@@ -59,27 +63,45 @@ entry's note.
 
 **Phase breakdown:**
 - **Session 0 — Design. Done.** Spec written to `docs/data-model.md`.
-- **Session 1 — Model layer.** `Grid` becomes first-class (building on
-  the existing `Grid.js` primitive). `Layer.style` moves to `Grid.style`.
-  `Canvas.js`'s paint/resize/frame/merge functions, `autoLayerSync.js`
-  (gets simpler — one layer, not many), `selection.js`, and `GlyphSet.js`'s
-  `canvasToGlyphPixels` (Glyph mode rides on this Canvas shape too — see
-  `docs/data-model.md`'s "Glyph mode" section) all get rewritten against
-  the new shape. `projectFile.js` gets a real version-3
-  migration (loading old v1/v2 saves into the new shape). **Next session.**
-- **Session 2 — Export/compose.** `composeLayersSvg.js` and the three
-  animated-export files (`animatedSvg.js`, `spriteSheet.js`,
-  `animatedRaster.js`, `spriteArchive.js`) need to iterate
-  `layers -> frames -> grids` and composite per-grid style instead of
-  per-layer style.
-- **Session 3 — UI.** `LayersPanel.jsx` needs to show/manage a layer's
-  shape(s) per `docs/data-model.md` section 4's wireframes; style panel
-  retargets to the active shape.
-- **Session 4 — Tests + hardening.** Rewrite the ~7 test files that
-  reference the old `Layer.frames`/`Canvas.layers` shape directly
-  (heaviest: `test/model/Canvas.test.js`), plus new coverage for the
-  sparsity behavior itself. Merge `layer-frame-grid-redesign` to `main`
-  once this passes clean.
+- **Session 1 — Model layer. Done.** `Grid` is now first-class; `Layer`
+  shrank to pure identity (`{id,name,locked,opacity,frames}`), style moved
+  to `Grid.style`. `Canvas.js`'s paint/resize/frame/merge functions,
+  `autoLayerSync.js` (collapsed to one style-scanned layer),
+  `selection.js`, and `GlyphSet.js`'s `canvasToGlyphPixels` all rewritten
+  against the new shape. `projectFile.js` got a real version-3 migration
+  (v1/v2 saves crop each frame to a Grid; Simple-tier saves collapse their
+  per-color auto-layers into one Layer). Test suite: 300/300 passing ->
+  290 passing / 63 skipped (old-shape assertions, tagged by which future
+  session unblocks them) / 0 failing.
+- **Session 2 — Export/compose. Done.** Turned out to be a single-function
+  fix: only `composeLayersSvg.js`'s `composeLayersBody` actually read
+  layer/frame pixel data — `animatedSvg.js`/`spriteSheet.js`/
+  `animatedRaster.js`/`spriteArchive.js` all only ever call
+  `composeFrameBody`, so they needed zero source changes once
+  `composeLayersBody` was rewritten to iterate `layers -> frame.grids ->
+  each grid`. The layer-level `<g id="layer-{slug}">` (a documented,
+  already-shipped feature — see "Draw mode" in `README.md`) is preserved
+  keyed on layer name, now wrapping one `<path>` per shape instead of
+  exactly one; gradient/filter def ids moved from `grad-${layer.id}` to
+  `grad-${grid.id}`. Test suite: 313 passing / 44 skipped / 0 failing.
+- **Session 3 — UI. Next session.** `LayersPanel.jsx` needs to show/manage
+  a layer's shape(s) per `docs/data-model.md` section 4's wireframes; style
+  panel retargets to the active shape; `GridOverlay.jsx`/
+  `SvgPixelEditor.jsx` swap their offset source from `layer.offset` to the
+  active grid's `offsetX`/`offsetY`. `state/store.js` isn't named in the
+  original spec but will need real changes (see the note above this
+  breakdown) — new shape actions (add/move/duplicate/merge/delete/rename/
+  set-visibility-lock-opacity), and its existing style-mutation actions
+  retargeted from layer to shape. This is the session where the app
+  becomes interactive again, so real browser verification applies (unlike
+  Sessions 1-2, which relied on the test suite alone since the app was
+  non-functional end-to-end either way).
+- **Session 4 — Tests + hardening.** Rewrite the ~10 test files (grew from
+  ~7 once Sessions 1-2's actual skip list came in) that reference the old
+  shape directly or exercise not-yet-rewritten code (heaviest:
+  `test/model/Canvas.test.js`), plus new coverage for the sparsity
+  behavior itself. Merge `layer-frame-grid-redesign` to `main` once this
+  passes clean.
 
 ## WOFF2 font export — disabled, times out in real browsers
 
