@@ -12,9 +12,9 @@
 // Simple tier only ever shows the Colors group (nothing else has anything
 // to apply to in simple tier — a layer's color there is auto-managed per
 // paint color, not a per-layer style). Advanced tier shows all three;
-// clicking any swatch applies it to the active layer (colors set a solid
+// clicking any swatch applies it to the active shape (colors set a solid
 // fill, gradients clone into the fill, styles replace fill+stroke+effects
-// wholesale) via `applyPaletteEntryToActiveLayer`.
+// wholesale) via `applyPaletteEntryToActiveGrid`.
 
 import { useState } from 'react';
 import { useStore } from '../../state/store.js';
@@ -54,12 +54,12 @@ function ColorsGroup({ tier }) {
   const setActiveColor = useStore((s) => s.setActiveColor);
   const addPaletteColor = useStore((s) => s.addPaletteColor);
   const removePaletteEntry = useStore((s) => s.removePaletteEntry);
-  const applyPaletteEntryToActiveLayer = useStore((s) => s.applyPaletteEntryToActiveLayer);
+  const applyPaletteEntryToActiveGrid = useStore((s) => s.applyPaletteEntryToActiveGrid);
   const [draftColor, setDraftColor] = useState('#000000');
 
   function selectColor(color) {
     setActiveColor(color);
-    if (tier === 'advanced') applyPaletteEntryToActiveLayer('colors', color);
+    if (tier === 'advanced') applyPaletteEntryToActiveGrid('colors', color);
   }
 
   function confirmDelete(color) {
@@ -110,7 +110,7 @@ function FillsGroup() {
   const fills = useStore((s) => s.canvas.palette.fills);
   const addPaletteFill = useStore((s) => s.addPaletteFill);
   const removePaletteEntry = useStore((s) => s.removePaletteEntry);
-  const applyPaletteEntryToActiveLayer = useStore((s) => s.applyPaletteEntryToActiveLayer);
+  const applyPaletteEntryToActiveGrid = useStore((s) => s.applyPaletteEntryToActiveGrid);
   const [selected, setSelected] = useState(null);
   const [draftGradient, setDraftGradient] = useState(null); // non-null while the "add" modal is open
 
@@ -138,7 +138,7 @@ function FillsGroup() {
             title={entry.name || entry.type}
             onClick={() => {
               setSelected(entry.id);
-              applyPaletteEntryToActiveLayer('fills', entry.id);
+              applyPaletteEntryToActiveGrid('fills', entry.id);
             }}
             onContextMenu={(e) => {
               e.preventDefault();
@@ -162,7 +162,7 @@ function FillsGroup() {
 function StylesGroup() {
   const styles = useStore((s) => s.canvas.palette.styles);
   const removePaletteEntry = useStore((s) => s.removePaletteEntry);
-  const applyPaletteEntryToActiveLayer = useStore((s) => s.applyPaletteEntryToActiveLayer);
+  const applyPaletteEntryToActiveGrid = useStore((s) => s.applyPaletteEntryToActiveGrid);
   const [selected, setSelected] = useState(null);
 
   function confirmDelete(entry) {
@@ -180,7 +180,7 @@ function StylesGroup() {
             title={entry.name || `Saved style${entry.stroke ? ' (with stroke)' : ''}${entry.effects?.length ? `, ${entry.effects.length} effect(s)` : ''}`}
             onClick={() => {
               setSelected(entry.id);
-              applyPaletteEntryToActiveLayer('styles', entry.id);
+              applyPaletteEntryToActiveGrid('styles', entry.id);
             }}
             onContextMenu={(e) => {
               e.preventDefault();

@@ -11,7 +11,7 @@
 // UI) is the actual styled, auto-cropped pixel content, one or more per
 // layer per frame.
 
-import { resizeAt, anchorOffset, ANCHOR_X_FRACS, ANCHOR_Y_FRACS, get, set, createShapeGrid, growGridToInclude, shrinkGridToFit, mergeGridDown, stylesEqual, makeGridId } from './Grid.js';
+import { resizeAt, anchorOffset, ANCHOR_X_FRACS, ANCHOR_Y_FRACS, get, set, createShapeGrid, growGridToInclude, shrinkGridToFit, mergeGridDown as mergeGridInFrame, stylesEqual, makeGridId } from './Grid.js';
 import { paintSimpleCell } from './autoLayerSync.js';
 import { createLayer } from './Layer.js';
 import { normalizePalette } from './Palette.js';
@@ -95,7 +95,7 @@ export function createCanvas({ width, height, palette = [] }) {
 }
 
 /** @returns {number} the frame index every paint/read operation should target — clamps defensively in case activeFrame ever drifts out of range (e.g. an older saved project). */
-function currentFrameIndex(canvas) {
+export function currentFrameIndex(canvas) {
   return Math.max(0, Math.min(canvas.activeFrame ?? 0, canvas.frameCount - 1));
 }
 
@@ -311,8 +311,120 @@ export function mergeLayerDown(canvas, layerId) {
   refreshActiveGrid(canvas);
 }
 
-/** Re-export of Grid.js's shape-merge, so callers only need one import for "merge" regardless of which kind. */
-export { mergeGridDown };
+/**
+ * Adds a new 1x1 Grid (Shape) to `layerId`'s current frame and makes it the
+ * active shape — the "+ Add Shape" toolbar action (see docs/data-model.md
+ * section 4). Distinct from paintCell's own "first paint allocates a Grid"
+ * path: this is an explicit "start a new shape" action, for when the active
+ * layer's current frame already has a shape and painting would just grow it
+ * instead of starting a separate one.
+ *
+ * @param {object} canvas
+ * @param {string} layerId
+ * @param {{ name?: string, style?: object }} [options]
+ * @returns {object|null} the new Grid, or null if `layerId` doesn't exist
+ */
+export function addGrid(canvas, layerId, { name, style } = {}) {
+  const layer = canvas.layers.find((l) => l.id === layerId);
+  if (!layer) return null;
+  const frame = layer.frames[currentFrameIndex(canvas)];
+  const grid = createShapeGrid({
+    name: name ?? `Shape ${frame.grids.length + 1}`,
+    offsetX: Math.floor(canvas.width / 2),
+    offsetY: Math.floor(canvas.height / 2),
+    style: style ?? { fill: '#808080', effects: [] },
+  });
+  frame.grids.push(grid);
+  canvas.activeLayerId = layerId;
+  canvas.activeGridId = grid.id;
+  return grid;
+}
+
+/**
+ * Removes a shape from `layerId`'s current frame and re-clamps
+ * `activeGridId` to the frame's first remaining shape, or null if none are
+ * left.
+ *
+ * @param {object} canvas
+ * @param {string} layerId
+ * @param {string} gridId
+ */
+export function removeGrid(canvas, layerId, gridId) {
+  const layer = canvas.layers.find((l) => l.id === layerId);
+  if (!layer) return;
+  const frame = layer.frames[currentFrameIndex(canvas)];
+  frame.grids = frame.grids.filter((g) => g.id !== gridId);
+  if (canvas.activeGridId === gridId) canvas.activeGridId = frame.grids[0]?.id ?? null;
+}
+
+/**
+ * Swaps a shape with its neighbor one step towards the front (+1) or back
+ * (-1) of `layerId`'s current-frame shape list (`frame.grids` is
+ * back-to-front, matching `canvas.layers`'s own convention). No-ops at
+ * either end.
+ *
+ * @param {object} canvas
+ * @param {string} layerId
+ * @param {string} gridId
+ * @param {1|-1} direction
+ */
+export function reorderGrid(canvas, layerId, gridId, direction) {
+  const layer = canvas.layers.find((l) => l.id === layerId);
+  if (!layer) return;
+  const frame = layer.frames[currentFrameIndex(canvas)];
+  const i = frame.grids.findIndex((g) => g.id === gridId);
+  const j = i + direction;
+  if (i < 0 || j < 0 || j >= frame.grids.length) return;
+  const grids = frame.grids.slice();
+  [grids[i], grids[j]] = [grids[j], grids[i]];
+  frame.grids = grids;
+}
+
+/**
+ * Duplicates a shape within `layerId`'s current frame, inserting the copy
+ * directly above the original and making it active. The copy gets a fresh
+ * id — same "genuinely new, separate identity" convention as
+ * duplicateLayer, not duplicateFrame's id-preserving one.
+ *
+ * @param {object} canvas
+ * @param {string} layerId
+ * @param {string} gridId
+ * @returns {object|null} the new Grid, or null if `layerId`/`gridId` don't exist
+ */
+export function duplicateGrid(canvas, layerId, gridId) {
+  const layer = canvas.layers.find((l) => l.id === layerId);
+  if (!layer) return null;
+  const frame = layer.frames[currentFrameIndex(canvas)];
+  const index = frame.grids.findIndex((g) => g.id === gridId);
+  if (index < 0) return null;
+  const original = frame.grids[index];
+  const copy = { ...original, id: makeGridId(), pixels: original.pixels.slice(), style: cloneLayerStyle(original.style) };
+  frame.grids = [...frame.grids.slice(0, index + 1), copy, ...frame.grids.slice(index + 1)];
+  canvas.activeLayerId = layerId;
+  canvas.activeGridId = copy.id;
+  return copy;
+}
+
+/**
+ * Merges a shape into the one directly below it in `layerId`'s current
+ * frame (Grid.js's `mergeGridDown` primitive, re-scoped here to resolve the
+ * layer/frame from ids like every other canvas-level action does) and lands
+ * `activeGridId` on the surviving (bottom) shape.
+ *
+ * @param {object} canvas
+ * @param {string} layerId
+ * @param {string} gridId the *top* shape of the pair being merged
+ */
+export function mergeGridDown(canvas, layerId, gridId) {
+  const layer = canvas.layers.find((l) => l.id === layerId);
+  if (!layer) return;
+  const frame = layer.frames[currentFrameIndex(canvas)];
+  const index = frame.grids.findIndex((g) => g.id === gridId);
+  if (index <= 0) return;
+  const bottom = frame.grids[index - 1];
+  mergeGridInFrame(frame, gridId);
+  canvas.activeGridId = bottom.id;
+}
 
 /**
  * Clears one cell from a specific layer's own current-frame shapes,
@@ -364,7 +476,7 @@ export function clampActiveLayer(canvas) {
  *
  * @param {object} canvas
  */
-function refreshActiveGrid(canvas) {
+export function refreshActiveGrid(canvas) {
   const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
   canvas.activeGridId = resolveActiveGrid(layer, currentFrameIndex(canvas), null);
 }

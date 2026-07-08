@@ -24,6 +24,13 @@ import {
   reorderLayer as reorderLayerModel,
   duplicateLayer as duplicateLayerModel,
   mergeLayerDown as mergeLayerDownModel,
+  addGrid as addGridModel,
+  removeGrid as removeGridModel,
+  reorderGrid as reorderGridModel,
+  duplicateGrid as duplicateGridModel,
+  mergeGridDown as mergeGridDownModel,
+  currentFrameIndex,
+  refreshActiveGrid as refreshActiveGridModel,
   clampActiveLayer,
   topVisibleLayerAt,
   convertTier as convertTierModel,
@@ -100,14 +107,12 @@ function applyContentSnapshot(canvas, snapshot) {
   canvas.tier = snapshot.tier;
   canvas.frameCount = snapshot.frameCount;
   canvas.frameDurations = snapshot.frameDurations;
-  // simpleTier.colorToLayerId is bookkeeping, not artwork — rebuild it from
-  // the restored layers so it can't fall out of sync with what undo/redo just restored.
-  canvas.simpleTier.colorToLayerId = new Map(canvas.layers.filter((l) => l.autoManaged).map((l) => [l.autoColor, l.id]));
-  // activeLayerId/activeFrame are excluded from snapshots (working-session
-  // concerns, not artwork), so a restored `layers` array might no longer
-  // contain/fit them.
+  // activeLayerId/activeFrame/activeGridId are excluded from snapshots
+  // (working-session concerns, not artwork), so a restored `layers` array
+  // might no longer contain/fit them.
   clampActiveLayer(canvas);
   canvas.activeFrame = Math.max(0, Math.min(canvas.activeFrame, canvas.frameCount - 1));
+  refreshActiveGridModel(canvas);
 }
 
 function glyphContentSnapshot(glyphSet) {
@@ -287,9 +292,11 @@ export const useStore = create((set, get) => {
       return colorAt(canvas, x, y);
     },
 
-    // --- Advanced tier: layers panel + per-layer style ---
+    // --- Advanced tier: layers panel + per-layer/per-shape style ---
     setActiveLayerId: (layerId) => {
-      get().canvas.activeLayerId = layerId;
+      const { canvas } = get();
+      canvas.activeLayerId = layerId;
+      refreshActiveGridModel(canvas);
       touchCanvas();
     },
     /** Advanced-tier eyedropper: activates the topmost layer at (x, y). */
@@ -298,6 +305,14 @@ export const useStore = create((set, get) => {
       const layer = topVisibleLayerAt(canvas, x, y);
       if (!layer) return;
       canvas.activeLayerId = layer.id;
+      refreshActiveGridModel(canvas);
+      touchCanvas();
+    },
+    /** Explicit shape selection (Layers panel row click) — sets both fields directly, deliberately bypassing resolveActiveGrid's sticky-selection heuristic, which only applies to automatic frame/layer-switch resolution. */
+    setActiveGridId: (layerId, gridId) => {
+      const { canvas } = get();
+      canvas.activeLayerId = layerId;
+      canvas.activeGridId = gridId;
       touchCanvas();
     },
     addLayer: () => {
@@ -320,10 +335,33 @@ export const useStore = create((set, get) => {
       mergeLayerDownModel(get().canvas, layerId);
       commit();
     },
-    setLayerOffset: (layerId, x, y) => {
-      const layer = get().canvas.layers.find((l) => l.id === layerId);
-      if (!layer) return;
-      layer.offset = { x, y };
+    // --- Advanced tier: per-layer shapes ("Shape" in the UI, Grid in code — see docs/data-model.md) ---
+    addGrid: (layerId) => {
+      addGridModel(get().canvas, layerId, { style: { fill: get().activeColor, effects: [] } });
+      commit();
+    },
+    removeGrid: (layerId, gridId) => {
+      removeGridModel(get().canvas, layerId, gridId);
+      commit();
+    },
+    reorderGrid: (layerId, gridId, direction) => {
+      reorderGridModel(get().canvas, layerId, gridId, direction);
+      commit();
+    },
+    duplicateGrid: (layerId, gridId) => {
+      duplicateGridModel(get().canvas, layerId, gridId);
+      commit();
+    },
+    mergeGridDown: (layerId, gridId) => {
+      mergeGridDownModel(get().canvas, layerId, gridId);
+      commit();
+    },
+    setGridProps: (layerId, gridId, patch) => {
+      const canvas = get().canvas;
+      const layer = canvas.layers.find((l) => l.id === layerId);
+      const grid = layer?.frames[currentFrameIndex(canvas)]?.grids.find((g) => g.id === gridId);
+      if (!grid) return;
+      Object.assign(grid, patch);
       commit();
     },
     setLayerProps: (layerId, patch) => {
@@ -337,10 +375,12 @@ export const useStore = create((set, get) => {
       setLayerFrameVisibilityModel(get().canvas, layerId, get().canvas.activeFrame, visible);
       commit();
     },
-    updateLayerStyle: (layerId, patch) => {
-      const layer = get().canvas.layers.find((l) => l.id === layerId);
-      if (!layer) return;
-      layer.style = { ...layer.style, ...patch };
+    updateGridStyle: (layerId, gridId, patch) => {
+      const canvas = get().canvas;
+      const layer = canvas.layers.find((l) => l.id === layerId);
+      const grid = layer?.frames[currentFrameIndex(canvas)]?.grids.find((g) => g.id === gridId);
+      if (!grid) return;
+      grid.style = { ...grid.style, ...patch };
       commit();
     },
     setTier: (newTier) => {
@@ -482,22 +522,23 @@ export const useStore = create((set, get) => {
       clearPaletteGroupModel(get().canvas.palette, group);
       commit();
     },
-    /** Advanced tier only: applies a palette entry to the active layer — colors set `fill` to that color, fills clone their gradient/pattern value into `fill`, styles replace fill+stroke+effects wholesale. */
-    applyPaletteEntryToActiveLayer: (group, key) => {
+    /** Advanced tier only: applies a palette entry to the active shape — colors set `fill` to that color, fills clone their gradient/pattern value into `fill`, styles replace fill+stroke+effects wholesale. */
+    applyPaletteEntryToActiveGrid: (group, key) => {
       const { canvas } = get();
       const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
-      if (!layer) return;
+      const grid = layer?.frames[currentFrameIndex(canvas)]?.grids.find((g) => g.id === canvas.activeGridId);
+      if (!grid) return;
       if (group === 'colors') {
-        layer.style = { ...layer.style, fill: key };
+        grid.style = { ...grid.style, fill: key };
       } else if (group === 'fills') {
         const entry = canvas.palette.fills.find((f) => f.id === key);
         if (!entry) return;
         const { id, ...fillValue } = entry;
-        layer.style = { ...layer.style, fill: cloneFillValue(fillValue) };
+        grid.style = { ...grid.style, fill: cloneFillValue(fillValue) };
       } else if (group === 'styles') {
         const entry = canvas.palette.styles.find((s) => s.id === key);
         if (!entry) return;
-        layer.style = cloneLayerStyle(entry);
+        grid.style = cloneLayerStyle(entry);
       } else {
         return;
       }

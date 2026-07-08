@@ -37,8 +37,8 @@ export const DEFAULT_FILLS = [
     stops: [{ offset: 0, color: '#FFF1E8' }, { offset: 1, color: '#FFEC27' }],
   },
 ];
-// Every fill here is non-null since applying a style replaces a layer's
-// fill+stroke+effects wholesale (state/store.js's applyPaletteEntryToActiveLayer)
+// Every fill here is non-null since applying a style replaces a shape's
+// fill+stroke+effects wholesale (state/store.js's applyPaletteEntryToActiveGrid)
 // — a null fill would clear whatever the user already had.
 export const DEFAULT_STYLES = [
   {

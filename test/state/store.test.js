@@ -89,11 +89,7 @@ test('cross-glyph copy-paste: selecting in glyph A, switching to glyph B, and pa
   assert.ok(columnIsFilled(glyphB, 5), "glyph B received the pasted stem (centered paste at x=floor((12-1)/2)=5)");
 });
 
-// Session 3: store.js's applyContentSnapshot still writes
-// canvas.simpleTier.colorToLayerId directly, a field retired in the
-// Layer/Frame/Grid redesign (see BACKLOG.md) — store.js itself isn't
-// rewritten until the UI/store-wiring session.
-test.skip('palette actions (add/remove/reorder/clear) are undo-tracked, same as any other structural edit', () => {
+test('palette actions (add/remove/reorder/clear) are undo-tracked, same as any other structural edit', () => {
   const store = useStore.getState();
   store.newProject('draw');
   store.clearPaletteGroup('colors'); // newProject seeds the standard default palette; start from a known-empty state
@@ -115,8 +111,7 @@ test.skip('palette actions (add/remove/reorder/clear) are undo-tracked, same as 
   assert.deepEqual(useStore.getState().canvas.palette.colors, []);
 });
 
-// Session 3: see the comment on the palette-actions test above.
-test.skip('renamePaletteEntry sets a name on a fills entry, undo-tracked', () => {
+test('renamePaletteEntry sets a name on a fills entry, undo-tracked', () => {
   const store = useStore.getState();
   store.newProject('draw');
   store.addPaletteFill({ type: 'linear-gradient', angle: 0, stops: [] });
@@ -129,17 +124,19 @@ test.skip('renamePaletteEntry sets a name on a fills entry, undo-tracked', () =>
   assert.equal(useStore.getState().canvas.palette.fills.find((f) => f.id === fill.id).name, undefined);
 });
 
-test('applyPaletteEntryToActiveLayer: a saved fill (gradient) clones onto the active layer\'s fill, independent of the palette entry afterward', () => {
+test('applyPaletteEntryToActiveGrid: a saved fill (gradient) clones onto the active shape\'s fill, independent of the palette entry afterward', () => {
   const store = useStore.getState();
   store.newProject('draw');
   store.setTier('advanced');
   const layer = useStore.getState().canvas.layers[0];
+  store.addGrid(layer.id);
+  const gridId = useStore.getState().canvas.activeGridId;
 
   store.addPaletteFill({ type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] });
   const fillEntry = useStore.getState().canvas.palette.fills.at(-1);
 
-  store.applyPaletteEntryToActiveLayer('fills', fillEntry.id);
-  const appliedFill = useStore.getState().canvas.layers.find((l) => l.id === layer.id).style.fill;
+  store.applyPaletteEntryToActiveGrid('fills', fillEntry.id);
+  const appliedFill = useStore.getState().canvas.layers.find((l) => l.id === layer.id).frames[0].grids.find((g) => g.id === gridId).style.fill;
   assert.equal(appliedFill.type, 'linear-gradient');
   assert.equal(appliedFill.stops.length, 2);
 
@@ -147,36 +144,40 @@ test('applyPaletteEntryToActiveLayer: a saved fill (gradient) clones onto the ac
   assert.equal(fillEntry.stops.length, 2, 'mutating the applied fill must not affect the palette entry it came from');
 });
 
-test('applyPaletteEntryToActiveLayer: a saved style replaces fill+stroke+effects wholesale', () => {
+test('applyPaletteEntryToActiveGrid: a saved style replaces fill+stroke+effects wholesale', () => {
   const store = useStore.getState();
   store.newProject('draw');
   store.setTier('advanced');
   const layer = useStore.getState().canvas.layers[0];
-  store.updateLayerStyle(layer.id, { fill: '#111111' });
+  store.addGrid(layer.id);
+  const gridId = useStore.getState().canvas.activeGridId;
+  store.updateGridStyle(layer.id, gridId, { fill: '#111111' });
 
   store.addPaletteStyle({ fill: '#abcdef', stroke: { color: '#000000', width: 0.2 }, effects: [{ type: 'blur', stdDeviation: 0.3 }] });
   const styleEntry = useStore.getState().canvas.palette.styles.at(-1);
 
-  store.applyPaletteEntryToActiveLayer('styles', styleEntry.id);
-  const appliedStyle = useStore.getState().canvas.layers.find((l) => l.id === layer.id).style;
+  store.applyPaletteEntryToActiveGrid('styles', styleEntry.id);
+  const appliedStyle = useStore.getState().canvas.layers.find((l) => l.id === layer.id).frames[0].grids.find((g) => g.id === gridId).style;
   assert.equal(appliedStyle.fill, '#abcdef');
   assert.equal(appliedStyle.stroke.width, 0.2);
   assert.equal(appliedStyle.effects.length, 1);
 });
 
-test('applyPaletteEntryToActiveLayer: every default palette style (projectFactory.js\'s DEFAULT_STYLES) applies without throwing', () => {
+test('applyPaletteEntryToActiveGrid: every default palette style (projectFactory.js\'s DEFAULT_STYLES) applies without throwing', () => {
   // Regression test: DEFAULT_STYLES's "Outlined" entry originally omitted
   // `effects`, which cloneLayerStyle (Canvas.js) requires as an array (it
   // calls .map() on it unconditionally) — applying that style silently threw
-  // and never reached the layer at all.
+  // and never reached the shape at all.
   const store = useStore.getState();
   store.newProject('draw');
   store.setTier('advanced');
   const layer = useStore.getState().canvas.layers[0];
+  store.addGrid(layer.id);
+  const gridId = useStore.getState().canvas.activeGridId;
 
   for (const styleEntry of useStore.getState().canvas.palette.styles) {
-    assert.doesNotThrow(() => store.applyPaletteEntryToActiveLayer('styles', styleEntry.id));
-    const appliedStyle = useStore.getState().canvas.layers.find((l) => l.id === layer.id).style;
+    assert.doesNotThrow(() => store.applyPaletteEntryToActiveGrid('styles', styleEntry.id));
+    const appliedStyle = useStore.getState().canvas.layers.find((l) => l.id === layer.id).frames[0].grids.find((g) => g.id === gridId).style;
     assert.equal(appliedStyle.fill, styleEntry.fill, `${styleEntry.name} should actually apply its fill`);
   }
 });
@@ -208,8 +209,7 @@ test('importPixelyphPalette returns false and leaves the palette untouched for i
   assert.equal(useStore.getState().canvas.palette, before, 'palette reference is unchanged on a failed import');
 });
 
-// Session 3: see the comment on the palette-actions test above.
-test.skip('addFrame/duplicateFrame/removeFrame are undo-tracked; setActiveFrame is a working-session pointer move that isn\'t', () => {
+test('addFrame/duplicateFrame/removeFrame are undo-tracked; setActiveFrame is a working-session pointer move that isn\'t', () => {
   const store = useStore.getState();
   store.newProject('draw');
   useStore.getState().paintCellLive(0, 0, '#ff0000');
@@ -239,8 +239,7 @@ test.skip('addFrame/duplicateFrame/removeFrame are undo-tracked; setActiveFrame 
   assert.equal(useStore.getState().canvas.frameCount, 1);
 });
 
-// Session 3: see the comment on the palette-actions test above.
-test.skip('setFrameDuration is undo-tracked, like any other structural edit', () => {
+test('setFrameDuration is undo-tracked, like any other structural edit', () => {
   const store = useStore.getState();
   store.newProject('draw');
   store.addFrame();
