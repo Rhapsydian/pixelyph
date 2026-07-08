@@ -9,9 +9,9 @@
 // single-color, single-layer 'simple'-tier Canvas (palette ['#000000']),
 // so the exact same SvgPixelEditor/tools/paintCell code that already
 // exists for Draw mode edits it — "layers/style/effects turned off" falls
-// out for free from there only ever being at most one plain black
-// auto-layer. canvasToGlyphPixels reads the result back out once a stroke
-// commits; see state/store.js's glyph-mode commit path.
+// out for free from there only ever being at most one Grid (Shape) in that
+// one layer's one frame. canvasToGlyphPixels reads the result back out once
+// a stroke commits; see state/store.js's glyph-mode commit path.
 
 import { createCanvas, paintCell as paintCanvasCell } from './Canvas.js';
 import { resize as resizeGrid } from './Grid.js';
@@ -150,13 +150,27 @@ export function glyphToCanvas(glyph) {
 
 /**
  * Reads the composited black pixels back out of a glyphToCanvas result — a
- * single-color palette means at most one auto-managed layer ever exists, so
- * this is just "that layer's grid, or all-zero if painting emptied it out."
+ * single-color palette means at most one Grid (Shape) ever exists, in the
+ * one layer's one frame, so this is just "that Grid's pixels, or all-zero if
+ * painting emptied it out." The Grid is auto-cropped to its own minimal
+ * bounding box (see docs/data-model.md), so its buffer has to be expanded
+ * back out into a full `canvas.width x canvas.height` array at its own
+ * `(offsetX, offsetY)` — the inverse of growGridToInclude.
  *
  * @param {object} canvas
  * @returns {Uint8Array}
  */
 export function canvasToGlyphPixels(canvas) {
   const layer = canvas.layers[0];
-  return layer ? layer.frames[0].pixels.slice() : new Uint8Array(canvas.width * canvas.height);
+  const grid = layer?.frames[0]?.grids[0];
+  const pixels = new Uint8Array(canvas.width * canvas.height);
+  if (!grid) return pixels;
+  for (let y = 0; y < grid.height; y++) {
+    for (let x = 0; x < grid.width; x++) {
+      if (grid.pixels[y * grid.width + x]) {
+        pixels[(grid.offsetY + y) * canvas.width + (grid.offsetX + x)] = 1;
+      }
+    }
+  }
+  return pixels;
 }
