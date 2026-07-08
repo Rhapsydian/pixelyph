@@ -9,6 +9,123 @@ blocking issue is fixed); and open ideas flagged for later discussion
 rather than acted on immediately. Review this list once all
 currently-planned phases are complete.
 
+## NEXT SESSION: Layer/Frame/Grid model redesign — scoped, ready for Session 0
+
+**This is the next `/dev-session` for this project.** Kick off straight into
+a plan-mode design pass (Session 0 below) rather than asking what to work on
+— the scope below is already agreed with the user across a full discussion;
+what's left is turning it into a concrete implementation plan.
+
+**Why:** started from two small questions ("why is a 16x16 save's `pixels`
+string 344 characters" and "how do vector animation apps handle layer/frame
+ownership") that exposed a real design gap: Pixelyph has been conflating
+"layer" (a persistent, styled entity) with "shape" (the actual pixel
+content), which is why Simple tier has to create a whole new `Layer` —
+with a dense `Frame` entry pre-allocated for *every* frame in the
+animation — the first time any color is used anywhere, even if that color
+only ever appears in 1 of 16 frames. Surveyed how real animation tools
+handle this (Adobe Animate/Flash, Aseprite, After Effects/Lottie, Rive):
+none of them invert the layer/frame nesting, and all of them keep a layer
+as the persistent identity while making per-frame content sparse/optional
+instead. Talking that through led to a cleaner reframe: separate "layer"
+(a collection/identity, no style of its own) from "grid" (the actual
+styled shape, closer to a vector-editor object) — see below.
+
+**Confirmed data model** (agreed with the user; do not re-litigate these
+without a specific reason — they were each a deliberate call):
+
+```
+Canvas
+ └─ Layer[]           persistent identity: name, locked, opacity, z-order — pure collection, no style, no offset
+     └─ Frame[]        same count/order across every layer (unchanged from today)
+         └─ Grid[]     independent per frame (no cross-frame identity) — each Grid:
+                        { offsetX, offsetY, width, height, pixels, style }
+```
+
+- **Grids have no cross-frame identity** — each frame's `grids` array is
+  independent content, like today's per-frame `pixels` copies.
+  `duplicateFrame` just deep-copies the array; no id tracking needed.
+- **Simple tier becomes exactly one `Layer`, always** — not one auto-layer
+  per color like today. That single layer's each-frame `grids` list holds
+  one Grid per color *currently used in that frame*, found by scanning that
+  frame's (short) grid list for a matching `style` — no persistent
+  `colorToLayerId`-style map needed. This is simpler than today's
+  `autoLayerSync.js`, not more complex.
+- **Active-grid paint model** (the one place Pixelyph does something
+  genuinely its own): there's always an "active grid" being edited, like
+  today's `activeLayerId` but pointing at a specific grid within a
+  layer+frame. Simple tier's paint op: turn the cell off in whichever grid
+  currently owns it (if a different color), turn it on in the target
+  color's grid (creating one in this frame if none exists yet) — same
+  mutual-exclusivity invariant `paintSimpleCell` enforces today, just
+  re-scoped from "across sibling layers" to "across sibling grids in one
+  frame." Advanced tier's active grid is just whatever the user has
+  explicitly selected; painting only touches that one grid, no
+  auto-clearing (matches today's Advanced-tier behavior).
+- **Grid bounds are fully auto-computed, both grow and shrink** — reuses
+  `Layer.js`'s existing `growToInclude` almost as-is (same "reallocate to
+  the minimal rect containing the new cell," applied to a Grid instead of
+  a Layer) for growing; shrinking (recomputing the minimal bounding box
+  after an erase, and deleting a Grid entirely once it's empty) is new
+  logic `growToInclude` doesn't have today, mirroring the
+  prune-when-empty pattern `paintSimpleCell` already uses for whole layers.
+  **This retires the "Advanced-tier layer offset — manual X/Y input
+  hidden" item below** — that item was shelved because manually-typed
+  fractional offsets disagreed with the grid-overlay/cursor-snap pipeline;
+  if offset is never manually typed at all, always derived from actual
+  painted content, that whole bug class can't occur. When this migration
+  ships, that backlog entry can be deleted rather than resolved
+  separately.
+- **Z-order is plain array order**, consistent with today's Layer order —
+  applies to a frame's `grids` list the same way it applies to
+  `canvas.layers` today.
+- **Scoping call for the migration itself:** Advanced tier can ship with
+  each Layer still holding exactly one Grid per frame (matching today's
+  behavior 1:1, just on the new data shape). Letting a user add a *second*
+  independent shape to one layer is genuinely the **"Layer groups/folders
+  — deferred again"** item further down this file, now made easy by this
+  foundation — it does not have to be built in the same pass as the
+  migration.
+
+**Phase breakdown:**
+- **Session 0 — Design.** Turn the confirmed model above into a concrete
+  spec: exact `Grid`/`Frame`/`Layer` shapes, the active-grid pointer's
+  exact shape (which layer + which grid within the current frame), the
+  shrink-to-fit algorithm, and — since this is a UI-affecting change for
+  Advanced tier (an "active grid" selector needs to exist somewhere) —
+  wireframes for whatever that selection affordance looks like. Output is
+  a written spec, not code.
+- **Session 1 — Model layer.** `Grid` becomes first-class (building on
+  the existing `Grid.js` primitive). `Layer.style` moves to `Grid.style`.
+  `Canvas.js`'s paint/resize/frame functions, `autoLayerSync.js` (gets
+  simpler — one layer, not many), and `selection.js` all get rewritten
+  against the new shape. `projectFile.js` gets a real version-3 migration
+  (loading old v1/v2 saves, which are Layer-per-color, into the new
+  one-simple-tier-layer-with-per-frame-grids shape).
+- **Session 2 — Export/compose.** `composeLayersSvg.js` and the three
+  animated-export files (`animatedSvg.js`, `spriteSheet.js`,
+  `animatedRaster.js`, `spriteArchive.js`) need to iterate
+  `layers -> frames -> grids` and composite per-grid style instead of
+  per-layer style.
+- **Session 3 — UI.** `LayersPanel.jsx` needs to show/manage a layer's
+  grid(s); Advanced tier gets whatever active-grid-selection affordance
+  Session 0 designed.
+- **Session 4 — Tests + hardening.** Rewrite the ~7 test files that
+  reference the old `Layer.frames`/`Canvas.layers` shape directly
+  (heaviest: `test/model/Canvas.test.js`), plus new coverage for the
+  sparsity behavior itself — that's the actual point of doing this.
+
+**Files known to be affected** (from a read-only Explore-agent survey done
+during scoping; re-verify at Session 1, this list predates the final
+Grid-based design): `src/model/Canvas.js`, `src/model/Layer.js`,
+`src/model/autoLayerSync.js`, `src/model/selection.js`,
+`src/io/projectFile.js`, `src/export/svg/composeLayersSvg.js`,
+`src/export/svg/animatedSvg.js`, `src/export/raster/spriteSheet.js`,
+`src/export/raster/animatedRaster.js`, `src/export/raster/spriteArchive.js`,
+`src/state/store.js`, `src/model/history.js`, `src/ui/draw/LayersPanel.jsx`,
+`src/ui/draw/FrameStrip.jsx`, `src/model/GlyphSet.js` (tangential — glyphs
+are single-frame, low risk).
+
 ## WOFF2 font export — disabled, times out in real browsers
 
 `wawoff2`'s WOFF2 compression (`src/export/font/woff.js`'s `toWoff2`) was
@@ -41,6 +158,13 @@ in general.
    `FontExportPanel.jsx` (and its `selected` default state).
 
 ## Advanced-tier layer offset — manual X/Y input hidden
+
+**Superseded by the "Layer/Frame/Grid model redesign" item above** — that
+migration makes offset fully auto-computed (never manually typed), which
+removes the fractional-offset disagreement this item was blocked on
+entirely. Once that migration ships, delete this entry rather than
+resolving it separately; keeping it below for now since the redesign
+hasn't happened yet.
 
 The per-layer offset X/Y number inputs in `LayersPanel.jsx` were removed
 (commit `1851d64`, "Hide layer offset UI controls pending fractional-offset
@@ -110,6 +234,12 @@ project's current "early development" status where "clone and
 installable builds to non-developers actually makes sense.
 
 ## Layer groups/folders — deferred again
+
+**Feeds into the "Layer/Frame/Grid model redesign" item above** — once a
+Layer is a collection of Grids rather than one styled entity, "a layer
+holding more than one shape" is most of the way to this feature already.
+Worth revisiting scope here once that migration ships, rather than
+designing grouping against the current flat-layer model.
 
 **Not scoped.** Raised during Phase 9's (Palette/Layers/Style review)
 planning and deferred a second time rather than built. A flat layer list
