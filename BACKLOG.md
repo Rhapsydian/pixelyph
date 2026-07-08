@@ -54,8 +54,10 @@ entry's note.
 - **Session 1 — Model layer.** `Grid` becomes first-class (building on
   the existing `Grid.js` primitive). `Layer.style` moves to `Grid.style`.
   `Canvas.js`'s paint/resize/frame/merge functions, `autoLayerSync.js`
-  (gets simpler — one layer, not many), and `selection.js` all get
-  rewritten against the new shape. `projectFile.js` gets a real version-3
+  (gets simpler — one layer, not many), `selection.js`, and `GlyphSet.js`'s
+  `canvasToGlyphPixels` (Glyph mode rides on this Canvas shape too — see
+  `docs/data-model.md`'s "Glyph mode" section) all get rewritten against
+  the new shape. `projectFile.js` gets a real version-3
   migration (loading old v1/v2 saves into the new shape). **Next session.**
 - **Session 2 — Export/compose.** `composeLayersSvg.js` and the three
   animated-export files (`animatedSvg.js`, `spriteSheet.js`,

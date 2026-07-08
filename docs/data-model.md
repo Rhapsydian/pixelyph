@@ -443,6 +443,67 @@ have much redundancy left to squeeze. Left open for a dedicated future
 pass rather than bundling a second pixel-encoding change into an
 already-large migration.
 
+## Glyph mode: effectively one Grid per glyph
+
+Glyph mode's own document (`GlyphSet.js`) doesn't use `Layer`/`Frame`/
+`Grid` directly — a `Glyph` is already just `{ width, height, pixels:
+Uint8Array, advanceWidth, leftSideBearing, name, unicode }`, a plain
+boolean grid with no color/layers/style of its own, and this migration
+doesn't change that shape. Editing reuses Draw mode's machinery
+indirectly: `glyphToCanvas(glyph)` wraps one glyph as a throwaway
+single-color (`palette: ['#000000']`), single-frame, Simple-tier `Canvas`,
+so the same `paintCell`/`SvgPixelEditor` code edits it unchanged. Since
+that canvas only ever has one possible color, its one Layer's one Frame
+can only ever hold **0 or 1 Grid — never more**. So functionally: one Grid
+per glyph, or none if the glyph is empty.
+
+`glyphToCanvas` itself needs no change — it just calls `paintCell` once
+per "on" pixel, which transparently becomes Grid-based under the hood once
+Session 1 rewrites `paintCell`.
+
+`canvasToGlyphPixels`, which reads the edited result back out, **does**
+need a real rewrite:
+
+```js
+// pre-migration — works only because auto-layers are always full-canvas,
+// so layer.frames[0].pixels is already a dense width*height buffer:
+export function canvasToGlyphPixels(canvas) {
+  const layer = canvas.layers[0];
+  return layer ? layer.frames[0].pixels.slice() : new Uint8Array(canvas.width * canvas.height);
+}
+```
+
+Post-migration, a Grid is auto-cropped to its minimal bounding box
+(`offsetX`/`offsetY`/`width`/`height` don't generally match the glyph's
+full dimensions), so this needs to pull the one Grid out of the single
+layer's single frame and **expand its cropped buffer back into a full
+`canvas.width × canvas.height` boolean array at `(offsetX, offsetY)`** —
+the inverse of `growGridToInclude`:
+
+```js
+export function canvasToGlyphPixels(canvas) {
+  const layer = canvas.layers[0];
+  const grid = layer?.frames[0]?.grids[0];
+  const pixels = new Uint8Array(canvas.width * canvas.height);
+  if (!grid) return pixels;
+  for (let y = 0; y < grid.height; y++) {
+    for (let x = 0; x < grid.width; x++) {
+      if (grid.pixels[y * grid.width + x]) {
+        pixels[(grid.offsetY + y) * canvas.width + (grid.offsetX + x)] = 1;
+      }
+    }
+  }
+  return pixels;
+}
+```
+
+`GlyphSet.js`'s own top-of-file comment ("at most one plain black
+auto-layer") also needs a one-line wording update to describe "at most one
+Grid in that one layer's frame" instead. This is Session 1 scope (it's
+part of the `Canvas`/`paintCell` rewrite's blast radius), not a separate
+session — flagged here so it isn't missed, since `GlyphSet.js` doesn't
+otherwise show up in the Draw-mode file list above.
+
 ## 6. What Session 0 does not cover (forward references)
 
 - Export modules (`composeLayersSvg.js`, `animatedSvg.js`, `spriteSheet.js`,
@@ -452,7 +513,8 @@ already-large migration.
   composite per-grid style/visibility. **Session 2.**
 - `Canvas.js`'s `paintCell`, `topVisibleLayerAt`, `colorAt`,
   `mergeLayerDown` (3a), the new `mergeGridDown` (3b), `autoLayerSync.js`'s
-  `paintSimpleCell`/`getOrCreateAutoLayer`, and `selection.js` all need
+  `paintSimpleCell`/`getOrCreateAutoLayer`, `selection.js`, and
+  `GlyphSet.js`'s `canvasToGlyphPixels` (see "Glyph mode" above) all need
   rewriting/adding against this shape. **Session 1.**
 - The ~7 test files referencing the pre-migration `Layer.frames`/
   `Canvas.layers` shape directly. **Session 4.**
@@ -478,3 +540,6 @@ already-large migration.
   new shape sub-rows and per-layer shape toolbar (section 4), style panel
   retargeting to `activeGridId`, and the offset-source swap in
   overlay/cursor-snap.
+- `src/model/GlyphSet.js` — `canvasToGlyphPixels` needs a real rewrite (see
+  "Glyph mode" above); `glyphToCanvas` is unaffected. **Session 1**, not
+  tangential — it depends directly on `Canvas.js`'s new shape.
