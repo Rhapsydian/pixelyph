@@ -21,47 +21,144 @@ test('serializeProject stamps the current pixelyphVersion and kind: draw', () =>
   assert.equal(doc.kind, 'draw');
 });
 
-test('pixel data is base64-encoded, not a raw JSON array', () => {
+// Session 4: reads pixels straight off frame (frame.pixels), which was the
+// pre-migration dense-per-frame shape — pixels now live per-Grid, nested
+// under frame.grids[i].pixels (see BACKLOG.md). Equivalent coverage is the
+// new test just below.
+test.skip('pixel data is base64-encoded, not a raw JSON array', () => {});
+
+test('a Grid\'s pixel data is base64-encoded, not a raw JSON array', () => {
   const canvas = createCanvas({ width: 2, height: 2 });
   paintCell(canvas, 0, 0, '#ff0000');
   const doc = serializeProject(canvas);
-  const encoded = doc.canvas.layers[0].frames[0].pixels;
+  const encoded = doc.canvas.layers[0].frames[0].grids[0].pixels;
   assert.equal(typeof encoded, 'string');
   assert.doesNotMatch(encoded, /^\[/);
 });
 
-test('a painted layer round-trips through bit-packed pixels with a much shorter base64 string than unpacked would be', () => {
+// Session 4: reads frame.pixels directly (see BACKLOG.md). Equivalent
+// coverage is the new test just below.
+test.skip('a painted layer round-trips through bit-packed pixels with a much shorter base64 string than unpacked would be', () => {});
+
+test('a painted Grid round-trips through bit-packed pixels with a much shorter base64 string than unpacked would be', () => {
   const canvas = createCanvas({ width: 16, height: 16 });
   for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) paintCell(canvas, x, y, '#ff0000');
   const doc = serializeProject(canvas);
-  const encoded = doc.canvas.layers[0].frames[0].pixels;
+  const encoded = doc.canvas.layers[0].frames[0].grids[0].pixels;
   assert.ok(encoded.length < 100, `expected a bit-packed 16x16 grid's base64 length well under the unpacked 344 chars, got ${encoded.length}`);
 
   const restored = loadProjectFromString(saveProjectToString(canvas));
   assert.deepStrictEqual(restored, canvas);
 });
 
-test('deserializeProject reads a pre-bit-packing (pixelyphVersion 1) file, where pixels were one unpacked byte per cell', () => {
-  const canvas = createCanvas({ width: 3, height: 3 });
-  paintCell(canvas, 0, 0, '#ff0000');
-  paintCell(canvas, 2, 2, '#ff0000');
+// Session 4: hand-builds a "legacy" doc from the *current* (already v3,
+// Grid-shaped) in-memory canvas, which no longer has frame.pixels to
+// re-encode — the real v1/v2 shape had it on the Layer, not per-Grid. The
+// new tests below hand-build an actual pre-migration-shaped document
+// instead, covering both the pixel-decode version branch and the v1/v2 ->
+// v3 structural migration (crop-to-bounds, Simple-tier collapse) together.
+test.skip('deserializeProject reads a pre-bit-packing (pixelyphVersion 1) file, where pixels were one unpacked byte per cell', () => {});
 
-  // Simulate a v1 save: same shape serializeProject produces, but with the
-  // pixels field encoded the old way (one raw byte per cell, not packed).
-  const doc = serializeProject(canvas);
-  doc.pixelyphVersion = 1;
-  const legacyBytesToBase64 = (bytes) => {
-    let binary = '';
-    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-    return btoa(binary);
+function legacyBytesToBase64(bytes) {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+/** Bit-packs pixels the same way v2+ saves do (8 cells/byte), for hand-building a legacy v2 doc. */
+function bitsToBase64V2(pixels) {
+  const bytes = new Uint8Array(Math.ceil(pixels.length / 8));
+  for (let i = 0; i < pixels.length; i++) {
+    if (pixels[i]) bytes[i >> 3] |= 1 << (i & 7);
+  }
+  return legacyBytesToBase64(bytes);
+}
+
+test('deserializeProject migrates a pre-bit-packing (v1) Advanced-tier layer into one cropped Grid per non-empty frame', () => {
+  // Hand-built v1 doc: dense per-frame pixel buffer, style/offset/width/
+  // height on the Layer — the real pre-migration shape (see docs/data-model.md).
+  const width = 4, height = 4;
+  const framePixels = new Uint8Array(width * height);
+  framePixels[1 * width + 1] = 1; // interior cell, off every edge
+  const doc = {
+    pixelyphVersion: 1,
+    kind: 'draw',
+    canvas: {
+      id: 'canvas-legacy', width, height, tier: 'advanced',
+      palette: ['#ff0000'], symmetryMode: 'none', referenceImage: null,
+      activeLayerId: 'layer-legacy', frameCount: 1, activeFrame: 0, frameRate: 12,
+      frameDurations: [83],
+      layers: [
+        {
+          id: 'layer-legacy', name: 'Legacy', locked: false, opacity: 1,
+          offset: { x: 2, y: 3 }, width, height,
+          style: { fill: '#ff0000', effects: [] },
+          frames: [{ pixels: legacyBytesToBase64(framePixels), visible: true }],
+        },
+      ],
+    },
   };
-  doc.canvas.layers = canvas.layers.map((layer) => ({
-    ...doc.canvas.layers.find((l) => l.id === layer.id),
-    frames: layer.frames.map((frame) => ({ pixels: legacyBytesToBase64(frame.pixels), visible: frame.visible })),
-  }));
 
   const restored = deserializeProject(doc);
-  assert.deepStrictEqual(restored, canvas);
+
+  assert.equal(restored.layers.length, 1);
+  const layer = restored.layers[0];
+  assert.equal(layer.id, 'layer-legacy'); // advanced-tier saves migrate 1:1, id preserved
+  assert.equal(layer.frames.length, 1);
+  assert.equal(layer.frames[0].grids.length, 1);
+  const grid = layer.frames[0].grids[0];
+  assert.equal(grid.width, 1);
+  assert.equal(grid.height, 1);
+  // offsetX/Y = old layer offset (2,3) + the cropped cell's local position (1,1)
+  assert.equal(grid.offsetX, 3);
+  assert.equal(grid.offsetY, 4);
+  assert.deepEqual(Array.from(grid.pixels), [1]);
+  assert.equal(grid.style.fill, '#ff0000');
+  assert.equal(grid.visible, true);
+  assert.equal(grid.locked, false);
+  assert.equal(restored.activeLayerId, 'layer-legacy'); // preserved for advanced-tier saves
+});
+
+test('deserializeProject collapses a Simple-tier v2 save\'s per-color auto-layers into one Layer with one Grid per color, per frame', () => {
+  const width = 2, height = 1;
+  const redPixels = new Uint8Array([1, 0]);
+  const bluePixels = new Uint8Array([0, 1]);
+  const doc = {
+    pixelyphVersion: 2,
+    kind: 'draw',
+    canvas: {
+      id: 'canvas-legacy', width, height, tier: 'simple',
+      palette: ['#ff0000', '#0000ff'], symmetryMode: 'none', referenceImage: null,
+      activeLayerId: 'layer-red', frameCount: 1, activeFrame: 0, frameRate: 12,
+      frameDurations: [83],
+      layers: [
+        {
+          id: 'layer-red', name: '#ff0000', locked: false, opacity: 1,
+          offset: { x: 0, y: 0 }, width, height,
+          style: { fill: '#ff0000', effects: [] },
+          frames: [{ pixels: bitsToBase64V2(redPixels), visible: true }],
+          autoManaged: true, autoColor: '#ff0000',
+        },
+        {
+          id: 'layer-blue', name: '#0000ff', locked: false, opacity: 1,
+          offset: { x: 0, y: 0 }, width, height,
+          style: { fill: '#0000ff', effects: [] },
+          frames: [{ pixels: bitsToBase64V2(bluePixels), visible: true }],
+          autoManaged: true, autoColor: '#0000ff',
+        },
+      ],
+    },
+  };
+
+  const restored = deserializeProject(doc);
+
+  assert.equal(restored.layers.length, 1); // collapsed into a single Layer
+  const layer = restored.layers[0];
+  assert.equal(layer.frames[0].grids.length, 2); // one Grid per color present in this frame
+  const colors = layer.frames[0].grids.map((g) => g.style.fill).sort();
+  assert.deepEqual(colors, ['#0000ff', '#ff0000']);
+  // the old per-auto-layer activeLayerId is meaningless post-collapse — repointed at the new single Layer
+  assert.equal(restored.activeLayerId, layer.id);
 });
 
 test('round-trips a multi-layer, multi-color canvas exactly', () => {
@@ -127,16 +224,22 @@ test('deserializeProject rejects a non-draw document', () => {
   assert.throws(() => deserializeProject({ pixelyphVersion: 1, kind: 'glyph', glyphSet: {} }), /expected kind 'draw'/);
 });
 
-test('round-trips an advanced-tier canvas with gradient fill, stroke, effects, and activeLayerId exactly', () => {
+// Session 4: sets layer.style/layer.offset directly — style/offset now
+// live on Grid, not Layer (see BACKLOG.md). Equivalent coverage is the new
+// test just below.
+test.skip('round-trips an advanced-tier canvas with gradient fill, stroke, effects, and activeLayerId exactly', () => {});
+
+test('round-trips an advanced-tier canvas with a gradient-filled, stroked, effect-bearing shape, and activeLayerId/activeGridId exactly', () => {
   const canvas = createCanvas({ width: 3, height: 3 });
   canvas.tier = 'advanced';
   const layer = addLayer(canvas, { name: 'styled' });
-  paintCell(canvas, 0, 0, 'x');
-  layer.style.fill = { type: 'linear-gradient', angle: 45, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] };
-  layer.style.stroke = { color: '#00ff00', width: 0.2, linecap: 'round', linejoin: 'round', dashArray: [0.5, 0.25] };
-  layer.style.effects = [{ type: 'drop-shadow', dx: 0.2, dy: 0.2, blur: 0.1, color: '#000', opacity: 0.5 }];
-  layer.offset = { x: -2, y: 3 };
+  paintCell(canvas, 0, 0, '#ff0000');
+  const grid = layer.frames[0].grids[0];
+  grid.style.fill = { type: 'linear-gradient', angle: 45, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] };
+  grid.style.stroke = { color: '#00ff00', width: 0.2, linecap: 'round', linejoin: 'round', dashArray: [0.5, 0.25] };
+  grid.style.effects = [{ type: 'drop-shadow', dx: 0.2, dy: 0.2, blur: 0.1, color: '#000', opacity: 0.5 }];
   canvas.activeLayerId = layer.id;
+  canvas.activeGridId = grid.id;
 
   const restored = loadProjectFromString(saveProjectToString(canvas));
   assert.deepStrictEqual(restored, canvas);

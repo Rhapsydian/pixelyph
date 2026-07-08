@@ -22,6 +22,7 @@ import {
   setLayerFrameVisibility,
   cloneLayerStyle,
   cloneFillValue,
+  resolveActiveGrid,
 } from '../../src/model/Canvas.js';
 
 test('colorAt reads the topmost (last) visible layer that owns a cell', () => {
@@ -33,7 +34,9 @@ test('colorAt reads the topmost (last) visible layer that owns a cell', () => {
   assert.equal(colorAt(canvas, 1, 0), null);
 });
 
-test('resizeCanvas grows a full-canvas layer with the new dimensions, content preserved relative to anchor', () => {
+// Session 4: asserts the pre-migration full-canvas Layer shape (layer.width/
+// height/offset) — see BACKLOG.md's Layer/Frame/Grid redesign entry.
+test.skip('resizeCanvas grows a full-canvas layer with the new dimensions, content preserved relative to anchor', () => {
   const canvas = createCanvas({ width: 2, height: 2 });
   paintCell(canvas, 0, 0, '#ff0000');
   paintCell(canvas, 1, 1, '#ff0000');
@@ -71,7 +74,8 @@ test('resizeCanvas center anchor keeps content centered after growth', () => {
 
 // --- Advanced tier ---
 
-test('addLayer appends a full-canvas layer and makes it active', () => {
+// Session 4: addLayer no longer creates a full-canvas grid eagerly (see BACKLOG.md).
+test.skip('addLayer appends a full-canvas layer and makes it active', () => {
   const canvas = createCanvas({ width: 3, height: 3 });
   canvas.tier = 'advanced';
   const layer = addLayer(canvas, { name: 'Sky', fill: '#0000ff' });
@@ -82,7 +86,8 @@ test('addLayer appends a full-canvas layer and makes it active', () => {
   assert.equal(layer.style.fill, '#0000ff');
 });
 
-test('advanced-tier paintCell paints/erases into the active layer only, growing it as needed', () => {
+// Session 4: asserts layer.frames[i].pixels dense buffer (see BACKLOG.md).
+test.skip('advanced-tier paintCell paints/erases into the active layer only, growing it as needed', () => {
   const canvas = createCanvas({ width: 4, height: 4 });
   canvas.tier = 'advanced';
   const a = addLayer(canvas, { name: 'A' });
@@ -101,7 +106,8 @@ test('advanced-tier paintCell is a no-op with no active layer', () => {
   assert.equal(canvas.layers.length, 0);
 });
 
-test('advanced-tier paintCell is a no-op on a locked layer', () => {
+// Session 4: asserts layer.frames[i].pixels dense buffer (see BACKLOG.md).
+test.skip('advanced-tier paintCell is a no-op on a locked layer', () => {
   const canvas = createCanvas({ width: 2, height: 2 });
   canvas.tier = 'advanced';
   const layer = addLayer(canvas);
@@ -162,7 +168,9 @@ test('topVisibleLayerAt finds the topmost visible layer covering a cell, skippin
   assert.equal(topVisibleLayerAt(canvas, 1, 1), null);
 });
 
-test('convertTier simple -> advanced flips autoManaged off and preserves layer content/position', () => {
+// Session 4: asserts the retired autoManaged flag (Simple tier is now a
+// single Layer, not per-color auto-layers — see BACKLOG.md).
+test.skip('convertTier simple -> advanced flips autoManaged off and preserves layer content/position', () => {
   const canvas = createCanvas({ width: 2, height: 2 });
   paintCell(canvas, 0, 0, '#ff0000');
   const layerId = canvas.layers[0].id;
@@ -174,7 +182,8 @@ test('convertTier simple -> advanced flips autoManaged off and preserves layer c
   assert.equal(canvas.activeLayerId, layerId);
 });
 
-test('convertTier simple -> advanced on a blank canvas creates one empty layer with a solid black fill', () => {
+// Session 4: asserts layer.style (style now lives on Grid, not Layer — see BACKLOG.md).
+test.skip('convertTier simple -> advanced on a blank canvas creates one empty layer with a solid black fill', () => {
   const canvas = createCanvas({ width: 2, height: 2 });
   assert.equal(canvas.layers.length, 0);
   convertTier(canvas, 'advanced');
@@ -185,7 +194,8 @@ test('convertTier simple -> advanced on a blank canvas creates one empty layer w
   assert.equal(colorAt(canvas, 0, 0), null); // layer exists but is unpainted
 });
 
-test('convertTier advanced -> simple rebuilds one auto-managed layer per composited color, dropping non-solid fills', () => {
+// Session 4: asserts direct layer.style mutation on the pre-migration shape (see BACKLOG.md).
+test.skip('convertTier advanced -> simple rebuilds one auto-managed layer per composited color, dropping non-solid fills', () => {
   const canvas = createCanvas({ width: 2, height: 1 });
   canvas.tier = 'advanced';
   const solid = addLayer(canvas, { name: 'solid', fill: '#ff0000' });
@@ -211,7 +221,8 @@ test('convertTier is a no-op when already at the requested tier', () => {
 
 // --- duplicateLayer / mergeLayerDown / eraseFromLayer ---
 
-test('duplicateLayer copies content/style independently and inserts directly above the original, active', () => {
+// Session 4: asserts layer.style/layer.frames[i].pixels (style/pixels now live on Grid — see BACKLOG.md).
+test.skip('duplicateLayer copies content/style independently and inserts directly above the original, active', () => {
   const canvas = createCanvas({ width: 3, height: 3 });
   canvas.tier = 'advanced';
   const original = addLayer(canvas, { name: 'Base', fill: '#ff0000' });
@@ -241,7 +252,8 @@ test('duplicateLayer returns null for an unknown layer id', () => {
   assert.equal(duplicateLayer(canvas, 'nope'), null);
 });
 
-test('duplicateLayer copies a gradient fill independently', () => {
+// Session 4: asserts layer.style.fill (style now lives on Grid — see BACKLOG.md).
+test.skip('duplicateLayer copies a gradient fill independently', () => {
   const canvas = createCanvas({ width: 2, height: 2 });
   canvas.tier = 'advanced';
   const original = addLayer(canvas, { name: 'Gradient' });
@@ -279,7 +291,8 @@ test('cloneLayerStyle handles every fill kind (solid/gradient/none) without thro
   }
 });
 
-test('mergeLayerDown combines pixel data across different offsets/sizes and keeps the bottom layer\'s id/name/style', () => {
+// Session 4: constructs layers via the pre-migration offset/width/height/frames[i].pixels shape (see BACKLOG.md).
+test.skip('mergeLayerDown combines pixel data across different offsets/sizes and keeps the bottom layer\'s id/name/style', () => {
   const canvas = createCanvas({ width: 6, height: 6 });
   canvas.tier = 'advanced';
   const bottom = addLayer(canvas, { name: 'Bottom', fill: '#0000ff' });
@@ -316,7 +329,8 @@ test('mergeLayerDown no-ops when the layer is already at the bottom of the stack
   assert.equal(canvas.layers[0], only);
 });
 
-test('eraseFromLayer clears a cell from a specific layer regardless of activeLayerId, and no-ops on a locked layer', () => {
+// Session 4: asserts layer.frames[i].pixels dense buffer (see BACKLOG.md).
+test.skip('eraseFromLayer clears a cell from a specific layer regardless of activeLayerId, and no-ops on a locked layer', () => {
   const canvas = createCanvas({ width: 2, height: 2 });
   canvas.tier = 'advanced';
   const layer = addLayer(canvas, { name: 'A' });
@@ -333,7 +347,8 @@ test('eraseFromLayer clears a cell from a specific layer regardless of activeLay
 
 // --- Animation (Phase 7): frame add/remove/duplicate ---
 
-test('addFrame inserts a blank frame into every layer, keeping frameCount uniform, and makes it active', () => {
+// Session 4: asserts layer.frames[i].pixels dense buffer (see BACKLOG.md).
+test.skip('addFrame inserts a blank frame into every layer, keeping frameCount uniform, and makes it active', () => {
   const canvas = createCanvas({ width: 2, height: 2 });
   canvas.tier = 'advanced';
   const a = addLayer(canvas, { name: 'A' });
@@ -353,7 +368,8 @@ test('addFrame inserts a blank frame into every layer, keeping frameCount unifor
   assert.equal(b.frames[0].pixels[0], 1);
 });
 
-test('addFrame inserts at a given index, shifting later frames back', () => {
+// Session 4: asserts layer.frames[i].pixels dense buffer (see BACKLOG.md).
+test.skip('addFrame inserts at a given index, shifting later frames back', () => {
   const canvas = createCanvas({ width: 2, height: 2 });
   canvas.tier = 'advanced';
   const layer = addLayer(canvas, {});
@@ -370,7 +386,8 @@ test('addFrame inserts at a given index, shifting later frames back', () => {
   assert.equal(canvas.activeFrame, 1);
 });
 
-test('duplicateFrame copies every layer\'s frame at index, inserting the copy right after it', () => {
+// Session 4: asserts layer.frames[i].pixels dense buffer (see BACKLOG.md).
+test.skip('duplicateFrame copies every layer\'s frame at index, inserting the copy right after it', () => {
   const canvas = createCanvas({ width: 2, height: 2 });
   canvas.tier = 'advanced';
   const layer = addLayer(canvas, {});
@@ -413,7 +430,8 @@ test('setLayerFrameVisibility toggles visibility for one frame only, leaving oth
   assert.equal(layer.frames[1].visible, false);
 });
 
-test('paintCell no-ops on a layer hidden in the active frame (same "can\'t be edited" contract as locked), and paints normally once shown again', () => {
+// Session 4: asserts layer.frames[i].pixels dense buffer (see BACKLOG.md).
+test.skip('paintCell no-ops on a layer hidden in the active frame (same "can\'t be edited" contract as locked), and paints normally once shown again', () => {
   const canvas = createCanvas({ width: 2, height: 2 });
   canvas.tier = 'advanced';
   const layer = addLayer(canvas, {});
@@ -427,7 +445,8 @@ test('paintCell no-ops on a layer hidden in the active frame (same "can\'t be ed
   assert.equal(layer.frames[0].pixels[0], 1);
 });
 
-test('removeFrame removes the frame from every layer and clamps activeFrame', () => {
+// Session 4: asserts layer.frames[i].pixels dense buffer (see BACKLOG.md).
+test.skip('removeFrame removes the frame from every layer and clamps activeFrame', () => {
   const canvas = createCanvas({ width: 2, height: 2 });
   canvas.tier = 'advanced';
   const layer = addLayer(canvas, {});
@@ -461,7 +480,8 @@ test('setActiveFrame clamps to the valid range', () => {
   assert.equal(canvas.activeFrame, 0);
 });
 
-test('paintCell targets only the active frame, leaving other frames of the same layer untouched', () => {
+// Session 4: asserts layer.frames[i].pixels dense buffer (see BACKLOG.md).
+test.skip('paintCell targets only the active frame, leaving other frames of the same layer untouched', () => {
   const canvas = createCanvas({ width: 2, height: 2 });
   canvas.tier = 'advanced';
   const layer = addLayer(canvas, {});
@@ -475,7 +495,8 @@ test('paintCell targets only the active frame, leaving other frames of the same 
   assert.equal(layer.frames[1].pixels[3], 1);
 });
 
-test('colorAt/topVisibleLayerAt read from the active frame, not always frame 0', () => {
+// Session 4: asserts layer.style.fill directly (style now lives on Grid — see BACKLOG.md).
+test.skip('colorAt/topVisibleLayerAt read from the active frame, not always frame 0', () => {
   const canvas = createCanvas({ width: 2, height: 2 });
   canvas.tier = 'advanced';
   const layer = addLayer(canvas, { name: 'A' });
@@ -490,7 +511,8 @@ test('colorAt/topVisibleLayerAt read from the active frame, not always frame 0',
   assert.equal(topVisibleLayerAt(canvas, 0, 0), null);
 });
 
-test('mergeLayerDown merges frame-by-frame, keeping bottom\'s frameCount', () => {
+// Session 4: mutates layer.frames[i].pixels directly (see BACKLOG.md).
+test.skip('mergeLayerDown merges frame-by-frame, keeping bottom\'s frameCount', () => {
   const canvas = createCanvas({ width: 2, height: 2 });
   canvas.tier = 'advanced';
   const bottom = addLayer(canvas, { name: 'bottom' });
@@ -565,4 +587,349 @@ test('setFrameDuration overrides one frame\'s duration, clamped to a 1ms floor, 
 
   setFrameDuration(canvas, 5, 999); // out of range — no-op
   assert.equal(canvas.frameDurations.length, 2);
+});
+
+// --- Session 1: Layer/Frame/Grid redesign (see docs/data-model.md) ---
+
+test('advanced-tier paintCell creates a Grid on first paint, grows it as the stroke extends, and shrinks/removes it on full erase', () => {
+  const canvas = createCanvas({ width: 5, height: 5 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas);
+  paintCell(canvas, 2, 2, '#ff0000');
+  const frame = layer.frames[0];
+  assert.equal(frame.grids.length, 1);
+  const grid = frame.grids[0];
+  assert.equal(canvas.activeGridId, grid.id);
+  assert.equal(grid.offsetX, 2);
+  assert.equal(grid.offsetY, 2);
+  assert.equal(grid.width, 1);
+  assert.equal(grid.height, 1);
+  assert.equal(grid.style.fill, '#ff0000');
+
+  paintCell(canvas, 4, 0, '#ff0000'); // same active grid grows to include this new point
+  assert.equal(frame.grids.length, 1);
+  assert.equal(grid.offsetX, 2);
+  assert.equal(grid.offsetY, 0);
+  assert.equal(grid.width, 3);
+  assert.equal(grid.height, 3);
+  assert.equal(colorAt(canvas, 2, 2), '#ff0000');
+  assert.equal(colorAt(canvas, 4, 0), '#ff0000');
+
+  paintCell(canvas, 4, 0, null);
+  assert.equal(frame.grids.length, 1); // still owns (2,2) — shrunk, not removed
+  assert.equal(colorAt(canvas, 4, 0), null);
+  assert.equal(colorAt(canvas, 2, 2), '#ff0000');
+
+  paintCell(canvas, 2, 2, null);
+  assert.equal(frame.grids.length, 0); // fully erased -> GC'd
+  assert.equal(canvas.activeGridId, null);
+});
+
+test('advanced-tier paintCell no-ops (paint and erase) when the active Grid is locked', () => {
+  const canvas = createCanvas({ width: 3, height: 3 });
+  canvas.tier = 'advanced';
+  addLayer(canvas);
+  paintCell(canvas, 0, 0, '#ff0000');
+  const grid = canvas.layers[0].frames[0].grids[0];
+  grid.locked = true;
+
+  paintCell(canvas, 1, 1, '#ff0000');
+  assert.equal(grid.width, 1);
+  assert.equal(grid.height, 1);
+
+  paintCell(canvas, 0, 0, null);
+  assert.equal(colorAt(canvas, 0, 0), '#ff0000');
+});
+
+test('mergeLayerDown concatenates shapes per frame (bottom stays back, top stays front), preserving each shape\'s own style', () => {
+  const canvas = createCanvas({ width: 4, height: 4 });
+  canvas.tier = 'advanced';
+  const bottom = addLayer(canvas, { name: 'Bottom' });
+  paintCell(canvas, 0, 0, '#0000ff');
+  const top = addLayer(canvas, { name: 'Top' });
+  paintCell(canvas, 3, 3, '#ff0000');
+
+  mergeLayerDown(canvas, top.id);
+
+  assert.equal(canvas.layers.length, 1);
+  const merged = canvas.layers[0];
+  assert.equal(merged.id, bottom.id);
+  assert.equal(merged.frames[0].grids.length, 2);
+  assert.equal(merged.frames[0].grids[0].style.fill, '#0000ff'); // bottom's shape stays first (back)
+  assert.equal(merged.frames[0].grids[1].style.fill, '#ff0000'); // top's shape stays last (front)
+  assert.equal(colorAt(canvas, 0, 0), '#0000ff');
+  assert.equal(colorAt(canvas, 3, 3), '#ff0000');
+});
+
+test('mergeLayerDown translates a hidden top-frame\'s visibility onto each of its incoming shapes', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  addLayer(canvas, { name: 'Bottom' });
+  paintCell(canvas, 0, 0, '#0000ff');
+  const top = addLayer(canvas, { name: 'Top' });
+  paintCell(canvas, 1, 1, '#ff0000');
+  top.frames[0].visible = false;
+
+  mergeLayerDown(canvas, top.id);
+
+  const merged = canvas.layers[0];
+  assert.equal(merged.frames[0].visible, true); // bottom's own frame visibility wins for the merged layer
+  const incoming = merged.frames[0].grids.find((g) => g.style.fill === '#ff0000');
+  assert.equal(incoming.visible, false);
+});
+
+test('mergeLayerDown merges frame-by-frame, keeping bottom\'s frameCount', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  addLayer(canvas, { name: 'bottom' });
+  paintCell(canvas, 0, 0, '#0000ff');
+  addFrame(canvas); // frame 1
+  paintCell(canvas, 1, 1, '#0000ff');
+  const top = addLayer(canvas, { name: 'top' }); // active, 2 frames (matches canvas.frameCount)
+  setActiveFrame(canvas, 0);
+  paintCell(canvas, 1, 0, '#ff0000');
+  setActiveFrame(canvas, 1);
+  paintCell(canvas, 0, 1, '#ff0000');
+
+  mergeLayerDown(canvas, top.id);
+
+  assert.equal(canvas.layers.length, 1);
+  const merged = canvas.layers[0];
+  assert.equal(merged.frames.length, 2);
+  assert.equal(merged.frames[0].grids.length, 2);
+  assert.equal(merged.frames[1].grids.length, 2);
+});
+
+test('colorAt/topVisibleLayerAt respect a layer\'s own shape stacking order, not just layer order', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas);
+  paintCell(canvas, 0, 0, '#0000ff'); // shape A
+  canvas.activeGridId = null; // force a new shape rather than growing shape A
+  paintCell(canvas, 0, 0, '#ff0000'); // shape B, painted on top at the same cell
+  assert.equal(layer.frames[0].grids.length, 2);
+  assert.equal(colorAt(canvas, 0, 0), '#ff0000'); // topmost (last) shape wins
+  assert.equal(topVisibleLayerAt(canvas, 0, 0), layer);
+
+  layer.frames[0].grids[1].visible = false; // hide shape B
+  assert.equal(colorAt(canvas, 0, 0), '#0000ff'); // falls through to shape A
+});
+
+test('duplicateLayer gives each copied shape a fresh id (not preserved, unlike duplicateFrame) and clones pixels/style independently', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const original = addLayer(canvas, { name: 'Base' });
+  paintCell(canvas, 0, 0, '#ff0000');
+  const originalGridId = original.frames[0].grids[0].id;
+
+  const copy = duplicateLayer(canvas, original.id);
+  assert.equal(copy.frames[0].grids.length, 1);
+  assert.notEqual(copy.frames[0].grids[0].id, originalGridId);
+  assert.equal(copy.frames[0].grids[0].style.fill, '#ff0000');
+  assert.notEqual(copy.frames[0].grids[0].style, original.frames[0].grids[0].style);
+
+  copy.frames[0].grids[0].pixels[0] = 0;
+  assert.equal(original.frames[0].grids[0].pixels[0], 1);
+});
+
+test('eraseFromLayer clears from whichever unlocked shape in that layer\'s active frame owns the cell, shrinking/removing it, regardless of activeLayerId', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas, { name: 'A' });
+  paintCell(canvas, 0, 0, '#ff0000');
+  addLayer(canvas, { name: 'B' }); // becomes active; `layer` is no longer canvas.activeLayerId
+  eraseFromLayer(canvas, layer, 0, 0);
+  assert.equal(layer.frames[0].grids.length, 0); // fully erased -> GC'd
+
+  const layerB = canvas.layers[1];
+  paintCell(canvas, 0, 0, '#00ff00');
+  const bGrid = layerB.frames[0].grids[0];
+  bGrid.locked = true;
+  eraseFromLayer(canvas, layerB, 0, 0);
+  assert.equal(bGrid.pixels[0], 1); // untouched — locked
+});
+
+test('resizeCanvas shifts every shape\'s offset by the anchor delta, without touching its own pixels', () => {
+  const canvas = createCanvas({ width: 6, height: 6 });
+  canvas.tier = 'advanced';
+  addLayer(canvas);
+  paintCell(canvas, 0, 0, '#ff0000');
+  const grid = canvas.layers[0].frames[0].grids[0];
+
+  resizeCanvas(canvas, 6, 6, 'top-left'); // same size, top-left anchor: no shift
+  assert.equal(grid.offsetX, 0);
+  assert.equal(grid.offsetY, 0);
+  assert.equal(colorAt(canvas, 0, 0), '#ff0000');
+
+  resizeCanvas(canvas, 8, 8, 'bottom-right'); // grows away from top-left, shifting content right/down
+  assert.equal(grid.offsetX, 2);
+  assert.equal(grid.offsetY, 2);
+  assert.equal(colorAt(canvas, 2, 2), '#ff0000');
+});
+
+test('convertTier simple -> advanced just flips the tier flag on the existing single layer (no auto-managed flag anymore)', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  paintCell(canvas, 0, 0, '#ff0000');
+  const layerId = canvas.layers[0].id;
+  convertTier(canvas, 'advanced');
+  assert.equal(canvas.tier, 'advanced');
+  assert.equal(canvas.layers.length, 1);
+  assert.equal(canvas.layers[0].id, layerId);
+  assert.equal(colorAt(canvas, 0, 0), '#ff0000');
+  assert.equal(canvas.activeLayerId, layerId);
+});
+
+test('convertTier advanced -> simple rebuilds a single style-scanned layer from the composited active frame, dropping non-solid fills', () => {
+  const canvas = createCanvas({ width: 2, height: 1 });
+  canvas.tier = 'advanced';
+  addLayer(canvas, { name: 'solid' });
+  paintCell(canvas, 0, 0, '#ff0000');
+  const gradientLayer = addLayer(canvas, { name: 'gradient' });
+  paintCell(canvas, 1, 0, '#00ff00');
+  gradientLayer.frames[0].grids[0].style.fill = { type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] };
+
+  convertTier(canvas, 'simple');
+
+  assert.equal(canvas.tier, 'simple');
+  assert.equal(canvas.layers.length, 1);
+  assert.equal(colorAt(canvas, 0, 0), '#ff0000');
+  assert.equal(colorAt(canvas, 1, 0), null); // gradient cell has no simple-tier equivalent
+});
+
+test('addFrame inserts an empty-grids frame into every layer, keeping frameCount uniform, and makes it active', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const a = addLayer(canvas, { name: 'A' });
+  const b = addLayer(canvas, { name: 'B' });
+  paintCell(canvas, 0, 0, '#ff0000'); // paints frame 0 of the active layer (b)
+
+  addFrame(canvas);
+
+  assert.equal(canvas.frameCount, 2);
+  assert.equal(canvas.activeFrame, 1);
+  assert.equal(a.frames.length, 2);
+  assert.equal(b.frames.length, 2);
+  assert.deepEqual(a.frames[1].grids, []);
+  assert.deepEqual(b.frames[1].grids, []);
+  assert.equal(canvas.activeGridId, null);
+  assert.equal(b.frames[0].grids.length, 1); // frame 0's prior content untouched
+});
+
+test('duplicateFrame copies every layer\'s frame at index (shapes included, ids preserved), inserting the copy right after it', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas, {});
+  paintCell(canvas, 0, 0, '#ff0000');
+  const sourceGrid = layer.frames[0].grids[0];
+
+  duplicateFrame(canvas, 0);
+
+  assert.equal(canvas.frameCount, 2);
+  assert.equal(canvas.activeFrame, 1);
+  assert.equal(layer.frames[1].grids.length, 1);
+  assert.equal(layer.frames[1].grids[0].id, sourceGrid.id);
+  layer.frames[1].grids[0].pixels[0] = 0;
+  assert.equal(layer.frames[0].grids[0].pixels[0], 1);
+});
+
+test('removeFrame removes the frame\'s shapes from every layer and clamps activeFrame', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas, {});
+  addFrame(canvas); // frame 1
+  addFrame(canvas); // frame 2, active
+  paintCell(canvas, 0, 0, '#ff0000'); // frame 2
+
+  removeFrame(canvas, 1);
+
+  assert.equal(canvas.frameCount, 2);
+  assert.equal(layer.frames.length, 2);
+  assert.equal(layer.frames[1].grids.length, 1); // old frame 2 shifted to index 1
+  assert.equal(canvas.activeFrame, 1); // clamped from the stale index 2
+});
+
+test('paintCell targets only the active frame\'s own shapes, leaving other frames of the same layer untouched', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas, {});
+  paintCell(canvas, 0, 0, '#ff0000'); // frame 0
+  addFrame(canvas); // frame 1, active
+  paintCell(canvas, 1, 1, '#00ff00'); // frame 1
+
+  assert.equal(layer.frames[0].grids.length, 1);
+  assert.equal(layer.frames[1].grids.length, 1);
+  assert.equal(colorAt(canvas, 0, 0), null); // active frame is 1; frame 0's content isn't composited here
+  setActiveFrame(canvas, 0);
+  assert.equal(colorAt(canvas, 0, 0), '#ff0000');
+  assert.equal(colorAt(canvas, 1, 1), null);
+});
+
+test('paintCell no-ops on a layer hidden in the active frame (same "can\'t be edited" contract as locked), and paints normally once shown again', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas, {});
+  setLayerFrameVisibility(canvas, layer.id, 0, false);
+
+  paintCell(canvas, 0, 0, '#ff0000');
+  assert.equal(layer.frames[0].grids.length, 0, 'hidden-in-this-frame blocks painting, like a locked layer');
+
+  setLayerFrameVisibility(canvas, layer.id, 0, true);
+  paintCell(canvas, 0, 0, '#ff0000');
+  assert.equal(layer.frames[0].grids.length, 1);
+});
+
+test('resolveActiveGrid: id match survives when the previously active shape\'s id is still present', () => {
+  const layer = { frames: [{ grids: [{ id: 'g1', style: { fill: '#f00', effects: [] } }, { id: 'g2', style: { fill: '#0f0', effects: [] } }] }] };
+  const prevGrid = { id: 'g2', style: { fill: '#0f0', effects: [] } };
+  assert.equal(resolveActiveGrid(layer, 0, prevGrid), 'g2');
+});
+
+test('resolveActiveGrid: falls back to a style match when the id no longer exists', () => {
+  const layer = { frames: [{ grids: [{ id: 'g3', style: { fill: '#0f0', effects: [] } }] }] };
+  const prevGrid = { id: 'stale', style: { fill: '#0f0', effects: [] } };
+  assert.equal(resolveActiveGrid(layer, 0, prevGrid), 'g3');
+});
+
+test('resolveActiveGrid: falls back to the first shape when neither id nor style match', () => {
+  const layer = { frames: [{ grids: [{ id: 'g4', style: { fill: '#000', effects: [] } }, { id: 'g5', style: { fill: '#fff', effects: [] } }] }] };
+  const prevGrid = { id: 'stale', style: { fill: '#abc', effects: [] } };
+  assert.equal(resolveActiveGrid(layer, 0, prevGrid), 'g4');
+});
+
+test('resolveActiveGrid: returns null for an empty frame, a missing layer, or no prior selection', () => {
+  const layer = { frames: [{ grids: [] }] };
+  assert.equal(resolveActiveGrid(layer, 0, null), null);
+  assert.equal(resolveActiveGrid(undefined, 0, null), null);
+});
+
+test('setActiveFrame keeps the same shape selected across a scrub when its id survives (duplicateFrame case)', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  addLayer(canvas);
+  paintCell(canvas, 0, 0, '#ff0000');
+  const originalGridId = canvas.activeGridId;
+
+  duplicateFrame(canvas, 0); // now on frame 1, a literal copy including grid ids
+  assert.equal(canvas.activeGridId, originalGridId);
+  setActiveFrame(canvas, 0);
+  assert.equal(canvas.activeGridId, originalGridId);
+  setActiveFrame(canvas, 1);
+  assert.equal(canvas.activeGridId, originalGridId);
+});
+
+test('setActiveFrame prefers a style match over "first shape" when scrubbing to an independently-drawn frame', () => {
+  const canvas = createCanvas({ width: 3, height: 3 });
+  canvas.tier = 'advanced';
+  addLayer(canvas);
+  paintCell(canvas, 0, 0, '#ff0000'); // frame 0's only shape, red — becomes activeGridId
+
+  addFrame(canvas); // frame 1, blank, active
+  paintCell(canvas, 1, 1, '#0000ff'); // shape A: blue, created+selected first
+  canvas.activeGridId = null; // deselect so the next paint creates a separate shape instead of growing blue
+  paintCell(canvas, 2, 2, '#ff0000'); // shape B: red, a *different* shape instance than frame 0's, added after blue
+  const redShapeId = canvas.layers[0].frames[1].grids.find((g) => g.style.fill === '#ff0000').id;
+
+  setActiveFrame(canvas, 0); // back to frame 0, whose only (red) shape is activeGridId
+  setActiveFrame(canvas, 1); // scrub to frame 1: no id match (different shape instance) — style match should pick the red one, not grids[0] (blue)
+  assert.equal(canvas.activeGridId, redShapeId);
 });

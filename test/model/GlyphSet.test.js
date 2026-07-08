@@ -93,6 +93,25 @@ test('glyphToCanvas/canvasToGlyphPixels round-trips a glyph exactly', () => {
   assert.deepEqual(Array.from(roundTripped), Array.from(glyph.pixels));
 });
 
+test('canvasToGlyphPixels round-trips a glyph whose content is auto-cropped away from the canvas edges', () => {
+  // A single "on" pixel in the interior of a 5x5 glyph: the underlying Grid
+  // is auto-cropped to a 1x1 shape at offset (2,2), not a dense 5x5 buffer —
+  // canvasToGlyphPixels has to expand that back out correctly.
+  const glyph = createGlyph({ width: 5, height: 5 });
+  glyph.pixels[2 * 5 + 2] = 1;
+
+  const canvas = glyphToCanvas(glyph);
+  const grid = canvas.layers[0].frames[0].grids[0];
+  assert.equal(grid.width, 1);
+  assert.equal(grid.height, 1);
+  assert.equal(grid.offsetX, 2);
+  assert.equal(grid.offsetY, 2);
+
+  const roundTripped = canvasToGlyphPixels(canvas);
+  assert.equal(roundTripped.length, 25);
+  assert.deepEqual(Array.from(roundTripped), Array.from(glyph.pixels));
+});
+
 test('canvasToGlyphPixels returns all-zero for a canvas with no layers (empty glyph)', () => {
   const glyph = createGlyph({ width: 2, height: 2 });
   const canvas = glyphToCanvas(glyph); // all pixels off -> no auto layer ever created

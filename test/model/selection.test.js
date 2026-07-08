@@ -8,7 +8,13 @@ test('normalizeRect handles corners given in any order', () => {
   assert.deepEqual(normalizeRect(0, 3, 3, 0), { x0: 0, y0: 0, x1: 3, y1: 3 });
 });
 
-test('a move spanning two colors relocates both layers correctly (selection/paste across multiple auto-managed layers)', () => {
+// Session 4: asserts the retired autoManaged/autoColor fields (Simple tier
+// is now a single Layer with per-frame Grids scanned by style — see
+// BACKLOG.md). Equivalent coverage (including the relocation itself) is
+// the new test just below.
+test.skip('a move spanning two colors relocates both layers correctly (selection/paste across multiple auto-managed layers)', () => {});
+
+test('a move spanning two colors relocates both shapes correctly (selection/paste across multiple simple-tier Grids)', () => {
   const canvas = createCanvas({ width: 4, height: 4 });
   // a 2x1 selection covering one red cell and one green cell
   paintCell(canvas, 0, 0, '#ff0000');
@@ -33,9 +39,9 @@ test('a move spanning two colors relocates both layers correctly (selection/past
   assert.equal(colorAt(canvas, 2, 2), '#ff0000');
   assert.equal(colorAt(canvas, 3, 2), '#00ff00');
 
-  // both source colors' auto layers still exist (now relocated), nothing left behind
-  const colorsPresent = canvas.layers.filter((l) => l.autoManaged).map((l) => l.autoColor).sort();
-  assert.deepEqual(colorsPresent, ['#00ff00', '#ff0000']);
+  // both source colors' shapes still exist (now relocated), nothing left behind
+  const shapeColors = canvas.layers[0].frames[0].grids.map((g) => g.style.fill).sort();
+  assert.deepEqual(shapeColors, ['#00ff00', '#ff0000']);
 });
 
 test('a non-destructive copy leaves the source untouched', () => {
@@ -57,26 +63,38 @@ test('extractRectColors omits empty cells rather than recording them as null', (
 
 // --- Advanced tier: per-layer selection scoping ---
 
-test('extractRectFromActiveLayer only reads the active layer, ignoring a non-active layer stacked on top of it', () => {
+// Session 4: creates layers via addLayer's retired `fill` option and expects
+// a placeholder paint color ('x') to still read back as that fill — style
+// now comes from the actual paint color, since Grids are styled per-shape,
+// not via a Layer-level fill set at creation (see BACKLOG.md). Equivalent
+// coverage is the new test just below.
+test.skip('extractRectFromActiveLayer only reads the active layer, ignoring a non-active layer stacked on top of it', () => {});
+
+test('extractRectFromActiveLayer only reads the active layer\'s own shapes, ignoring a non-active layer stacked on top of it', () => {
   const canvas = createCanvas({ width: 2, height: 1 });
   canvas.tier = 'advanced';
-  const bottom = addLayer(canvas, { name: 'bottom', fill: '#0000ff' });
+  const bottom = addLayer(canvas, { name: 'bottom' });
   canvas.activeLayerId = bottom.id;
-  paintCell(canvas, 0, 0, 'x');
-  addLayer(canvas, { name: 'top', fill: '#ff0000' }); // becomes active, covers (1,0)
-  paintCell(canvas, 1, 0, 'x');
+  paintCell(canvas, 0, 0, '#0000ff');
+  addLayer(canvas, { name: 'top' }); // becomes active, covers (1,0)
+  paintCell(canvas, 1, 0, '#ff0000');
   canvas.activeLayerId = bottom.id; // scope back to the bottom layer
 
   const cells = extractRectFromActiveLayer(canvas, { x0: 0, y0: 0, x1: 1, y1: 0 });
   assert.deepEqual(cells, [{ dx: 0, dy: 0, color: '#0000ff' }]); // only the active (bottom) layer's own cell
 });
 
+// Session 4: sets `layer.style.fill` directly — style now lives on Grid, not
+// Layer (see BACKLOG.md). Equivalent coverage is the new test just below.
+test.skip('extractRectFromActiveLayer falls back to a placeholder color for a non-solid (gradient) fill', () => {});
+
 test('extractRectFromActiveLayer falls back to a placeholder color for a non-solid (gradient) fill', () => {
   const canvas = createCanvas({ width: 1, height: 1 });
   canvas.tier = 'advanced';
-  const layer = addLayer(canvas, { name: 'grad' });
-  layer.style.fill = { type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] };
-  paintCell(canvas, 0, 0, 'x');
+  addLayer(canvas, { name: 'grad' });
+  paintCell(canvas, 0, 0, '#ffffff');
+  const grid = canvas.layers[0].frames[0].grids[0];
+  grid.style.fill = { type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] };
   const cells = extractRectFromActiveLayer(canvas, { x0: 0, y0: 0, x1: 0, y1: 0 });
   assert.equal(cells.length, 1);
   assert.equal(typeof cells[0].color, 'string');

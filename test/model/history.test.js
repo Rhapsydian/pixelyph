@@ -34,7 +34,9 @@ test('redo re-applies the snapshot undo just moved past', () => {
   undo(history);
   const redone = redo(history);
   assert.equal(redone.layers.length, 1);
-  assert.equal(redone.layers[0].autoColor, '#ff0000');
+  // Session 1: style now lives on the painted Grid, not a retired
+  // layer.autoColor field (see BACKLOG.md's Layer/Frame/Grid redesign entry).
+  assert.equal(redone.layers[0].frames[0].grids[0].style.fill, '#ff0000');
 });
 
 test('pushing a new snapshot after undo clears the redo stack', () => {
