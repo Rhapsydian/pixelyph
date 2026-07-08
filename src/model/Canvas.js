@@ -1,13 +1,19 @@
-// The Draw-mode document. `tier: 'simple'` canvases reconcile auto-managed
-// per-color layers (autoLayerSync.js); `tier: 'advanced'` canvases expose
-// free-floating, independently styled layers the user manages directly —
-// paintCell's advanced branch just paints/erases into whichever layer is
-// `activeLayerId`, growing it (growToInclude) as a stroke extends past its
-// current bounds.
+// The Draw-mode document. `tier: 'simple'` canvases reconcile a single
+// auto-managed layer whose per-frame shapes are scanned/created by style
+// (autoLayerSync.js); `tier: 'advanced'` canvases expose free-floating,
+// independently styled layers the user manages directly — paintCell's
+// advanced branch paints/erases into whichever Grid (Shape) is
+// `activeGridId`, within whichever layer is `activeLayerId`, growing it
+// (growGridToInclude) as a stroke extends past its current bounds, or
+// creating a brand new Grid if the active layer has no shape in this frame
+// yet. See docs/data-model.md for the full Layer/Frame/Grid model this is
+// built against — a Layer is pure identity/z-order; a Grid ("Shape" in the
+// UI) is the actual styled, auto-cropped pixel content, one or more per
+// layer per frame.
 
-import { resizeAt, anchorOffset, ANCHOR_X_FRACS, ANCHOR_Y_FRACS, set } from './Grid.js';
+import { resizeAt, anchorOffset, ANCHOR_X_FRACS, ANCHOR_Y_FRACS, get, set, createShapeGrid, growGridToInclude, shrinkGridToFit, mergeGridDown, stylesEqual, makeGridId } from './Grid.js';
 import { paintSimpleCell } from './autoLayerSync.js';
-import { createLayer, growToInclude } from './Layer.js';
+import { createLayer } from './Layer.js';
 import { normalizePalette } from './Palette.js';
 
 /**
@@ -25,11 +31,13 @@ export function cloneFillValue(fill) {
 }
 
 /**
- * Deep-clones a Layer's style (fill/stroke/effects) so mutating one layer's
- * style afterward never affects the other — used by duplicateLayer, and by
- * the palette's "save style"/"apply style" flow (state/store.js).
+ * Deep-clones a Grid's style (fill/stroke/effects) so mutating one shape's
+ * style afterward never affects another — used by duplicateLayer/
+ * duplicateFrame, and by the palette's "save style"/"apply style" flow
+ * (state/store.js). Named for the pre-migration `Layer.style` this used to
+ * clone; the shape (`{fill,stroke,effects}`) is identical on `Grid.style`.
  *
- * @param {object} style Layer.style
+ * @param {object} style
  * @returns {object} an independent copy
  */
 export function cloneLayerStyle(style) {
@@ -57,7 +65,6 @@ export function createCanvas({ width, height, palette = [] }) {
     layers: [],
     tier: 'simple',
     palette: normalizePalette(palette),
-    simpleTier: { colorToLayerId: new Map() },
     symmetryMode: 'none',
     referenceImage: undefined,
     // Which layer advanced-tier painting targets, and which the LayersPanel
@@ -65,6 +72,10 @@ export function createCanvas({ width, height, palette = [] }) {
     // (persisted, but not part of undo snapshots) rather than artwork
     // content, so it lives here rather than being threaded through explicitly.
     activeLayerId: null,
+    // Which Grid (Shape), within the active layer's active frame, painting
+    // targets and the style editor edits — see resolveActiveGrid below for
+    // how this is kept sensible across frame/layer switches.
+    activeGridId: null,
     // Animation (Phase 7): every layer's `frames` array is kept the same
     // length (`frameCount`) uniformly — see addFrame/duplicateFrame/
     // removeFrame below, the only places that length ever changes.
@@ -94,10 +105,60 @@ function defaultFrameDurationMs(canvas) {
 }
 
 /**
+ * Finds the topmost (last, per the array's back-to-front convention) Grid
+ * in `frame.grids` whose own pixels have (x, y) set — the shared spatial
+ * lookup `colorAt`/`topVisibleLayerAt`/`eraseFromLayer` all need, now that a
+ * layer's content can be more than one independently-positioned shape.
+ *
+ * @param {{grids: object[]}} frame
+ * @param {number} x canvas-space
+ * @param {number} y canvas-space
+ * @param {{skipLocked?: boolean}} [options] `skipLocked` excludes locked
+ *   shapes — used by erase, which (like paintCell) can't touch a locked Grid.
+ * @returns {object|null} Grid
+ */
+export function topGridAt(frame, x, y, { skipLocked = false } = {}) {
+  for (let i = frame.grids.length - 1; i >= 0; i--) {
+    const grid = frame.grids[i];
+    if (!grid.visible) continue;
+    if (skipLocked && grid.locked) continue;
+    if (get(grid, x - grid.offsetX, y - grid.offsetY)) return grid;
+  }
+  return null;
+}
+
+/**
+ * Resolves which Grid (Shape) should become `activeGridId` after the active
+ * frame or active layer changes. Tries, in order: the same shape by `id`
+ * (survives `duplicateFrame`, whose copies keep their source ids), then a
+ * shape with an equal style (a reasonable proxy for "the same conceptual
+ * shape" across independently-drawn frames — keeps selection sticky while
+ * scrubbing animation without forcing a re-click every frame), then just the
+ * first shape in the list. See docs/data-model.md section 2 for the full
+ * rationale.
+ *
+ * @param {object|undefined|null} layer
+ * @param {number} frameIndex
+ * @param {object|null} prevGrid the previously active Grid, if any
+ * @returns {string|null}
+ */
+export function resolveActiveGrid(layer, frameIndex, prevGrid) {
+  const grids = layer?.frames[frameIndex]?.grids ?? [];
+  if (grids.length === 0) return null;
+  if (prevGrid) {
+    const sameId = grids.find((g) => g.id === prevGrid.id);
+    if (sameId) return sameId.id;
+    const styleMatch = grids.find((g) => stylesEqual(g.style, prevGrid.style));
+    if (styleMatch) return styleMatch.id;
+  }
+  return grids[0].id;
+}
+
+/**
  * Paints one cell to `color` (or clears it, if `color` is null/undefined).
  * The single entry point every tool (pencil, shapes, bucket fill, selection
  * paste, raster import) routes through, so tier-specific bookkeeping
- * (simple tier's auto-layer sync, advanced tier's active-layer targeting)
+ * (simple tier's auto-layer sync, advanced tier's active-shape targeting)
  * only needs to live in one place.
  *
  * @param {object} canvas
@@ -114,33 +175,51 @@ export function paintCell(canvas, x, y, color) {
   const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
   if (!layer || layer.locked) return;
   const frameIndex = currentFrameIndex(canvas);
+  const frame = layer.frames[frameIndex];
   // A layer hidden in the currently-active frame is effectively locked for
   // that frame — same "can't be edited" contract `locked` already has,
   // just scoped to whichever frame you're actually looking at (a layer can
   // be hidden in frame 2 and visible, paintable, in frame 3).
-  if (!layer.frames[frameIndex].visible) return;
-  if (color) {
-    growToInclude(layer, x, y);
-    set({ width: layer.width, height: layer.height, pixels: layer.frames[frameIndex].pixels }, x - layer.offset.x, y - layer.offset.y, 1);
-  } else {
-    set({ width: layer.width, height: layer.height, pixels: layer.frames[frameIndex].pixels }, x - layer.offset.x, y - layer.offset.y, 0);
+  if (!frame.visible) return;
+  const grid = frame.grids.find((g) => g.id === canvas.activeGridId);
+  if (grid?.locked) return;
+  if (!color) {
+    if (!grid) return;
+    if (!get(grid, x - grid.offsetX, y - grid.offsetY)) return;
+    set(grid, x - grid.offsetX, y - grid.offsetY, 0);
+    if (!shrinkGridToFit(grid)) {
+      frame.grids = frame.grids.filter((g) => g.id !== grid.id);
+      if (canvas.activeGridId === grid.id) canvas.activeGridId = frame.grids[0]?.id ?? null;
+    }
+    return;
   }
+  if (!grid) {
+    // Nothing selected, or the active layer has no shape in this frame yet —
+    // same "first paint allocates" pattern growGridToInclude already covers
+    // for an existing shape, just also covering "first paint in this frame
+    // at all."
+    const newGrid = createShapeGrid({ name: `Shape ${frame.grids.length + 1}`, offsetX: x, offsetY: y, style: { fill: color, effects: [] } });
+    frame.grids.push(newGrid);
+    canvas.activeGridId = newGrid.id;
+    return;
+  }
+  growGridToInclude(grid, x, y);
+  set(grid, x - grid.offsetX, y - grid.offsetY, 1);
 }
 
 /**
- * Adds a new full-canvas-sized layer, makes it active, and returns it —
- * the "+" button in LayersPanel. Sized full-canvas so it's immediately
- * paintable without a preceding grow; growToInclude still applies once a
- * stroke or offset move takes it past those bounds.
+ * Adds a new, empty layer (no shapes yet — the first paint stroke creates
+ * one, see paintCell) and makes it active.
  *
  * @param {object} canvas
- * @param {{ name?: string, fill?: string }} [options]
+ * @param {{ name?: string }} [options]
  * @returns {object} Layer
  */
-export function addLayer(canvas, { name, fill = '#000000' } = {}) {
-  const layer = createLayer({ name: name ?? `Layer ${canvas.layers.length + 1}`, width: canvas.width, height: canvas.height, fill, frameCount: canvas.frameCount });
+export function addLayer(canvas, { name } = {}) {
+  const layer = createLayer({ name: name ?? `Layer ${canvas.layers.length + 1}`, frameCount: canvas.frameCount });
   canvas.layers.push(layer);
   canvas.activeLayerId = layer.id;
+  refreshActiveGrid(canvas);
   return layer;
 }
 
@@ -153,9 +232,6 @@ export function addLayer(canvas, { name, fill = '#000000' } = {}) {
  */
 export function removeLayer(canvas, layerId) {
   canvas.layers = canvas.layers.filter((l) => l.id !== layerId);
-  for (const [color, id] of canvas.simpleTier.colorToLayerId) {
-    if (id === layerId) canvas.simpleTier.colorToLayerId.delete(color);
-  }
   clampActiveLayer(canvas);
 }
 
@@ -178,9 +254,12 @@ export function reorderLayer(canvas, layerId, direction) {
 }
 
 /**
- * Duplicates a layer (independent pixel buffers and style — mutating one
- * afterward never affects the other) and inserts the copy directly above
- * the original, making it active.
+ * Duplicates a layer (independent shapes — mutating one afterward never
+ * affects the other) and inserts the copy directly above the original,
+ * making it active. Each copied Grid gets a **fresh id**: unlike
+ * `duplicateFrame` (which must preserve ids so the same shape survives a
+ * frame duplicate, see resolveActiveGrid), this is a genuinely new,
+ * separate layer's shapes, not a continuation of the originals' identity.
  *
  * @param {object} canvas
  * @param {string} layerId
@@ -190,25 +269,29 @@ export function duplicateLayer(canvas, layerId) {
   const index = canvas.layers.findIndex((l) => l.id === layerId);
   if (index < 0) return null;
   const original = canvas.layers[index];
-  const copy = createLayer({ name: `${original.name} copy`, width: original.width, height: original.height, offset: original.offset });
+  const copy = createLayer({ name: `${original.name} copy`, frameCount: original.frames.length });
   copy.locked = original.locked;
   copy.opacity = original.opacity;
-  copy.style = cloneLayerStyle(original.style);
-  copy.frames = original.frames.map((frame) => ({ pixels: frame.pixels.slice(), visible: frame.visible }));
+  copy.frames = original.frames.map((frame) => ({
+    visible: frame.visible,
+    grids: frame.grids.map((g) => ({ ...g, id: makeGridId(), pixels: g.pixels.slice(), style: cloneLayerStyle(g.style) })),
+  }));
   canvas.layers.splice(index + 1, 0, copy);
   canvas.activeLayerId = copy.id;
+  refreshActiveGrid(canvas);
   return copy;
 }
 
 /**
  * Merges a layer into the one directly below it in the stack (a "merge
- * down"): pixel data from both is combined (boolean OR, in canvas space —
- * they can have different offsets/sizes) into one grid sized to bound both.
- * The result keeps the *bottom* layer's id/name/style/locked/opacity, and
- * each merged frame keeps the bottom layer's own per-frame visibility —
- * matching how Photoshop/Aseprite's own "Merge Down" resolves which
- * layer's settings survive — and the top layer is removed. No-ops if
- * `layerId` is already the bottom-most layer (nothing to merge into).
+ * down"): every frame's shapes are concatenated, bottom's staying toward
+ * the back and top's toward the front — no pixel math or bounding-box
+ * computation needed, since each Grid already carries its own independent
+ * offset/size/style (contrast with `mergeGridDown` in Grid.js, which fuses
+ * two shapes into one and does need that). A frame where the top layer was
+ * hidden translates that into `visible: false` on each of its incoming
+ * shapes, rather than dropping it silently. The top layer is removed;
+ * no-ops if `layerId` is already the bottom-most layer.
  *
  * @param {object} canvas
  * @param {string} layerId the *top* layer of the pair being merged
@@ -218,46 +301,28 @@ export function mergeLayerDown(canvas, layerId) {
   if (index <= 0) return;
   const top = canvas.layers[index];
   const bottom = canvas.layers[index - 1];
-  const minX = Math.min(top.offset.x, bottom.offset.x);
-  const minY = Math.min(top.offset.y, bottom.offset.y);
-  const maxX = Math.max(top.offset.x + top.width, bottom.offset.x + bottom.width);
-  const maxY = Math.max(top.offset.y + top.height, bottom.offset.y + bottom.height);
-  const width = maxX - minX;
-  const height = maxY - minY;
-  // Frames merge index-for-index — both layers already carry the same
-  // uniform frameCount (see the invariant addFrame/duplicateFrame/removeFrame
-  // maintain), so frame 0 of the merged layer combines frame 0 of each
-  // source layer, frame 1 combines frame 1, and so on.
-  const frames = bottom.frames.map((bottomFrame, frameIndex) => {
-    const pixels = new Uint8Array(width * height);
-    for (const layer of [bottom, top]) {
-      const frame = layer.frames[frameIndex];
-      for (let y = 0; y < layer.height; y++) {
-        for (let x = 0; x < layer.width; x++) {
-          if (!frame.pixels[y * layer.width + x]) continue;
-          const nx = layer.offset.x + x - minX;
-          const ny = layer.offset.y + y - minY;
-          pixels[ny * width + nx] = 1;
-        }
-      }
-    }
-    return { pixels, visible: bottomFrame.visible };
+  bottom.frames.forEach((bottomFrame, i) => {
+    const topFrame = top.frames[i];
+    const incoming = topFrame.visible ? topFrame.grids : topFrame.grids.map((g) => ({ ...g, visible: false }));
+    bottomFrame.grids = [...bottomFrame.grids, ...incoming];
   });
-  bottom.offset = { x: minX, y: minY };
-  bottom.width = width;
-  bottom.height = height;
-  bottom.frames = frames;
   canvas.layers.splice(index, 1);
   canvas.activeLayerId = bottom.id;
+  refreshActiveGrid(canvas);
 }
 
+/** Re-export of Grid.js's shape-merge, so callers only need one import for "merge" regardless of which kind. */
+export { mergeGridDown };
+
 /**
- * Clears one cell from a specific layer's own local grid, regardless of
- * `canvas.activeLayerId` — the primitive a multi-layer-aware selection cut
- * needs (paintCell's advanced-tier erase only ever targets the active
- * layer; see the "select from all visible layers" cut path in selection.js).
- * No-ops out-of-bounds or on a locked layer, matching paintCell's own
- * "locked blocks writes" convention.
+ * Clears one cell from a specific layer's own current-frame shapes,
+ * regardless of `canvas.activeLayerId` — the primitive a multi-layer-aware
+ * selection cut needs (paintCell's advanced-tier erase only ever targets the
+ * active layer+shape; see the "select from all visible layers" cut path in
+ * selection.js). Finds whichever (unlocked) shape in the layer's active
+ * frame owns the cell, clears it, and shrinks/deletes that shape exactly
+ * like paintCell's own erase path. No-ops out-of-bounds, on a locked layer,
+ * or if no unlocked shape owns the cell.
  *
  * @param {object} canvas
  * @param {object} layer
@@ -266,9 +331,14 @@ export function mergeLayerDown(canvas, layerId) {
  */
 export function eraseFromLayer(canvas, layer, canvasX, canvasY) {
   if (layer.locked) return;
-  const lx = canvasX - layer.offset.x;
-  const ly = canvasY - layer.offset.y;
-  set({ width: layer.width, height: layer.height, pixels: layer.frames[currentFrameIndex(canvas)].pixels }, lx, ly, 0);
+  const frame = layer.frames[currentFrameIndex(canvas)];
+  const grid = topGridAt(frame, canvasX, canvasY, { skipLocked: true });
+  if (!grid) return;
+  set(grid, canvasX - grid.offsetX, canvasY - grid.offsetY, 0);
+  if (!shrinkGridToFit(grid)) {
+    frame.grids = frame.grids.filter((g) => g.id !== grid.id);
+    if (canvas.activeGridId === grid.id) canvas.activeGridId = frame.grids[0]?.id ?? null;
+  }
 }
 
 /**
@@ -282,6 +352,21 @@ export function eraseFromLayer(canvas, layer, canvasX, canvasY) {
 export function clampActiveLayer(canvas) {
   if (canvas.layers.some((l) => l.id === canvas.activeLayerId)) return;
   canvas.activeLayerId = canvas.layers.length ? canvas.layers[canvas.layers.length - 1].id : null;
+  refreshActiveGrid(canvas);
+}
+
+/**
+ * Re-derives `activeGridId` from scratch (no previously-active-shape
+ * carryover) for the current `activeLayerId`/active frame — the "a
+ * structural edit changed which layer/frames exist" case. Frame-to-frame
+ * scrubbing (`setActiveFrame`) uses `resolveActiveGrid` directly instead,
+ * with a real `prevGrid`, since sticky selection only matters there.
+ *
+ * @param {object} canvas
+ */
+function refreshActiveGrid(canvas) {
+  const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
+  canvas.activeGridId = resolveActiveGrid(layer, currentFrameIndex(canvas), null);
 }
 
 /**
@@ -299,28 +384,28 @@ export function topVisibleLayerAt(canvas, x, y) {
   const frameIndex = currentFrameIndex(canvas);
   for (let i = canvas.layers.length - 1; i >= 0; i--) {
     const layer = canvas.layers[i];
-    if (!layer.frames[frameIndex].visible) continue;
-    const lx = x - layer.offset.x;
-    const ly = y - layer.offset.y;
-    if (lx < 0 || ly < 0 || lx >= layer.width || ly >= layer.height) continue;
-    if (layer.frames[frameIndex].pixels[ly * layer.width + lx]) return layer;
+    const frame = layer.frames[frameIndex];
+    if (!frame.visible) continue;
+    if (topGridAt(frame, x, y)) return layer;
   }
   return null;
 }
 
 /**
- * Switches `canvas.tier`. Simple -> advanced is always safe: it just flips
- * every layer's `autoManaged` off, handing them over as free-floating
- * layers with their existing style/position untouched — or, for a blank
- * canvas with no layers yet, creates one so advanced tier never opens onto
- * an unpaintable empty layer stack (matching the "+ Add Layer" button's own
- * default: a full-canvas layer with a solid black fill). Advanced -> simple
- * is potentially lossy (the caller should confirm first): every layer is
- * discarded and rebuilt as auto-managed, one per distinct composited color,
- * by re-painting each canvas cell's `colorAt` result through the normal
- * simple-tier path — cells under a non-solid fill (gradient) have no
- * simple-tier equivalent and are dropped, and overlapping layers of the
- * same color merge, exactly as "lossy" implies.
+ * Switches `canvas.tier`. Simple -> advanced is always safe: Simple tier is
+ * already just a single Layer (see autoLayerSync.js), so this just flips the
+ * tier flag and hands that layer over as a free-floating one — or, for a
+ * blank canvas with no layers yet, creates one so advanced tier never opens
+ * onto an unpaintable empty layer stack (matching the "+ Add Layer" button's
+ * own default). Advanced -> simple is potentially lossy (the caller should
+ * confirm first): every layer is discarded and rebuilt as a single
+ * style-scanned Layer by re-painting each *currently active frame's*
+ * composited cell's `colorAt` result through the simple-tier path — other
+ * frames' advanced-tier content is not preserved (matches the pre-migration
+ * behavior, which only ever reconstructed the active frame the same way);
+ * cells under a non-solid fill (gradient) have no simple-tier equivalent and
+ * are dropped, and overlapping shapes of the same color merge, exactly as
+ * "lossy" implies.
  *
  * @param {object} canvas
  * @param {'simple'|'advanced'} newTier
@@ -328,8 +413,6 @@ export function topVisibleLayerAt(canvas, x, y) {
 export function convertTier(canvas, newTier) {
   if (canvas.tier === newTier) return;
   if (newTier === 'advanced') {
-    for (const layer of canvas.layers) layer.autoManaged = false;
-    canvas.simpleTier = { colorToLayerId: new Map() };
     canvas.tier = 'advanced';
     if (canvas.layers.length === 0) addLayer(canvas);
     clampActiveLayer(canvas);
@@ -343,19 +426,20 @@ export function convertTier(canvas, newTier) {
     }
   }
   canvas.layers = [];
-  canvas.simpleTier = { colorToLayerId: new Map() };
   canvas.tier = 'simple';
   canvas.activeLayerId = null;
+  canvas.activeGridId = null;
   for (const cell of cells) paintSimpleCell(canvas, cell.x, cell.y, cell.color);
+  clampActiveLayer(canvas);
 }
 
 /**
- * Resizes the canvas to newWidth x newHeight relative to `anchor`. Any
- * layer that was exactly full-canvas-sized (the invariant simple-tier auto
- * layers maintain) is resized in step via the same `anchor`, via Grid's
- * resize primitive; any other layer just has its offset shifted by the
- * same delta, keeping its own content untouched. See growToInclude for the
- * matching per-paint-stroke case of the identical resizeAt primitive.
+ * Resizes the canvas to newWidth x newHeight relative to `anchor`. Every
+ * shape (Grid) in every layer/frame just has its offset shifted by the same
+ * delta — a Grid is always independently positioned/auto-cropped (there's
+ * no "full-canvas" special case to resize in step, the way a pre-migration
+ * full-canvas Layer had), matching how a non-full-canvas layer's offset used
+ * to shift under the old model.
  *
  * @param {object} canvas
  * @param {number} newWidth
@@ -366,16 +450,11 @@ export function resizeCanvas(canvas, newWidth, newHeight, anchor = 'top-left') {
   const deltaX = anchorOffset(anchor, canvas.width, newWidth, ANCHOR_X_FRACS, ['left', 'right']);
   const deltaY = anchorOffset(anchor, canvas.height, newHeight, ANCHOR_Y_FRACS, ['top', 'bottom']);
   for (const layer of canvas.layers) {
-    const wasFullCanvas = layer.offset.x === 0 && layer.offset.y === 0 && layer.width === canvas.width && layer.height === canvas.height;
-    if (wasFullCanvas) {
-      layer.frames = layer.frames.map((frame) => ({
-        pixels: resizeAt({ width: layer.width, height: layer.height, pixels: frame.pixels }, newWidth, newHeight, deltaX, deltaY).pixels,
-        visible: frame.visible,
-      }));
-      layer.width = newWidth;
-      layer.height = newHeight;
-    } else {
-      layer.offset = { x: layer.offset.x + deltaX, y: layer.offset.y + deltaY };
+    for (const frame of layer.frames) {
+      for (const grid of frame.grids) {
+        grid.offsetX += deltaX;
+        grid.offsetY += deltaY;
+      }
     }
   }
   canvas.width = newWidth;
@@ -384,9 +463,10 @@ export function resizeCanvas(canvas, newWidth, newHeight, anchor = 'top-left') {
 
 /**
  * Reads the composited color at a canvas-space cell — whichever visible
- * layer nearest the top (end of `layers`) has that cell set. Used by tools
- * that need to know "what's here" (eyedropper, bucket fill, selection
- * extract) without caring how many layers are actually involved.
+ * layer nearest the top (end of `layers`), and within it whichever visible
+ * shape nearest its own top, has that cell set. Used by tools that need to
+ * know "what's here" (eyedropper, bucket fill, selection extract) without
+ * caring how many layers or shapes are actually involved.
  *
  * @param {object} canvas
  * @param {number} x
@@ -397,13 +477,10 @@ export function colorAt(canvas, x, y) {
   const frameIndex = currentFrameIndex(canvas);
   for (let i = canvas.layers.length - 1; i >= 0; i--) {
     const layer = canvas.layers[i];
-    if (!layer.frames[frameIndex].visible) continue;
-    const lx = x - layer.offset.x;
-    const ly = y - layer.offset.y;
-    if (lx < 0 || ly < 0 || lx >= layer.width || ly >= layer.height) continue;
-    if (layer.frames[frameIndex].pixels[ly * layer.width + lx]) {
-      return typeof layer.style.fill === 'string' ? layer.style.fill : null;
-    }
+    const frame = layer.frames[frameIndex];
+    if (!frame.visible) continue;
+    const grid = topGridAt(frame, x, y);
+    if (grid) return typeof grid.style.fill === 'string' ? grid.style.fill : null;
   }
   return null;
 }
@@ -422,11 +499,14 @@ export function colorAt(canvas, x, y) {
 export function addFrame(canvas, index) {
   const insertAt = index ?? currentFrameIndex(canvas) + 1;
   for (const layer of canvas.layers) {
-    layer.frames.splice(insertAt, 0, { pixels: new Uint8Array(layer.width * layer.height), visible: true });
+    layer.frames.splice(insertAt, 0, { visible: true, grids: [] });
   }
   canvas.frameDurations.splice(insertAt, 0, defaultFrameDurationMs(canvas));
   canvas.frameCount++;
   canvas.activeFrame = insertAt;
+  // The new frame has no shapes yet, so this is always null — no need for
+  // the id/style-matching machinery here.
+  canvas.activeGridId = null;
 }
 
 /**
@@ -434,18 +514,29 @@ export function addFrame(canvas, index) {
  * makes the copy active. The copy's duration matches the source frame's
  * (an exact duplicate, timing included) rather than resetting to the
  * canvas's default; each layer's per-frame visibility copies the same way.
+ * Each copied shape **keeps its source's id** (only its own pixel buffer and
+ * style are independently cloned) — this is exactly the case
+ * `resolveActiveGrid`'s id-match path exists for, so the previously active
+ * shape (if any) stays selected in the new frame.
  *
  * @param {object} canvas
  * @param {number} index
  */
 export function duplicateFrame(canvas, index) {
   const insertAt = index + 1;
+  const activeLayer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
+  const prevGrid = activeLayer?.frames[index]?.grids.find((g) => g.id === canvas.activeGridId) ?? null;
   for (const layer of canvas.layers) {
-    layer.frames.splice(insertAt, 0, { pixels: layer.frames[index].pixels.slice(), visible: layer.frames[index].visible });
+    const source = layer.frames[index];
+    layer.frames.splice(insertAt, 0, {
+      visible: source.visible,
+      grids: source.grids.map((g) => ({ ...g, pixels: g.pixels.slice(), style: cloneLayerStyle(g.style) })),
+    });
   }
   canvas.frameDurations.splice(insertAt, 0, canvas.frameDurations[index]);
   canvas.frameCount++;
   canvas.activeFrame = insertAt;
+  canvas.activeGridId = resolveActiveGrid(activeLayer, insertAt, prevGrid);
 }
 
 /**
@@ -461,17 +552,26 @@ export function removeFrame(canvas, index) {
   canvas.frameDurations.splice(index, 1);
   canvas.frameCount--;
   canvas.activeFrame = Math.min(canvas.activeFrame, canvas.frameCount - 1);
+  refreshActiveGrid(canvas);
 }
 
 /**
  * Makes `index` the active frame — a working-session pointer move (like
  * setActiveLayerId), not a committed action. Clamped to the valid range.
+ * Re-resolves `activeGridId` (see resolveActiveGrid) using the shape that
+ * was active in the frame being left, so the common "scrubbing through
+ * frames while adjusting one particular shape" workflow keeps that shape
+ * selected instead of clearing on every step.
  *
  * @param {object} canvas
  * @param {number} index
  */
 export function setActiveFrame(canvas, index) {
-  canvas.activeFrame = Math.max(0, Math.min(index, canvas.frameCount - 1));
+  const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
+  const prevGrid = layer?.frames[canvas.activeFrame]?.grids.find((g) => g.id === canvas.activeGridId) ?? null;
+  const newIndex = Math.max(0, Math.min(index, canvas.frameCount - 1));
+  canvas.activeFrame = newIndex;
+  canvas.activeGridId = resolveActiveGrid(layer, newIndex, prevGrid);
 }
 
 /**

@@ -1,60 +1,65 @@
-// Simple tier is "advanced tier with auto-managed layers, panel hidden": one
-// full-canvas, single-color layer per palette color in use, reconciled on
-// every painted cell so "last color painted wins" per cell — the mutual-
+// Simple tier is "advanced tier with a single, style-scanned auto layer,
+// panel hidden": exactly one Layer, whose current frame holds one Grid
+// (Shape) per distinct color painted anywhere in that frame — reconciled on
+// every painted cell so "last color painted wins" per cell, the mutual-
 // exclusivity invariant that lets a multi-color stroke or selection-paste
-// decompose cleanly back into per-color layers for pixelloom to trace.
+// decompose cleanly back into per-color shapes for pixelloom to trace.
+// Grids are found by scanning style, not tracked via a persistent map (the
+// pre-migration `colorToLayerId`) — a shape only needs to exist in frames
+// where its color actually appears, which is the whole point of this
+// redesign (see docs/data-model.md).
 
-import { set } from './Grid.js';
-import { createLayer, isEmpty } from './Layer.js';
-
-function frameGrid(canvas, layer) {
-  const frameIndex = Math.max(0, Math.min(canvas.activeFrame ?? 0, layer.frames.length - 1));
-  return { width: layer.width, height: layer.height, pixels: layer.frames[frameIndex].pixels };
-}
+import { get, set, createShapeGrid, growGridToInclude, shrinkGridToFit } from './Grid.js';
+import { createLayer } from './Layer.js';
 
 /**
- * Lazily creates a full-canvas, auto-managed layer for `color` if one
- * doesn't already exist.
+ * Returns Simple tier's single managed layer, creating it lazily for a
+ * blank canvas.
  *
  * @param {object} canvas
- * @param {string} color
  * @returns {object} Layer
  */
-export function getOrCreateAutoLayer(canvas, color) {
-  const existingId = canvas.simpleTier.colorToLayerId.get(color);
-  if (existingId) {
-    const existing = canvas.layers.find((l) => l.id === existingId);
-    if (existing) return existing;
+function getSimpleLayer(canvas) {
+  if (canvas.layers.length === 0) {
+    canvas.layers.push(createLayer({ name: 'Layer 1', frameCount: canvas.frameCount }));
   }
-  const layer = createLayer({ name: color, width: canvas.width, height: canvas.height, fill: color, autoManaged: true, autoColor: color, frameCount: canvas.frameCount });
-  canvas.layers.push(layer);
-  canvas.simpleTier.colorToLayerId.set(color, layer.id);
-  return layer;
+  return canvas.layers[0];
+}
+
+/** @returns {object} Frame the current active frame of the simple-tier layer. */
+function currentFrame(canvas, layer) {
+  const frameIndex = Math.max(0, Math.min(canvas.activeFrame ?? 0, layer.frames.length - 1));
+  return layer.frames[frameIndex];
 }
 
 /**
- * Simple-tier per-cell paint: clears (x, y) from every *other* auto-managed
- * layer, sets it into `color`'s layer (creating one lazily if needed), then
- * GCs any auto layer left empty. `color` of null/undefined just erases.
+ * Simple-tier per-cell paint: finds whichever shape in the active frame
+ * currently owns (x, y) and clears it from there (shrinking or deleting
+ * that shape, same as any other erase) unless it's already `color`'s own
+ * shape, then — if painting, not erasing — sets the cell into the shape
+ * matching `color` (creating one lazily if none exists yet this frame).
+ * `color` of null/undefined just erases.
  *
  * @param {object} canvas
- * @param {number} x canvas-space (auto layers are always full-canvas, so this doubles as local space)
+ * @param {number} x canvas-space
  * @param {number} y canvas-space
  * @param {string|null} [color]
  */
 export function paintSimpleCell(canvas, x, y, color) {
-  for (const layer of canvas.layers.filter((l) => l.autoManaged && l.autoColor !== color)) {
-    set(frameGrid(canvas, layer), x, y, 0);
+  const layer = getSimpleLayer(canvas);
+  const frame = currentFrame(canvas, layer);
+  const owner = frame.grids.find((g) => get(g, x - g.offsetX, y - g.offsetY));
+  if (owner && owner.style.fill !== color) {
+    set(owner, x - owner.offsetX, y - owner.offsetY, 0);
+    if (!shrinkGridToFit(owner)) frame.grids = frame.grids.filter((g) => g.id !== owner.id);
   }
-  if (color) {
-    const target = getOrCreateAutoLayer(canvas, color);
-    set(frameGrid(canvas, target), x, y, 1);
+  if (!color || owner?.style.fill === color) return;
+  let target = frame.grids.find((g) => g.style.fill === color);
+  if (!target) {
+    target = createShapeGrid({ name: color, offsetX: x, offsetY: y, style: { fill: color, effects: [] } });
+    frame.grids.push(target);
+  } else {
+    growGridToInclude(target, x, y);
   }
-  canvas.layers = canvas.layers.filter((layer) => {
-    if (!layer.autoManaged || !isEmpty(layer)) return true;
-    if (canvas.simpleTier.colorToLayerId.get(layer.autoColor) === layer.id) {
-      canvas.simpleTier.colorToLayerId.delete(layer.autoColor);
-    }
-    return false;
-  });
+  set(target, x - target.offsetX, y - target.offsetY, 1);
 }
