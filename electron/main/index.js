@@ -60,12 +60,18 @@ function createWindow() {
 
 ipcMain.handle('pixelyph:save-file', async (event, filename, arrayBuffer) => {
   const win = BrowserWindow.fromWebContents(event.sender);
+  const ext = extname(filename);
   const { canceled, filePath } = await dialog.showSaveDialog(win, {
     defaultPath: filename,
-    filters: filtersForExtension(extname(filename)),
+    filters: filtersForExtension(ext),
   });
   if (canceled || !filePath) return;
-  await writeFile(filePath, Buffer.from(arrayBuffer));
+  // The Windows/Linux native dialogs only auto-append the filtered extension
+  // if the user leaves that filter selected — picking "All Files" (always
+  // offered alongside it) or typing over the suggested name drops it, so
+  // re-check and append here rather than trust the dialog's result as-is.
+  const finalPath = ext && extname(filePath).toLowerCase() !== ext.toLowerCase() ? filePath + ext : filePath;
+  await writeFile(finalPath, Buffer.from(arrayBuffer));
 });
 
 ipcMain.handle('pixelyph:open-file', async (event, accept) => {

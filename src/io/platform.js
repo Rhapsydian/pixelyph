@@ -33,7 +33,13 @@ export async function saveFile(filename, blob) {
   }
   if (typeof window.showSaveFilePicker === 'function') {
     try {
-      const handle = await window.showSaveFilePicker({ suggestedName: filename });
+      const dot = filename.lastIndexOf('.');
+      const ext = dot >= 0 ? filename.slice(dot) : '';
+      // Passing `types` (rather than just `suggestedName`) is what makes the
+      // picker auto-append the extension if the user edits the filename to
+      // drop it — matching native save-dialog behavior.
+      const types = ext ? [{ description: `${ext.slice(1).toUpperCase()} File`, accept: { 'application/octet-stream': [ext] } }] : undefined;
+      const handle = await window.showSaveFilePicker({ suggestedName: filename, types });
       const writable = await handle.createWritable();
       await writable.write(blob);
       await writable.close();
