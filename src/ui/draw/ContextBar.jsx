@@ -73,7 +73,8 @@ export function ContextBar() {
   const activeTool = useStore((s) => s.activeTool);
   const shapeFilled = useStore((s) => s.shapeFilled);
   const setShapeFilled = useStore((s) => s.setShapeFilled);
-  const symmetryMode = useStore((s) => s.canvas.symmetryMode);
+  const canvasSymmetryMode = useStore((s) => s.canvas.symmetryMode);
+  const glyphCanvas = useStore((s) => s.glyphCanvas);
   const setSymmetryMode = useStore((s) => s.setSymmetryMode);
   const showGrid = useStore((s) => s.showGrid);
   const toggleGrid = useStore((s) => s.toggleGrid);
@@ -88,6 +89,7 @@ export function ContextBar() {
 
   const isGlyphMode = mode === 'glyph';
   const showsShapeToggle = activeTool === 'rectangle' || activeTool === 'ellipse';
+  const symmetryMode = isGlyphMode ? (glyphCanvas?.symmetryMode ?? 'none') : canvasSymmetryMode;
 
   function handleTierChange(newTier) {
     if (newTier === tier) return;
@@ -136,7 +138,7 @@ export function ContextBar() {
         </label>
       )}
 
-      {!isGlyphMode && (
+      {(!isGlyphMode || glyphCanvas) && (
         <label>
           Symmetry:{' '}
           <select value={symmetryMode} onChange={(e) => setSymmetryMode(e.target.value)}>

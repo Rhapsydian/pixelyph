@@ -238,8 +238,15 @@ export const useStore = create((set, get) => {
     setSelectionScope: (scope) => set({ selectionScope: scope }),
 
     // Working-session conveniences: persisted with the project, excluded from undo.
-    setSymmetryMode: (mode) => {
-      get().canvas.symmetryMode = mode;
+    setSymmetryMode: (symmetryMode) => {
+      const { mode, glyphCanvas, canvas } = get();
+      if (mode === 'glyph') {
+        if (!glyphCanvas) return;
+        glyphCanvas.symmetryMode = symmetryMode;
+        set({ glyphCanvas: { ...glyphCanvas } });
+        return;
+      }
+      canvas.symmetryMode = symmetryMode;
       touchCanvas();
     },
     setReferenceImage: (dataUrl) => {
@@ -256,11 +263,14 @@ export const useStore = create((set, get) => {
       touchCanvas();
     },
 
-    /** Mirror-aware per-cell paint — the hot pointer-drag path. Glyph mode has no symmetry, paints straight into `glyphCanvas`. */
+    /** Mirror-aware per-cell paint — the hot pointer-drag path. */
     paintCellLive: (x, y, color) => {
       const { mode, glyphCanvas } = get();
       if (mode === 'glyph') {
-        if (glyphCanvas) paintCanvasCell(glyphCanvas, x, y, color);
+        if (!glyphCanvas) return;
+        for (const p of mirrorPoints(glyphCanvas.width, glyphCanvas.height, x, y, glyphCanvas.symmetryMode)) {
+          paintCanvasCell(glyphCanvas, p.x, p.y, color);
+        }
         return;
       }
       const { canvas } = get();
