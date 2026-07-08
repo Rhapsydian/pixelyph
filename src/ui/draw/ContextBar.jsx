@@ -122,7 +122,7 @@ export function ContextBar() {
         </div>
       )}
 
-      {!isGlyphMode && showsShapeToggle && (
+      {showsShapeToggle && (
         <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <input type="checkbox" checked={shapeFilled} onChange={(e) => setShapeFilled(e.target.checked)} /> Filled
         </label>
