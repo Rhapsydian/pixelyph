@@ -109,6 +109,10 @@ npm run dist:win        # build, then package a Windows installer into release/
 
 [`BACKLOG.md`](./BACKLOG.md) tracks features that were built and then deliberately hidden or disabled behind a known issue (rather than shipped half-broken or removed outright — the underlying logic is left intact so restoring them later is a small, targeted change), plus open ideas flagged for future discussion rather than acted on immediately.
 
+## Data model
+
+[`docs/data-model.md`](./docs/data-model.md) documents Pixelyph's core artwork data model (Canvas → Layer → Frame → Grid) in detail — exact shapes, the active-grid selection pointer, the auto grow/shrink and merge algorithms, and the save-file migration path. It currently describes the target model for an in-progress migration (tracked on the `layer-frame-grid-redesign` branch and in `BACKLOG.md`), not yet what's on `main`.
+
 ## Session logs
 
 The [`session-logs/`](./session-logs/) directory contains a markdown log for each Claude Code session used to build Pixelyph, written from the actual session transcripts. Each log covers the goal, key decisions (with rationale), work completed, and what was deferred. They are intended as a transparent record of how the project was conceived and built, and as a demonstration of AI-assisted development as a practical workflow.

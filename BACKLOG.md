@@ -9,12 +9,14 @@ blocking issue is fixed); and open ideas flagged for later discussion
 rather than acted on immediately. Review this list once all
 currently-planned phases are complete.
 
-## NEXT SESSION: Layer/Frame/Grid model redesign — scoped, ready for Session 0
+## IN PROGRESS: Layer/Frame/Grid model redesign — Session 0 done, Session 1 next
 
-**This is the next `/dev-session` for this project.** Kick off straight into
-a plan-mode design pass (Session 0 below) rather than asking what to work on
-— the scope below is already agreed with the user across a full discussion;
-what's left is turning it into a concrete implementation plan.
+**Branch:** `layer-frame-grid-redesign`. This migration spans several
+sessions and leaves the app genuinely broken partway through (model shape
+changes before export/UI catch up), so it's developed on its own branch and
+merged to `main` only once Session 4 (tests + hardening) is complete and
+verified — `main` stays deployable (the live demo redeploys on every push
+to `main`) for the whole span.
 
 **Why:** started from two small questions ("why is a 16x16 save's `pixels`
 string 344 characters" and "how do vector animation apps handle layer/frame
@@ -27,104 +29,47 @@ only ever appears in 1 of 16 frames. Surveyed how real animation tools
 handle this (Adobe Animate/Flash, Aseprite, After Effects/Lottie, Rive):
 none of them invert the layer/frame nesting, and all of them keep a layer
 as the persistent identity while making per-frame content sparse/optional
-instead. Talking that through led to a cleaner reframe: separate "layer"
-(a collection/identity, no style of its own) from "grid" (the actual
-styled shape, closer to a vector-editor object) — see below.
+instead.
 
-**Confirmed data model** (agreed with the user; do not re-litigate these
-without a specific reason — they were each a deliberate call):
+**Full data model spec: [`docs/data-model.md`](./docs/data-model.md).**
+Exact `Layer`/`Frame`/`Grid` shapes, the `activeGridId` selection pointer
+and its frame-switch resolution algorithm, the grow/shrink-to-fit
+algorithm, the two merge operations (layer merge-down is now pure
+concatenation; grid/shape merge-down keeps the old bounding-box+pixel-OR
+behavior, "bottom wins" on style), UI wireframes, and the save-file v3
+migration outline all live there, not duplicated here.
 
-```
-Canvas
- └─ Layer[]           persistent identity: name, locked, opacity, z-order — pure collection, no style, no offset
-     └─ Frame[]        same count/order across every layer (unchanged from today)
-         └─ Grid[]     independent per frame (no cross-frame identity) — each Grid:
-                        { offsetX, offsetY, width, height, pixels, style }
-```
+**Retires the "Advanced-tier layer offset — manual X/Y input hidden" item
+below** once shipped — offset becomes fully auto-computed from painted
+content, never manually typed, so the fractional-offset bug class this was
+shelved for can't occur. Delete that entry when this migration ships.
 
-- **Grids have no cross-frame identity** — each frame's `grids` array is
-  independent content, like today's per-frame `pixels` copies.
-  `duplicateFrame` just deep-copies the array; no id tracking needed.
-- **Simple tier becomes exactly one `Layer`, always** — not one auto-layer
-  per color like today. That single layer's each-frame `grids` list holds
-  one Grid per color *currently used in that frame*, found by scanning that
-  frame's (short) grid list for a matching `style` — no persistent
-  `colorToLayerId`-style map needed. This is simpler than today's
-  `autoLayerSync.js`, not more complex.
-- **Active-grid paint model** (the one place Pixelyph does something
-  genuinely its own): there's always an "active grid" being edited, like
-  today's `activeLayerId` but pointing at a specific grid within a
-  layer+frame. Simple tier's paint op: turn the cell off in whichever grid
-  currently owns it (if a different color), turn it on in the target
-  color's grid (creating one in this frame if none exists yet) — same
-  mutual-exclusivity invariant `paintSimpleCell` enforces today, just
-  re-scoped from "across sibling layers" to "across sibling grids in one
-  frame." Advanced tier's active grid is just whatever the user has
-  explicitly selected; painting only touches that one grid, no
-  auto-clearing (matches today's Advanced-tier behavior).
-- **Grid bounds are fully auto-computed, both grow and shrink** — reuses
-  `Layer.js`'s existing `growToInclude` almost as-is (same "reallocate to
-  the minimal rect containing the new cell," applied to a Grid instead of
-  a Layer) for growing; shrinking (recomputing the minimal bounding box
-  after an erase, and deleting a Grid entirely once it's empty) is new
-  logic `growToInclude` doesn't have today, mirroring the
-  prune-when-empty pattern `paintSimpleCell` already uses for whole layers.
-  **This retires the "Advanced-tier layer offset — manual X/Y input
-  hidden" item below** — that item was shelved because manually-typed
-  fractional offsets disagreed with the grid-overlay/cursor-snap pipeline;
-  if offset is never manually typed at all, always derived from actual
-  painted content, that whole bug class can't occur. When this migration
-  ships, that backlog entry can be deleted rather than resolved
-  separately.
-- **Z-order is plain array order**, consistent with today's Layer order —
-  applies to a frame's `grids` list the same way it applies to
-  `canvas.layers` today.
-- **Scoping call for the migration itself:** Advanced tier can ship with
-  each Layer still holding exactly one Grid per frame (matching today's
-  behavior 1:1, just on the new data shape). Letting a user add a *second*
-  independent shape to one layer is genuinely the **"Layer groups/folders
-  — deferred again"** item further down this file, now made easy by this
-  foundation — it does not have to be built in the same pass as the
-  migration.
+**Substantially resolves "Layer groups/folders — deferred again" below** —
+Advanced tier now supports multiple shapes per layer per frame from the
+start (not deferred), which was that item's entire premise. See that
+entry's note.
 
 **Phase breakdown:**
-- **Session 0 — Design.** Turn the confirmed model above into a concrete
-  spec: exact `Grid`/`Frame`/`Layer` shapes, the active-grid pointer's
-  exact shape (which layer + which grid within the current frame), the
-  shrink-to-fit algorithm, and — since this is a UI-affecting change for
-  Advanced tier (an "active grid" selector needs to exist somewhere) —
-  wireframes for whatever that selection affordance looks like. Output is
-  a written spec, not code.
+- **Session 0 — Design. Done.** Spec written to `docs/data-model.md`.
 - **Session 1 — Model layer.** `Grid` becomes first-class (building on
   the existing `Grid.js` primitive). `Layer.style` moves to `Grid.style`.
-  `Canvas.js`'s paint/resize/frame functions, `autoLayerSync.js` (gets
-  simpler — one layer, not many), and `selection.js` all get rewritten
-  against the new shape. `projectFile.js` gets a real version-3 migration
-  (loading old v1/v2 saves, which are Layer-per-color, into the new
-  one-simple-tier-layer-with-per-frame-grids shape).
+  `Canvas.js`'s paint/resize/frame/merge functions, `autoLayerSync.js`
+  (gets simpler — one layer, not many), and `selection.js` all get
+  rewritten against the new shape. `projectFile.js` gets a real version-3
+  migration (loading old v1/v2 saves into the new shape). **Next session.**
 - **Session 2 — Export/compose.** `composeLayersSvg.js` and the three
   animated-export files (`animatedSvg.js`, `spriteSheet.js`,
   `animatedRaster.js`, `spriteArchive.js`) need to iterate
   `layers -> frames -> grids` and composite per-grid style instead of
   per-layer style.
 - **Session 3 — UI.** `LayersPanel.jsx` needs to show/manage a layer's
-  grid(s); Advanced tier gets whatever active-grid-selection affordance
-  Session 0 designed.
+  shape(s) per `docs/data-model.md` section 4's wireframes; style panel
+  retargets to the active shape.
 - **Session 4 — Tests + hardening.** Rewrite the ~7 test files that
   reference the old `Layer.frames`/`Canvas.layers` shape directly
   (heaviest: `test/model/Canvas.test.js`), plus new coverage for the
-  sparsity behavior itself — that's the actual point of doing this.
-
-**Files known to be affected** (from a read-only Explore-agent survey done
-during scoping; re-verify at Session 1, this list predates the final
-Grid-based design): `src/model/Canvas.js`, `src/model/Layer.js`,
-`src/model/autoLayerSync.js`, `src/model/selection.js`,
-`src/io/projectFile.js`, `src/export/svg/composeLayersSvg.js`,
-`src/export/svg/animatedSvg.js`, `src/export/raster/spriteSheet.js`,
-`src/export/raster/animatedRaster.js`, `src/export/raster/spriteArchive.js`,
-`src/state/store.js`, `src/model/history.js`, `src/ui/draw/LayersPanel.jsx`,
-`src/ui/draw/FrameStrip.jsx`, `src/model/GlyphSet.js` (tangential — glyphs
-are single-frame, low risk).
+  sparsity behavior itself. Merge `layer-frame-grid-redesign` to `main`
+  once this passes clean.
 
 ## WOFF2 font export — disabled, times out in real browsers
 
@@ -233,33 +178,33 @@ project's current "early development" status where "clone and
 **To resolve:** revisit once the project is far enough along that shipping
 installable builds to non-developers actually makes sense.
 
-## Layer groups/folders — deferred again
+## Layer groups/folders — substantially resolved by the Layer/Frame/Grid redesign
 
-**Feeds into the "Layer/Frame/Grid model redesign" item above** — once a
-Layer is a collection of Grids rather than one styled entity, "a layer
-holding more than one shape" is most of the way to this feature already.
-Worth revisiting scope here once that migration ships, rather than
-designing grouping against the current flat-layer model.
+**Resolved/superseded by the "Layer/Frame/Grid model redesign" item
+above** — this item's entire premise was "a layer holding more than one
+shape." The redesign ships exactly that from the start (a Layer is a
+collection of Grids/shapes; Advanced tier gets Add Shape/reorder/
+duplicate/merge/delete per layer, see `docs/data-model.md` section 4) —
+not deferred to this item.
 
-**Not scoped.** Raised during Phase 9's (Palette/Layers/Style review)
-planning and deferred a second time rather than built. A flat layer list
-(`LayersPanel.jsx`) is simple to reorder and reason about; nesting layers
-under a collapsible named group touches several things at once:
+**Residual sliver, if still wanted:** nested, collapsible named *groups of
+layers* (grouping whole layers together, not shapes within one layer) is a
+distinct, smaller ask than what this item originally described. If picked
+up, it still touches:
 
-- Reorder semantics: Phase 9 kept single-step move-up/move-down (no drag-
-  and-drop) for both layers and the palette — moving a layer in or out of
-  a group, or past a group boundary, needs its own defined behavior on top
-  of that.
+- Reorder semantics: single-step move-up/move-down (no drag-and-drop) for
+  layers today — moving a layer in or out of a group, or past a group
+  boundary, needs its own defined behavior on top of that.
 - Collapse/expand state per group — a new piece of working-session state
   (like `activeLayerId`/`activeFrame`), not artwork content.
-- `composeLayersSvg.js`'s `composeLayersBody` currently iterates
-  `canvas.layers` as a flat, linear list — grouping would need either a
-  flattening pass before composition or a recursive rewrite, without
-  changing the exported SVG's actual visual stacking order.
+- `composeLayersSvg.js`'s `composeLayersBody` iterates `canvas.layers` as
+  a flat, linear list — grouping would need either a flattening pass
+  before composition or a recursive rewrite, without changing the
+  exported SVG's actual visual stacking order.
 
-**To resolve:** scope properly in its own planning session if/when it's
-picked up — likely bigger than a slice of whatever phase is running at
-the time.
+**To resolve:** scope properly in its own planning session if/when this
+residual sliver is picked up — likely much smaller now than before the
+Grid redesign, but still its own session, not a slice of another phase.
 
 ## SVG pattern fills — built, then removed; more complex than it looked
 
