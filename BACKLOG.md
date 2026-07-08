@@ -11,12 +11,20 @@ currently-planned phases are complete.
 
 ## IN PROGRESS: Layer/Frame/Grid model redesign — Session 0 done, Session 1 next
 
-**Branch:** `layer-frame-grid-redesign`. This migration spans several
-sessions and leaves the app genuinely broken partway through (model shape
-changes before export/UI catch up), so it's developed on its own branch and
-merged to `main` only once Session 4 (tests + hardening) is complete and
-verified — `main` stays deployable (the live demo redeploys on every push
-to `main`) for the whole span.
+**This is the next `/dev-session` for this project.** Check out (or
+confirm you're already on) the `layer-frame-grid-redesign` branch —
+**not** `main` — before doing anything else, then kick off straight into
+implementing Session 1 (Model layer, below) rather than asking what to
+work on. The scope is fully specified in `docs/data-model.md`; there's
+nothing left to discuss in plan-mode kickoff beyond confirming the user's
+ready to start Session 1.
+
+**Branch:** `layer-frame-grid-redesign` (pushed to remote). This migration
+spans several sessions and leaves the app genuinely broken partway through
+(model shape changes before export/UI catch up), so it's developed on its
+own branch and merged to `main` only once Session 4 (tests + hardening) is
+complete and verified — `main` stays deployable (the live demo redeploys on
+every push to `main`) for the whole span.
 
 **Why:** started from two small questions ("why is a 16x16 save's `pixels`
 string 344 characters" and "how do vector animation apps handle layer/frame
