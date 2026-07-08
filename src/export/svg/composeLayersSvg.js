@@ -1,14 +1,21 @@
-// Composes every visible layer into one SVG string: one pixelloom
-// gridToPath call per layer, each wrapped in a <g transform="translate(...)">
-// for its offset in canvas space — pixelloom itself never sees offsets.
-// Per-layer gradient/filter defs are collected into one shared <defs>
-// block, ids namespaced per layer (`grad-${id}`/`filter-${id}`) to avoid
-// collisions between layers.
+// Composes every visible layer into one SVG string. A layer is pure
+// identity/z-order (see docs/data-model.md); its actual pixel content is
+// one or more independently-positioned, independently-styled Grids
+// ("Shapes" in the UI) in the active frame. Each visible Grid becomes one
+// pixelloom gridToPath call, wrapped in its own <path transform=
+// "translate(...)"> for its offset in canvas space — pixelloom itself
+// never sees offsets. Every Shape's <path> in a layer is collected as a
+// sibling inside that layer's one <g>, so the layer-level grouping/id/
+// opacity survives even though a layer's content is no longer a single
+// dense buffer. Per-shape gradient/filter defs are collected into one
+// shared <defs> block, ids namespaced per shape (`grad-${grid.id}`/
+// `filter-${grid.id}`) — already globally unique since Grid ids come from
+// one counter, so no extra collision-avoidance is needed there.
 //
-// Each <g> also gets a CSS-selectable id derived from the layer's *name*
-// (not its internal id), on by default rather than a per-layer opt-in —
-// most layers get meaningful names anyway, and it matches the slugification
-// iconFontCss.js will need for glyph names in Phase 4. Two layers sharing a
+// Each layer's <g> still gets a CSS-selectable id derived from the
+// *layer's* name (not its internal id, and not any shape's name) — on by
+// default rather than a per-layer opt-in, matching the slugification
+// iconFontCss.js needs for glyph names in Phase 4. Two layers sharing a
 // name still get distinct ids (`-2`, `-3`, ...) so nothing silently
 // collides in the exported markup.
 //
@@ -51,24 +58,34 @@ export function composeLayersBody(canvas) {
       // snapshot of it. animatedSvg.js/spriteSheet.js/animatedRaster.js
       // (Phase 7) render every frame separately instead of calling this once.
       const frameIndex = Math.max(0, Math.min(canvas.activeFrame ?? 0, layer.frames.length - 1));
-      const frame = layer.frames[frameIndex];
-      return { layer, frameIndex, frame };
+      return { layer, frame: layer.frames[frameIndex] };
     })
     // Visibility is per-frame (Layer.js) — a layer hidden in *this* frame
     // is skipped even though it might be visible in others.
     .filter(({ frame }) => frame.visible)
     .map(({ layer, frame }) => {
-      const d = gridToPath(frame.pixels, layer.width, layer.height);
-      if (!d) return '';
+      const paths = frame.grids
+        // Shape visibility is independent of the layer's own frame
+        // visibility (docs/data-model.md) — a hidden shape within an
+        // otherwise-visible layer/frame just contributes nothing.
+        .filter((grid) => grid.visible)
+        .map((grid) => {
+          const d = gridToPath(grid.pixels, grid.width, grid.height);
+          if (!d) return '';
+          const fill = serializeFill(grid.style.fill, `grad-${grid.id}`);
+          if (fill.def) defs.push(fill.def);
+          const strokeAttr = serializeStroke(grid.style.stroke);
+          const filterDef = buildFilterDef(grid.style.effects, `filter-${grid.id}`);
+          if (filterDef) defs.push(filterDef);
+          const filterAttr = filterDef ? ` filter="url(#filter-${grid.id})"` : '';
+          const opacityAttr = grid.opacity === 1 ? '' : ` opacity="${grid.opacity}"`;
+          return `<path transform="translate(${grid.offsetX},${grid.offsetY})" d="${d}" fill-rule="evenodd" fill="${escapeAttr(fill.attr)}"${strokeAttr}${opacityAttr}${filterAttr}/>`;
+        })
+        .filter(Boolean);
+      if (paths.length === 0) return '';
       const elementId = uniqueLayerElementId(layer.name, usedIds);
-      const fill = serializeFill(layer.style.fill, `grad-${layer.id}`);
-      if (fill.def) defs.push(fill.def);
-      const strokeAttr = serializeStroke(layer.style.stroke);
-      const filterDef = buildFilterDef(layer.style.effects, `filter-${layer.id}`);
-      if (filterDef) defs.push(filterDef);
-      const filterAttr = filterDef ? ` filter="url(#filter-${layer.id})"` : '';
       const opacityAttr = layer.opacity === 1 ? '' : ` opacity="${layer.opacity}"`;
-      return `<g id="${elementId}" transform="translate(${layer.offset.x},${layer.offset.y})"${opacityAttr}><path d="${d}" fill-rule="evenodd" fill="${escapeAttr(fill.attr)}"${strokeAttr}${filterAttr}/></g>`;
+      return `<g id="${elementId}"${opacityAttr}>${paths.join('')}</g>`;
     })
     .join('');
   return { body, defs };

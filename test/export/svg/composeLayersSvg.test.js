@@ -3,33 +3,55 @@ import assert from 'node:assert/strict';
 import { createCanvas, paintCell, addLayer, addFrame, setActiveFrame } from '../../../src/model/Canvas.js';
 import { composeLayersSvg, composeFrameBody } from '../../../src/export/svg/composeLayersSvg.js';
 
-// Session 2: composeLayersSvg.js itself still reads layer.style/layer.opacity
-// as singular and frame-invariant, and iterates layer.frames[i].pixels as a
-// dense per-layer buffer — none of that has been rewritten yet to iterate
-// layers -> frame.grids -> each grid and composite per-grid style/visibility
-// (see BACKLOG.md's Layer/Frame/Grid redesign entry, Session 2 scope). Most
-// of this file's tests are marked test.skip below until that lands.
-
 test('an empty canvas composes to an svg with a matching viewBox and no paths', () => {
   const canvas = createCanvas({ width: 3, height: 2 });
   const svg = composeLayersSvg(canvas);
   assert.equal(svg, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3 2"></svg>');
 });
 
-test.skip('one painted cell produces one <g> wrapping one traced <path> with the layer color', () => {
+test('one painted cell produces one <g> wrapping one traced <path>, with transform/fill on the path', () => {
   const canvas = createCanvas({ width: 1, height: 1 });
+  canvas.tier = 'advanced';
+  addLayer(canvas, { name: 'Fill' });
   paintCell(canvas, 0, 0, '#ff0000');
   const svg = composeLayersSvg(canvas);
-  assert.match(svg, /<g id="layer-ff0000" transform="translate\(0,0\)">/);
-  assert.match(svg, /<path d="M0 0H1V1H0Z" fill-rule="evenodd" fill="#ff0000"\/>/);
+  assert.match(svg, /<g id="layer-fill">/);
+  assert.match(svg, /<path transform="translate\(0,0\)" d="M0 0H1V1H0Z" fill-rule="evenodd" fill="#ff0000"\/>/);
 });
 
-test.skip('multiple colors produce one <g><path> pair per auto-managed layer', () => {
+test('multiple colors in simple tier produce one <g> with one <path> per shape', () => {
   const canvas = createCanvas({ width: 2, height: 1 });
   paintCell(canvas, 0, 0, '#ff0000');
   paintCell(canvas, 1, 0, '#00ff00');
   const svg = composeLayersSvg(canvas);
+  assert.equal((svg.match(/<g /g) || []).length, 1); // simple tier is a single Layer
+  assert.equal((svg.match(/<path /g) || []).length, 2); // one shape per color
+  assert.match(svg, /fill="#ff0000"/);
+  assert.match(svg, /fill="#00ff00"/);
+});
+
+test('two layers each get their own <g>, one <path> apiece', () => {
+  const canvas = createCanvas({ width: 2, height: 1 });
+  canvas.tier = 'advanced';
+  addLayer(canvas, { name: 'A' });
+  paintCell(canvas, 0, 0, '#ff0000');
+  addLayer(canvas, { name: 'B' });
+  paintCell(canvas, 1, 0, '#00ff00');
+  const svg = composeLayersSvg(canvas);
   assert.equal((svg.match(/<g /g) || []).length, 2);
+  assert.equal((svg.match(/<path /g) || []).length, 2);
+});
+
+test('a layer holding multiple shapes at once renders each as a sibling <path> inside the one <g>', () => {
+  const canvas = createCanvas({ width: 2, height: 1 });
+  canvas.tier = 'advanced';
+  addLayer(canvas, { name: 'multi' });
+  paintCell(canvas, 0, 0, '#ff0000'); // shape A
+  canvas.activeGridId = null; // force a new shape rather than growing shape A
+  paintCell(canvas, 1, 0, '#00ff00'); // shape B
+  const svg = composeLayersSvg(canvas);
+  assert.equal((svg.match(/<g /g) || []).length, 1);
+  assert.equal((svg.match(/<path /g) || []).length, 2);
   assert.match(svg, /fill="#ff0000"/);
   assert.match(svg, /fill="#00ff00"/);
 });
@@ -42,13 +64,22 @@ test('a layer hidden in the active frame is excluded from the composed output', 
   assert.ok(!svg.includes('<path'));
 });
 
-test.skip('a layer\'s visibility is independent per frame — hidden in one, visible in another', () => {
+test('a shape\'s own visibility is independent of its layer\'s frame visibility', () => {
+  const canvas = createCanvas({ width: 1, height: 1 });
+  paintCell(canvas, 0, 0, '#ff0000');
+  const grid = canvas.layers[0].frames[0].grids[0];
+  grid.visible = false;
+  const svg = composeLayersSvg(canvas);
+  assert.ok(!svg.includes('<path'));
+});
+
+test('a layer\'s visibility is independent per frame — hidden in one, visible in another', () => {
   const canvas = createCanvas({ width: 1, height: 1 });
   canvas.tier = 'advanced';
   addLayer(canvas, { name: 'A' });
-  paintCell(canvas, 0, 0, 'x');
+  paintCell(canvas, 0, 0, '#ff0000');
   addFrame(canvas); // frame 1, active
-  paintCell(canvas, 0, 0, 'x');
+  paintCell(canvas, 0, 0, '#ff0000');
   canvas.layers[0].frames[0].visible = false; // hide only in frame 0
 
   assert.ok(!composeLayersSvg({ ...canvas, activeFrame: 0 }).includes('<path'));
@@ -60,65 +91,76 @@ test.skip('a layer\'s visibility is independent per frame — hidden in one, vis
   assert.equal(canvas.layers[0].frames[canvas.activeFrame].visible, true);
 });
 
-test.skip('non-default opacity is emitted on the wrapping <g>', () => {
+test('non-default layer opacity is emitted on the wrapping <g>', () => {
   const canvas = createCanvas({ width: 1, height: 1 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas, { name: 'Fill' });
   paintCell(canvas, 0, 0, '#ff0000');
-  canvas.layers[0].opacity = 0.5;
+  layer.opacity = 0.5;
   const svg = composeLayersSvg(canvas);
-  assert.match(svg, /<g id="layer-ff0000" transform="translate\(0,0\)" opacity="0.5">/);
+  assert.match(svg, /<g id="layer-fill" opacity="0.5">/);
 });
 
-test.skip('fill color is attribute-escaped', () => {
+test('non-default shape opacity is emitted on the path', () => {
+  const canvas = createCanvas({ width: 1, height: 1 });
+  paintCell(canvas, 0, 0, '#ff0000');
+  canvas.layers[0].frames[0].grids[0].opacity = 0.3;
+  const svg = composeLayersSvg(canvas);
+  assert.match(svg, /opacity="0\.3"/);
+});
+
+test('fill color is attribute-escaped', () => {
   const canvas = createCanvas({ width: 1, height: 1 });
   paintCell(canvas, 0, 0, '" fill="red');
   const svg = composeLayersSvg(canvas);
   assert.match(svg, /fill="&quot; fill=&quot;red"/);
 });
 
-// --- Advanced tier: gradient fill, stroke, effects ---
+// --- Advanced tier: gradient fill, stroke, effects (now per-shape) ---
 
-test.skip('a gradient fill emits a <defs> block with the gradient, referenced by url() from the path', () => {
+test('a gradient fill emits a <defs> block with the gradient, referenced by url() from the path', () => {
   const canvas = createCanvas({ width: 1, height: 1 });
   canvas.tier = 'advanced';
-  const layer = addLayer(canvas, { name: 'grad' });
-  layer.style.fill = { type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] };
-  paintCell(canvas, 0, 0, 'x');
+  addLayer(canvas, { name: 'grad' });
+  paintCell(canvas, 0, 0, '#ffffff');
+  const grid = canvas.layers[0].frames[0].grids[0];
+  grid.style.fill = { type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] };
   const svg = composeLayersSvg(canvas);
-  assert.match(svg, new RegExp(`<defs><linearGradient id="grad-${layer.id}"`));
-  assert.match(svg, new RegExp(`fill="url\\(#grad-${layer.id}\\)"`));
+  assert.match(svg, new RegExp(`<defs><linearGradient id="grad-${grid.id}"`));
+  assert.match(svg, new RegExp(`fill="url\\(#grad-${grid.id}\\)"`));
 });
 
-test.skip('a stroke emits stroke/stroke-width/stroke-dasharray attributes on the path', () => {
+test('a stroke emits stroke/stroke-width/stroke-dasharray attributes on the path', () => {
   const canvas = createCanvas({ width: 1, height: 1 });
   canvas.tier = 'advanced';
   addLayer(canvas, { name: 'stroked' });
-  paintCell(canvas, 0, 0, 'x');
-  canvas.layers[0].style.stroke = { color: '#00ff00', width: 0.2, linecap: 'round', linejoin: 'round', dashArray: [0.5, 0.25] };
+  paintCell(canvas, 0, 0, '#ff0000');
+  canvas.layers[0].frames[0].grids[0].style.stroke = { color: '#00ff00', width: 0.2, linecap: 'round', linejoin: 'round', dashArray: [0.5, 0.25] };
   const svg = composeLayersSvg(canvas);
   assert.match(svg, /stroke="#00ff00" stroke-width="0\.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="0\.5,0\.25"/);
 });
 
-test.skip('effects emit a per-layer <filter> def referenced by filter="url(...)" on the path', () => {
+test('effects emit a per-shape <filter> def referenced by filter="url(...)" on the path', () => {
   const canvas = createCanvas({ width: 1, height: 1 });
   canvas.tier = 'advanced';
-  const layer = addLayer(canvas, { name: 'shadowed' });
-  paintCell(canvas, 0, 0, 'x');
-  layer.style.effects = [{ type: 'drop-shadow', dx: 0.2, dy: 0.2, blur: 0.1, color: '#000', opacity: 0.5 }];
+  addLayer(canvas, { name: 'shadowed' });
+  paintCell(canvas, 0, 0, '#ff0000');
+  const grid = canvas.layers[0].frames[0].grids[0];
+  grid.style.effects = [{ type: 'drop-shadow', dx: 0.2, dy: 0.2, blur: 0.1, color: '#000', opacity: 0.5 }];
   const svg = composeLayersSvg(canvas);
-  assert.match(svg, new RegExp(`<filter id="filter-${layer.id}"`));
-  assert.match(svg, new RegExp(`filter="url\\(#filter-${layer.id}\\)"`));
+  assert.match(svg, new RegExp(`<filter id="filter-${grid.id}"`));
+  assert.match(svg, new RegExp(`filter="url\\(#filter-${grid.id}\\)"`));
 });
 
-test.skip('multiple styled layers collect all defs into one shared <defs> block with no id collisions', () => {
+test('multiple styled shapes collect all defs into one shared <defs> block with no id collisions', () => {
   const canvas = createCanvas({ width: 2, height: 1 });
   canvas.tier = 'advanced';
-  const a = addLayer(canvas, { name: 'a' });
-  a.style.fill = { type: 'radial-gradient', cx: 0.5, cy: 0.5, r: 0.5, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] };
-  canvas.activeLayerId = a.id;
-  paintCell(canvas, 0, 0, 'x');
-  const b = addLayer(canvas, { name: 'b' });
-  b.style.effects = [{ type: 'blur', stdDeviation: 0.3 }];
-  paintCell(canvas, 1, 0, 'x');
+  addLayer(canvas, { name: 'a' });
+  paintCell(canvas, 0, 0, '#ffffff');
+  canvas.layers[0].frames[0].grids[0].style.fill = { type: 'radial-gradient', cx: 0.5, cy: 0.5, r: 0.5, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] };
+  addLayer(canvas, { name: 'b' });
+  paintCell(canvas, 1, 0, '#ffffff');
+  canvas.layers[1].frames[0].grids[0].style.effects = [{ type: 'blur', stdDeviation: 0.3 }];
   const svg = composeLayersSvg(canvas);
   assert.equal((svg.match(/<radialGradient /g) || []).length, 1);
   assert.equal((svg.match(/<filter /g) || []).length, 1);
@@ -127,39 +169,39 @@ test.skip('multiple styled layers collect all defs into one shared <defs> block 
 
 // --- CSS-selectable layer ids (on by default, derived from the layer name) ---
 
-test.skip('a layer\'s <g> id is a slugified version of its name', () => {
+test('a layer\'s <g> id is a slugified version of its name', () => {
   const canvas = createCanvas({ width: 1, height: 1 });
   canvas.tier = 'advanced';
   addLayer(canvas, { name: 'Sky Background' });
-  paintCell(canvas, 0, 0, 'x');
+  paintCell(canvas, 0, 0, '#ff0000');
   const svg = composeLayersSvg(canvas);
   assert.match(svg, /<g id="layer-sky-background"/);
 });
 
-test.skip('two layers sharing a name get distinct ids, not a collision', () => {
+test('two layers sharing a name get distinct ids, not a collision', () => {
   const canvas = createCanvas({ width: 2, height: 1 });
   canvas.tier = 'advanced';
   addLayer(canvas, { name: 'Outline' });
-  paintCell(canvas, 0, 0, 'x');
+  paintCell(canvas, 0, 0, '#ff0000');
   addLayer(canvas, { name: 'Outline' });
-  paintCell(canvas, 1, 0, 'x');
+  paintCell(canvas, 1, 0, '#00ff00');
   const svg = composeLayersSvg(canvas);
   assert.match(svg, /<g id="layer-outline"/);
   assert.match(svg, /<g id="layer-outline-2"/);
 });
 
-test.skip('a name with no slug-safe characters falls back to "layer-unnamed" rather than an empty id', () => {
+test('a name with no slug-safe characters falls back to "layer-unnamed" rather than an empty id', () => {
   const canvas = createCanvas({ width: 1, height: 1 });
   canvas.tier = 'advanced';
   addLayer(canvas, { name: '!!!' });
-  paintCell(canvas, 0, 0, 'x');
+  paintCell(canvas, 0, 0, '#ff0000');
   const svg = composeLayersSvg(canvas);
   assert.match(svg, /<g id="layer-unnamed"/);
 });
 
 // --- Animation (Phase 7): frame-aware composition ---
 
-test.skip('composeLayersSvg renders whichever frame is active, not always frame 0', () => {
+test('composeLayersSvg renders whichever frame is active, not always frame 0', () => {
   const canvas = createCanvas({ width: 2, height: 1 });
   paintCell(canvas, 0, 0, '#ff0000'); // frame 0
   addFrame(canvas); // frame 1, active
@@ -175,7 +217,7 @@ test.skip('composeLayersSvg renders whichever frame is active, not always frame 
   assert.ok(!svgFrame0.includes('#00ff00'));
 });
 
-test.skip('composeFrameBody renders a specific frame without mutating canvas.activeFrame', () => {
+test('composeFrameBody renders a specific frame without mutating canvas.activeFrame', () => {
   const canvas = createCanvas({ width: 2, height: 1 });
   paintCell(canvas, 0, 0, '#ff0000'); // frame 0
   addFrame(canvas); // frame 1, active
