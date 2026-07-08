@@ -6,7 +6,7 @@
 
 import { normalizePalette } from '../model/Palette.js';
 
-export const PIXELYPH_VERSION = 1;
+export const PIXELYPH_VERSION = 2;
 
 function bytesToBase64(bytes) {
   let binary = '';
@@ -21,6 +21,32 @@ function base64ToBytes(base64) {
   return bytes;
 }
 
+// Grid cells are always exactly 0 or 1 (paint mask — color/style lives on
+// the Layer, not per cell; see Canvas.js's paintCell/paintSimpleCell), so
+// packing 8 cells per byte before base64 shrinks saves ~8x versus spending
+// a full byte per cell. Versioned (see PIXELYPH_VERSION) since pre-v2 saves
+// have one unpacked byte per cell instead.
+function bitsToBase64(pixels) {
+  const bytes = new Uint8Array(Math.ceil(pixels.length / 8));
+  for (let i = 0; i < pixels.length; i++) {
+    if (pixels[i]) bytes[i >> 3] |= 1 << (i & 7);
+  }
+  return bytesToBase64(bytes);
+}
+
+function base64ToBits(base64, length) {
+  const bytes = base64ToBytes(base64);
+  const pixels = new Uint8Array(length);
+  for (let i = 0; i < length; i++) {
+    pixels[i] = (bytes[i >> 3] >> (i & 7)) & 1;
+  }
+  return pixels;
+}
+
+function decodePixels(base64, length, pixelyphVersion) {
+  return pixelyphVersion >= 2 ? base64ToBits(base64, length) : base64ToBytes(base64);
+}
+
 function serializeLayer(layer) {
   return {
     id: layer.id,
@@ -31,17 +57,18 @@ function serializeLayer(layer) {
     width: layer.width,
     height: layer.height,
     style: layer.style,
-    frames: layer.frames.map((frame) => ({ pixels: bytesToBase64(frame.pixels), visible: frame.visible })),
+    frames: layer.frames.map((frame) => ({ pixels: bitsToBase64(frame.pixels), visible: frame.visible })),
     ...(layer.autoManaged !== undefined ? { autoManaged: layer.autoManaged } : {}),
     ...(layer.autoColor !== undefined ? { autoColor: layer.autoColor } : {}),
   };
 }
 
-function deserializeLayer(layer) {
+function deserializeLayer(layer, pixelyphVersion) {
   // Pre-per-frame-visibility saves had one `visible` boolean for the whole
   // layer instead of one per frame — used as every frame's initial value
   // when a loaded frame doesn't have its own `visible` field yet.
   const legacyVisible = layer.visible ?? true;
+  const length = layer.width * layer.height;
   return {
     id: layer.id,
     name: layer.name,
@@ -51,7 +78,7 @@ function deserializeLayer(layer) {
     width: layer.width,
     height: layer.height,
     style: layer.style,
-    frames: layer.frames.map((frame) => ({ pixels: base64ToBytes(frame.pixels), visible: frame.visible ?? legacyVisible })),
+    frames: layer.frames.map((frame) => ({ pixels: decodePixels(frame.pixels, length, pixelyphVersion), visible: frame.visible ?? legacyVisible })),
     ...(layer.autoManaged !== undefined ? { autoManaged: layer.autoManaged } : {}),
     ...(layer.autoColor !== undefined ? { autoColor: layer.autoColor } : {}),
   };
@@ -118,7 +145,7 @@ export function deserializeProject(doc) {
     frameRate: c.frameRate ?? 12,
     frameDurations: c.frameDurations ?? new Array(c.frameCount ?? 1).fill(Math.round(1000 / (c.frameRate ?? 12))),
     simpleTier: { colorToLayerId: new Map(c.simpleTier.colorToLayerId) },
-    layers: c.layers.map(deserializeLayer),
+    layers: c.layers.map((layer) => deserializeLayer(layer, doc.pixelyphVersion ?? 1)),
   };
 }
 
@@ -136,7 +163,7 @@ function serializeGlyph(glyph) {
   return {
     width: glyph.width,
     height: glyph.height,
-    pixels: bytesToBase64(glyph.pixels),
+    pixels: bitsToBase64(glyph.pixels),
     advanceWidth: glyph.advanceWidth,
     leftSideBearing: glyph.leftSideBearing,
     name: glyph.name,
@@ -144,11 +171,11 @@ function serializeGlyph(glyph) {
   };
 }
 
-function deserializeGlyph(glyph) {
+function deserializeGlyph(glyph, pixelyphVersion) {
   return {
     width: glyph.width,
     height: glyph.height,
-    pixels: base64ToBytes(glyph.pixels),
+    pixels: decodePixels(glyph.pixels, glyph.width * glyph.height, pixelyphVersion),
     advanceWidth: glyph.advanceWidth,
     leftSideBearing: glyph.leftSideBearing,
     name: glyph.name,
@@ -184,7 +211,7 @@ export function deserializeGlyphSetProject(doc) {
     id: gs.id,
     kind: gs.kind,
     meta: gs.meta,
-    glyphs: new Map(gs.glyphs.map(([codepoint, glyph]) => [codepoint, deserializeGlyph(glyph)])),
+    glyphs: new Map(gs.glyphs.map(([codepoint, glyph]) => [codepoint, deserializeGlyph(glyph, doc.pixelyphVersion ?? 1)])),
   };
 }
 

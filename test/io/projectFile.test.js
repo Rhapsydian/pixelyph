@@ -30,6 +30,40 @@ test('pixel data is base64-encoded, not a raw JSON array', () => {
   assert.doesNotMatch(encoded, /^\[/);
 });
 
+test('a painted layer round-trips through bit-packed pixels with a much shorter base64 string than unpacked would be', () => {
+  const canvas = createCanvas({ width: 16, height: 16 });
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) paintCell(canvas, x, y, '#ff0000');
+  const doc = serializeProject(canvas);
+  const encoded = doc.canvas.layers[0].frames[0].pixels;
+  assert.ok(encoded.length < 100, `expected a bit-packed 16x16 grid's base64 length well under the unpacked 344 chars, got ${encoded.length}`);
+
+  const restored = loadProjectFromString(saveProjectToString(canvas));
+  assert.deepStrictEqual(restored, canvas);
+});
+
+test('deserializeProject reads a pre-bit-packing (pixelyphVersion 1) file, where pixels were one unpacked byte per cell', () => {
+  const canvas = createCanvas({ width: 3, height: 3 });
+  paintCell(canvas, 0, 0, '#ff0000');
+  paintCell(canvas, 2, 2, '#ff0000');
+
+  // Simulate a v1 save: same shape serializeProject produces, but with the
+  // pixels field encoded the old way (one raw byte per cell, not packed).
+  const doc = serializeProject(canvas);
+  doc.pixelyphVersion = 1;
+  const legacyBytesToBase64 = (bytes) => {
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  };
+  doc.canvas.layers = canvas.layers.map((layer) => ({
+    ...doc.canvas.layers.find((l) => l.id === layer.id),
+    frames: layer.frames.map((frame) => ({ pixels: legacyBytesToBase64(frame.pixels), visible: frame.visible })),
+  }));
+
+  const restored = deserializeProject(doc);
+  assert.deepStrictEqual(restored, canvas);
+});
+
 test('round-trips a multi-layer, multi-color canvas exactly', () => {
   const canvas = createCanvas({ width: 5, height: 5, palette: ['#ff0000', '#00ff00', '#0000ff'] });
   paintCell(canvas, 0, 0, '#ff0000');
