@@ -9,24 +9,11 @@ blocking issue is fixed); and open ideas flagged for later discussion
 rather than acted on immediately. Review this list once all
 currently-planned phases are complete.
 
-## IN PROGRESS: Layer/Frame/Grid model redesign — Sessions 0-3 done, Session 4 next
+## DONE: Layer/Frame/Grid model redesign
 
-**This is the next `/dev-session` for this project.** Check out (or
-confirm you're already on) the `layer-frame-grid-redesign` branch —
-**not** `main` — before doing anything else, then kick off straight into
-Session 4 (tests + hardening, below) rather than asking what to work on.
-The app is fully interactive again as of Session 3 (painting, undo/redo,
-style editing, grid overlay, palette application all verified in the
-browser) — there's nothing left to discuss in plan-mode kickoff beyond
-confirming the user's ready to start rewriting the skipped test files and
-merge to `main` once they pass clean.
-
-**Branch:** `layer-frame-grid-redesign` (pushed to remote). This migration
-spans several sessions and leaves the app genuinely broken partway through
-(model shape changes before export/UI catch up), so it's developed on its
-own branch and merged to `main` only once Session 4 (tests + hardening) is
-complete and verified — `main` stays deployable (the live demo redeploys on
-every push to `main`) for the whole span.
+Shipped across 5 sessions (0-4); merged `layer-frame-grid-redesign` into
+`main` (fast-forward, `main` hadn't moved) once Session 4's rewritten test
+suite passed clean.
 
 **Why:** started from two small questions ("why is a 16x16 save's `pixels`
 string 344 characters" and "how do vector animation apps handle layer/frame
@@ -109,12 +96,23 @@ entry's note.
   Test suite: 313 passing / 44 skipped -> 317 passing / 40 skipped / 0
   failing (4 newly-passing were unblocked by the `simpleTier` fix; 3 more
   were rewritten against `Grid` instead of staying skipped).
-- **Session 4 — Tests + hardening.** Rewrite the ~10 test files (grew from
-  ~7 once Sessions 1-2's actual skip list came in) that reference the old
-  shape directly or exercise not-yet-rewritten code (heaviest:
-  `test/model/Canvas.test.js`), plus new coverage for the sparsity
-  behavior itself. Merge `layer-frame-grid-redesign` to `main` once this
-  passes clean.
+- **Session 4 — Tests + hardening. Done.** Un-skipped all 40 old-shape
+  tests across 5 files (`Canvas.test.js` 19, `autoLayerSync.test.js` 8,
+  `Layer.test.js` 6, `projectFile.test.js` 4, `selection.test.js` 3). Most
+  were already superseded by replacement tests Sessions 1-3 had written
+  alongside their rewrites — those skips were deleted outright rather than
+  duplicated. Six needed genuinely new coverage where behavior itself had
+  changed, not just relocated: `addLayer` no longer eager-creates content;
+  a layer-level `locked` check is distinct from a locked Grid; `convertTier`
+  simple->advanced on a blank canvas now leaves a genuinely empty layer
+  (no more auto solid-black fill, since style only exists once a Grid is
+  created); a shape's gradient fill clones independently on `duplicateLayer`;
+  `addFrame` at an explicit index; and `colorAt`/`topVisibleLayerAt` reading
+  the active frame's own shapes. Two more edge cases (`growGridToInclude` in
+  one direction only, and on an unfilled shape) backfilled `Grid.test.js`,
+  which already covered most of `Layer.test.js`'s retired `growToInclude`
+  skips. Test suite: 317 passing/40 skipped/0 failing -> 326 passing/0
+  skipped/0 failing. Merged to `main`.
 
 ## WOFF2 font export — disabled, times out in real browsers
 
@@ -146,42 +144,6 @@ in general.
 2. Flip `WOFF2_EXPORT_ENABLED` back to `true` in `state/store.js`.
 3. Restore the `{ key: 'woff2', label: 'WOFF2' }` row to `CHECKBOX_ROWS` in
    `FontExportPanel.jsx` (and its `selected` default state).
-
-## Advanced-tier layer offset — manual X/Y input hidden
-
-**Superseded by the "Layer/Frame/Grid model redesign" item above** — that
-migration makes offset fully auto-computed (never manually typed), which
-removes the fractional-offset disagreement this item was blocked on
-entirely. Once that migration ships, delete this entry rather than
-resolving it separately; keeping it below for now since the redesign
-hasn't happened yet.
-
-The per-layer offset X/Y number inputs in `LayersPanel.jsx` were removed
-(commit `1851d64`, "Hide layer offset UI controls pending fractional-offset
-fixes") after two preceding fixes for offset-aware grid alignment (commits
-`e26abc9` "Shift grid overlay to match active layer offset in advanced
-mode" and `2ba7c3c` "Align BrushCursor snap with active layer offset
-grid") still left non-integer offset values behaving inconsistently
-between the grid overlay, brush cursor snapping, and the actual painted
-result.
-
-**Current state:** the `Layer.offset` model field, the `setLayerOffset`
-store action, `GridOverlay`'s offset-aware pattern transform, and
-`SvgPixelEditor`'s offset-aware cursor snapping are all still intact and
-still used (e.g. layers moved programmatically, or offsets restored from a
-saved project, render and paint correctly) — only the manual "type an X/Y
-value" input UI is hidden, since that's the path that surfaces fractional
-values the rest of the pipeline doesn't fully agree on.
-
-**To resolve:**
-1. Decide the intended behavior for fractional offsets (snap to whole grid
-   cells only, e.g. round on input / on blur; or make the whole pipeline —
-   grid overlay, cursor snap, paint targeting — consistently fractional-
-   aware) and fix whichever of `GridOverlay.jsx` / `SvgPixelEditor.jsx` /
-   `Canvas.js`'s `paintCell` doesn't match that decision.
-2. Restore the X/Y `<input type="number">` pair in `LayersPanel.jsx`'s
-   `LayerRow` (removed in `1851d64` — that diff is a small, direct
-   reference for what to add back).
 
 ## Explore: making Pixelyph's capabilities more leverageable by AI agents
 
@@ -223,14 +185,13 @@ project's current "early development" status where "clone and
 **To resolve:** revisit once the project is far enough along that shipping
 installable builds to non-developers actually makes sense.
 
-## Layer groups/folders — substantially resolved by the Layer/Frame/Grid redesign
+## Layer groups/folders — residual sliver after the Layer/Frame/Grid redesign
 
-**Resolved/superseded by the "Layer/Frame/Grid model redesign" item
-above** — this item's entire premise was "a layer holding more than one
-shape." The redesign ships exactly that from the start (a Layer is a
-collection of Grids/shapes; Advanced tier gets Add Shape/reorder/
-duplicate/merge/delete per layer, see `docs/data-model.md` section 4) —
-not deferred to this item.
+**Original premise resolved:** this item used to mean "a layer holding
+more than one shape." The Layer/Frame/Grid redesign ships exactly that (a
+Layer is a collection of Grids/shapes; Advanced tier has Add Shape/
+reorder/duplicate/merge/delete per layer, see `docs/data-model.md` section
+4), so what's left below is a narrower, distinct ask.
 
 **Residual sliver, if still wanted:** nested, collapsible named *groups of
 layers* (grouping whole layers together, not shapes within one layer) is a
