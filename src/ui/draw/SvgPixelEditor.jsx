@@ -21,6 +21,7 @@ import { BrushCursor } from './BrushCursor.jsx';
 import { ReferenceImageLayer } from './ReferenceImageLayer.jsx';
 import { TransparencyBackground } from './TransparencyBackground.jsx';
 import { composeLayersBody, composeFrameBody } from '../../export/svg/composeLayersSvg.js';
+import { currentFrameIndex } from '../../model/Canvas.js';
 
 /**
  * The Canvas-shaped document this editor is currently painting: Draw mode's
@@ -229,8 +230,9 @@ export function SvgPixelEditor() {
     const px = ((evt.clientX - rect.left) / rect.width) * live.width;
     const py = ((evt.clientY - rect.top) / rect.height) * live.height;
     const activeL = live.tier === 'advanced' ? live.layers?.find((l) => l.id === live.activeLayerId) : null;
-    const ox = activeL?.offset.x ?? 0;
-    const oy = activeL?.offset.y ?? 0;
+    const activeGrid = activeL?.frames[currentFrameIndex(live)]?.grids.find((g) => g.id === live.activeGridId);
+    const ox = activeGrid?.offsetX ?? 0;
+    const oy = activeGrid?.offsetY ?? 0;
     return {
       x: Math.min(live.width - 1, Math.max(0, Math.floor(px - ox) + ox)),
       y: Math.min(live.height - 1, Math.max(0, Math.floor(py - oy) + oy)),
@@ -335,6 +337,7 @@ export function SvgPixelEditor() {
   }, [mode, onionSkinEnabled, doc, canvas, tickCount]);
 
   const activeLayer = doc && doc.tier === 'advanced' ? doc.layers.find((l) => l.id === doc.activeLayerId) : null;
+  const activeGrid = activeLayer?.frames[currentFrameIndex(doc)]?.grids.find((g) => g.id === doc.activeGridId);
 
   const normalizedSelection = selection && {
     x0: Math.min(selection.x0, selection.x1),
@@ -426,8 +429,8 @@ export function SvgPixelEditor() {
           <GridOverlay
             width={doc.width}
             height={doc.height}
-            offsetX={activeLayer?.offset.x ?? 0}
-            offsetY={activeLayer?.offset.y ?? 0}
+            offsetX={activeGrid?.offsetX ?? 0}
+            offsetY={activeGrid?.offsetY ?? 0}
           />
         )}
         {cursorCell && <BrushCursor x={cursorCell.x} y={cursorCell.y} />}
