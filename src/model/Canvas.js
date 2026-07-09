@@ -654,6 +654,28 @@ export function resizeCanvas(canvas, newWidth, newHeight, anchor = 'top-left') {
 }
 
 /**
+ * Shifts every Grid in one layer's one frame by (dx, dy) — the Pixel-tier/
+ * Glyph-mode nudge target ("move this whole layer's content"), the same
+ * translation `resizeCanvas` applies canvas-wide, scoped down to a single
+ * layer/frame instead of every layer/frame.
+ *
+ * @param {object} canvas
+ * @param {string} layerId
+ * @param {number} frameIndex
+ * @param {number} dx
+ * @param {number} dy
+ */
+export function nudgeLayerFrame(canvas, layerId, frameIndex, dx, dy) {
+  const layer = canvas.layers.find((l) => l.id === layerId);
+  const frame = layer?.frames[frameIndex];
+  if (!frame) return;
+  for (const grid of frame.grids) {
+    grid.offsetX += dx;
+    grid.offsetY += dy;
+  }
+}
+
+/**
  * Reads the composited color at a canvas-space cell — whichever visible
  * layer nearest the top (end of `layers`), and within it whichever visible
  * shape nearest its own top, has that cell set. Used by tools that need to

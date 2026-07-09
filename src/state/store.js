@@ -29,6 +29,7 @@ import {
   reorderGrid as reorderGridModel,
   duplicateGrid as duplicateGridModel,
   mergeGridDown as mergeGridDownModel,
+  nudgeLayerFrame as nudgeLayerFrameModel,
   currentFrameIndex,
   refreshActiveGrid as refreshActiveGridModel,
   clampActiveLayer,
@@ -375,6 +376,14 @@ export const useStore = create((set, get) => {
       const grid = layer?.frames[currentFrameIndex(canvas)]?.grids.find((g) => g.id === gridId);
       if (!grid) return;
       Object.assign(grid, patch);
+      commit();
+    },
+    /** Nudge target for Pixel tier / Glyph mode: shifts a whole layer's active-frame content, mode-aware like colorAt. */
+    nudgeLayerFrame: (layerId, frameIndex, dx, dy) => {
+      const { mode, canvas, glyphCanvas } = get();
+      const doc = mode === 'glyph' ? glyphCanvas : canvas;
+      if (!doc) return;
+      nudgeLayerFrameModel(doc, layerId, frameIndex, dx, dy);
       commit();
     },
     setLayerProps: (layerId, patch) => {

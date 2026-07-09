@@ -25,6 +25,7 @@ import {
   cloneFillValue,
   resolveActiveGrid,
   refreshActiveGrid,
+  nudgeLayerFrame,
 } from '../../src/model/Canvas.js';
 
 test('colorAt reads the topmost (last) visible layer that owns a cell', () => {
@@ -61,6 +62,52 @@ test('resizeCanvas center anchor keeps content centered after growth', () => {
   resizeCanvas(canvas, 3, 3, 'center');
   assert.equal(colorAt(canvas, 1, 1), '#ff0000');
   assert.equal(colorAt(canvas, 0, 0), null);
+});
+
+test('nudgeLayerFrame shifts every shape in one layer/frame by (dx, dy)', () => {
+  // Default (simple/Pixel) tier auto-manages one Grid per distinct color, so
+  // two paintCell calls with different colors land two Grids in one frame —
+  // a simpler way to get multiple shapes to nudge together than hand-wiring
+  // advanced tier's single-active-shape paint semantics.
+  const canvas = createCanvas({ width: 12, height: 12 });
+  paintCell(canvas, 1, 1, '#ff0000');
+  paintCell(canvas, 5, 5, '#00ff00');
+  const layer = canvas.layers[0];
+  assert.equal(layer.frames[0].grids.length, 2);
+
+  nudgeLayerFrame(canvas, layer.id, 0, 2, 3);
+
+  assert.equal(colorAt(canvas, 1, 1), null);
+  assert.equal(colorAt(canvas, 3, 4), '#ff0000');
+  assert.equal(colorAt(canvas, 5, 5), null);
+  assert.equal(colorAt(canvas, 7, 8), '#00ff00');
+});
+
+test('nudgeLayerFrame leaves other layers and other frames untouched', () => {
+  const canvas = createCanvas({ width: 6, height: 6 });
+  canvas.tier = 'advanced';
+  const a = addLayer(canvas, { name: 'A' });
+  paintCell(canvas, 0, 0, '#ff0000'); // a's first shape, frame 0
+
+  const b = addLayer(canvas, { name: 'B' }); // switches active layer to b
+  paintCell(canvas, 1, 1, '#0000ff'); // b's first shape, frame 0
+
+  addFrame(canvas); // frame 1 added to both layers, canvas.activeFrame -> 1
+  canvas.activeFrame = 0;
+
+  nudgeLayerFrame(canvas, b.id, 0, 2, 2);
+
+  assert.equal(colorAt(canvas, 1, 1), null); // b's shape moved away
+  assert.equal(colorAt(canvas, 3, 3), '#0000ff'); // b's shape landed here
+  assert.equal(colorAt(canvas, 0, 0), '#ff0000'); // a's shape (different layer) untouched
+  assert.deepEqual(b.frames[1].grids, []); // b's frame 1 (different frame) untouched
+});
+
+test('nudgeLayerFrame is a no-op for an unknown layerId', () => {
+  const canvas = createCanvas({ width: 4, height: 4 });
+  paintCell(canvas, 0, 0, '#ff0000');
+  nudgeLayerFrame(canvas, 'does-not-exist', 0, 1, 1);
+  assert.equal(colorAt(canvas, 0, 0), '#ff0000');
 });
 
 // --- Advanced tier ---

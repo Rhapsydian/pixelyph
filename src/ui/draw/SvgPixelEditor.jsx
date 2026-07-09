@@ -94,6 +94,7 @@ export function SvgPixelEditor() {
       const isCut = (evt.ctrlKey || evt.metaKey) && evt.key.toLowerCase() === 'x';
       const isPaste = (evt.ctrlKey || evt.metaKey) && evt.key.toLowerCase() === 'v';
       const isSelectAll = (evt.ctrlKey || evt.metaKey) && evt.key.toLowerCase() === 'a';
+      const isArrow = evt.key === 'ArrowUp' || evt.key === 'ArrowDown' || evt.key === 'ArrowLeft' || evt.key === 'ArrowRight';
       const state = useStore.getState();
 
       if (isUndo) {
@@ -132,6 +133,33 @@ export function SvgPixelEditor() {
         // document is active, Canvas or the glyph pseudo-Canvas.
         evt.preventDefault();
         state.selectAll();
+      } else if (isArrow) {
+        // Nudge, in priority order: a floating selection always wins (any
+        // mode/tier); otherwise Shape tier moves the active shape, Pixel
+        // tier/Glyph mode shifts the active layer's whole current-frame
+        // content. A plain (not-yet-lifted) rect selection intentionally
+        // does nothing here — there's no established "move this" target
+        // until it's lifted into a floating selection.
+        const step = evt.shiftKey ? 10 : 1;
+        const dx = evt.key === 'ArrowLeft' ? -step : evt.key === 'ArrowRight' ? step : 0;
+        const dy = evt.key === 'ArrowUp' ? -step : evt.key === 'ArrowDown' ? step : 0;
+        if (state.floatingSelection) {
+          evt.preventDefault();
+          state.moveFloatingSelection(state.floatingSelection.x + dx, state.floatingSelection.y + dy);
+        } else if (!state.selection) {
+          const nudgeDoc = state.mode === 'glyph' ? state.glyphCanvas : state.canvas;
+          if (nudgeDoc?.tier === 'advanced') {
+            const frame = nudgeDoc.layers.find((l) => l.id === nudgeDoc.activeLayerId)?.frames[currentFrameIndex(nudgeDoc)];
+            const activeGrid = frame?.grids.find((g) => g.id === nudgeDoc.activeGridId);
+            if (activeGrid) {
+              evt.preventDefault();
+              state.setGridProps(nudgeDoc.activeLayerId, nudgeDoc.activeGridId, { offsetX: activeGrid.offsetX + dx, offsetY: activeGrid.offsetY + dy });
+            }
+          } else if (nudgeDoc) {
+            evt.preventDefault();
+            state.nudgeLayerFrame(nudgeDoc.activeLayerId, currentFrameIndex(nudgeDoc), dx, dy);
+          }
+        }
       }
     }
     window.addEventListener('keydown', onKeyDown);
