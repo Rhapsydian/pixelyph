@@ -38,7 +38,14 @@ import { composeFrameBody } from '../../export/svg/composeLayersSvg.js';
 import { IconButton } from '../IconButton.jsx';
 import { EyeIcon, EyeOffIcon, LockIcon, UnlockIcon, MoveUpIcon, MoveDownIcon, TrashIcon, DuplicateIcon, MergeDownIcon, AddLayerIcon, AddShapeIcon, ChevronDownIcon } from '../icons.jsx';
 
-const THUMBNAIL_SIZE = 56;
+// Matches the two-row name/controls block's actual rendered height (a text
+// input plus a 4px gap plus a row of 32px icon buttons) — an SVG has no
+// intrinsic size of its own to stretch from, so `aspect-ratio` alone (tried
+// first) isn't safe here: with no definite width or height to start from,
+// it fell back to the replaced-element default and blew up to fill
+// available space instead. A concrete constant, kept next to the value it
+// mirrors, is the reliable option.
+const THUMBNAIL_SIZE = 64;
 
 /** Shared SVG wrapper both thumbnail flavors below render into — same fixed size/border/background either way, just fed a different `body`/`defs`. */
 function ThumbnailFrame({ canvas, body, defs }) {
@@ -113,7 +120,8 @@ function EntityControls({ visible, onToggleVisible, hideLabel, showLabel, locked
           active={locked}
           onClick={() => onToggleLocked(!locked)}
         />
-        <label title="Opacity" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <label title="Opacity" style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto', textAlign: 'right' }}>
+          <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>Alpha:</span>
           <input
             type="number"
             min={0}
@@ -122,7 +130,7 @@ function EntityControls({ visible, onToggleVisible, hideLabel, showLabel, locked
             onChange={(e) => setOpacityPercent(Number(e.target.value))}
             onBlur={commitOpacity}
             onKeyDown={(e) => e.key === 'Enter' && commitOpacity()}
-            style={{ width: 48 }}
+            style={{ width: 48, textAlign: 'right' }}
           />
           <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>%</span>
         </label>
@@ -134,7 +142,7 @@ function EntityControls({ visible, onToggleVisible, hideLabel, showLabel, locked
 function ExpandCaret({ expanded }) {
   return (
     <span style={{ display: 'inline-flex', transform: expanded ? undefined : 'rotate(-90deg)' }}>
-      <ChevronDownIcon />
+      <ChevronDownIcon size={12} />
     </span>
   );
 }
@@ -155,10 +163,23 @@ function LayerRow({ canvas, layer, isActive, isExpanded, onToggleExpand, onSelec
         onSelect();
       }}
       className={isActive ? 'row active' : 'row'}
-      style={{ flexWrap: 'nowrap', padding: 'var(--space-2)', cursor: 'pointer', alignItems: 'center' }}
+      style={{
+        flexWrap: 'nowrap',
+        paddingTop: 'var(--space-2)',
+        paddingRight: 'var(--space-2)',
+        paddingBottom: 'var(--space-2)',
+        paddingLeft: 'var(--space-2)',
+        cursor: 'pointer',
+        alignItems: 'center',
+      }}
     >
       <span onClick={(e) => e.stopPropagation()} style={{ display: 'inline-flex' }}>
-        <IconButton icon={<ExpandCaret expanded={isExpanded} />} label={isExpanded ? 'Collapse shapes' : 'Expand shapes'} onClick={onToggleExpand} />
+        <IconButton
+          icon={<ExpandCaret expanded={isExpanded} />}
+          label={isExpanded ? 'Collapse shapes' : 'Expand shapes'}
+          onClick={onToggleExpand}
+          style={{ width: 20, height: 20 }}
+        />
       </span>
       <LayerThumbnail canvas={canvas} layer={layer} />
       <EntityControls
@@ -190,7 +211,16 @@ function ShapeRow({ canvas, layer, grid, isActive, onSelect }) {
         onSelect();
       }}
       className={isActive ? 'row active' : 'row'}
-      style={{ flexWrap: 'nowrap', padding: 'var(--space-2)', paddingLeft: 64, cursor: 'pointer', alignItems: 'center' }}
+      style={{
+        flexWrap: 'nowrap',
+        paddingTop: 'var(--space-2)',
+        paddingRight: 'var(--space-2)',
+        paddingBottom: 'var(--space-2)',
+        paddingLeft: 'var(--space-2)',
+        marginLeft: 64,
+        cursor: 'pointer',
+        alignItems: 'center',
+      }}
     >
       <ShapeThumbnail canvas={canvas} grid={grid} />
       <EntityControls
@@ -353,7 +383,7 @@ export function LayersPanel() {
               {isExpanded && (
                 <>
                   {grids.length === 0 && (
-                    <div style={{ paddingLeft: 64, color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No shapes in this frame yet.</div>
+                    <div style={{ marginLeft: 64, color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No shapes in this frame yet.</div>
                   )}
                   {grids
                     .slice()
