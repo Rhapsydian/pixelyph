@@ -9,19 +9,17 @@ blocking issue is fixed); and open ideas flagged for later discussion
 rather than acted on immediately. Review this list once all
 currently-planned phases are complete.
 
-## IN PROGRESS: Layer/Frame/Grid model redesign — Sessions 0-2 done, Session 3 next
+## IN PROGRESS: Layer/Frame/Grid model redesign — Sessions 0-3 done, Session 4 next
 
 **This is the next `/dev-session` for this project.** Check out (or
 confirm you're already on) the `layer-frame-grid-redesign` branch —
 **not** `main` — before doing anything else, then kick off straight into
-implementing Session 3 (UI, below) rather than asking what to work on. The
-scope is fully specified in `docs/data-model.md`'s section 4 (wireframes);
-there's nothing left to discuss in plan-mode kickoff beyond confirming the
-user's ready to start Session 3. Note that `state/store.js` isn't named in
-the phase breakdown below but will very likely need real changes too —
-it's the glue between the UI and `Canvas.js`, and already has 4 tests
-skipped from Session 1 (`test/state/store.test.js`) because it directly
-touches the retired `simpleTier`/`layer.style`/`layer.offset` fields.
+Session 4 (tests + hardening, below) rather than asking what to work on.
+The app is fully interactive again as of Session 3 (painting, undo/redo,
+style editing, grid overlay, palette application all verified in the
+browser) — there's nothing left to discuss in plan-mode kickoff beyond
+confirming the user's ready to start rewriting the skipped test files and
+merge to `main` once they pass clean.
 
 **Branch:** `layer-frame-grid-redesign` (pushed to remote). This migration
 spans several sessions and leaves the app genuinely broken partway through
@@ -84,18 +82,33 @@ entry's note.
   keyed on layer name, now wrapping one `<path>` per shape instead of
   exactly one; gradient/filter def ids moved from `grad-${layer.id}` to
   `grad-${grid.id}`. Test suite: 313 passing / 44 skipped / 0 failing.
-- **Session 3 — UI. Next session.** `LayersPanel.jsx` needs to show/manage
-  a layer's shape(s) per `docs/data-model.md` section 4's wireframes; style
-  panel retargets to the active shape; `GridOverlay.jsx`/
-  `SvgPixelEditor.jsx` swap their offset source from `layer.offset` to the
-  active grid's `offsetX`/`offsetY`. `state/store.js` isn't named in the
-  original spec but will need real changes (see the note above this
-  breakdown) — new shape actions (add/move/duplicate/merge/delete/rename/
-  set-visibility-lock-opacity), and its existing style-mutation actions
-  retargeted from layer to shape. This is the session where the app
-  becomes interactive again, so real browser verification applies (unlike
-  Sessions 1-2, which relied on the test suite alone since the app was
-  non-functional end-to-end either way).
+- **Session 3 — UI. Done.** `LayersPanel.jsx` now shows each layer's Shapes
+  as expandable, indented sub-rows (same eye/lock/name/opacity control set
+  as a layer row, a small gap so an active layer's and an active shape's
+  highlight borders never touch) — move/duplicate/merge-down/delete live
+  in one shared toolbar that context-switches between layer and shape
+  actions based on which kind of row was last clicked (tracked separately
+  from `activeGridId`, since that auto-resolves to a shape even on a plain
+  layer click, which would otherwise make layer actions unreachable on any
+  non-empty layer); Add Layer/Add Shape stayed two distinct icon buttons
+  (a stacked-diamond glyph and a single-square glyph, each with a small
+  "+" badge) rather than folding "add" into the context switch, since
+  unlike the other four it isn't an action *on* the current selection.
+  `LayerStylePanel.jsx` retargeted from the active layer to the active
+  shape. `SvgPixelEditor.jsx`'s cursor-targeting/paint-targeting/
+  grid-overlay offset source switched from the retired `layer.offset` to
+  the active shape's `offsetX`/`offsetY` — this was a live bug (the old
+  read threw whenever an advanced-tier layer was active), so painting only
+  started working again at the very end of this session. `Canvas.js`
+  gained `addGrid`/`removeGrid`/`reorderGrid`/`duplicateGrid`/a
+  canvas-level `mergeGridDown`; `store.js` gained matching thin-wrapper
+  actions plus `setActiveGridId`, and `applyContentSnapshot`'s stale
+  `simpleTier.colorToLayerId` write (silently breaking undo/redo) was
+  removed. `createShapeGrid` gained a `filled` option so "+ Add Shape"
+  creates a genuinely empty shape instead of one with a pre-painted pixel.
+  Test suite: 313 passing / 44 skipped -> 317 passing / 40 skipped / 0
+  failing (4 newly-passing were unblocked by the `simpleTier` fix; 3 more
+  were rewritten against `Grid` instead of staying skipped).
 - **Session 4 — Tests + hardening.** Rewrite the ~10 test files (grew from
   ~7 once Sessions 1-2's actual skip list came in) that reference the old
   shape directly or exercise not-yet-rewritten code (heaviest:
