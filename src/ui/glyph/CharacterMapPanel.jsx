@@ -40,6 +40,7 @@ export function CharacterMapPanel() {
   const selectGlyph = useStore((s) => s.selectGlyph);
   const assignCodepoint = useStore((s) => s.assignCodepoint);
   const removeGlyphAction = useStore((s) => s.removeGlyphAction);
+  const requestConfirm = useStore((s) => s.requestConfirm);
   const [hoveredCodepoint, setHoveredCodepoint] = useState(null);
   // A font commonly wants more than one preset at once (e.g. Basic Latin
   // *and* Card Suits), so this is a multi-select — the grid shows the
@@ -64,8 +65,8 @@ export function CharacterMapPanel() {
 
   if (!glyphSet || glyphSet.kind !== 'characters') return null;
 
-  function assign(codepoint) {
-    if (wouldCollide(glyphSet, codepoint) && !window.confirm(`U+${codepoint.toString(16).toUpperCase()} already has a glyph — replace it?`)) {
+  async function assign(codepoint) {
+    if (wouldCollide(glyphSet, codepoint) && !(await requestConfirm(`U+${codepoint.toString(16).toUpperCase()} already has a glyph — replace it?`))) {
       return;
     }
     assignCodepoint(codepoint);
@@ -141,9 +142,9 @@ export function CharacterMapPanel() {
               <GlyphThumbnail glyph={glyph} codepoint={codepoint} />
               {glyph && isHovered && (
                 <button
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.stopPropagation();
-                    if (window.confirm(`Remove glyph for ${String.fromCodePoint(codepoint)} (U+${codepoint.toString(16).toUpperCase()})?`)) {
+                    if (await requestConfirm(`Remove glyph for ${String.fromCodePoint(codepoint)} (U+${codepoint.toString(16).toUpperCase()})?`)) {
                       removeGlyphAction(codepoint);
                     }
                   }}

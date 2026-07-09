@@ -35,12 +35,13 @@ export function FontMetadataPanel() {
   const glyphSet = useStore((s) => s.glyphSet);
   const updateFontMeta = useStore((s) => s.updateFontMeta);
   const resizeFontPixelsPerEm = useStore((s) => s.resizeFontPixelsPerEm);
+  const requestConfirm = useStore((s) => s.requestConfirm);
   const [pixelsPerEmDraft, setPixelsPerEmDraft] = useState(glyphSet?.meta.pixelsPerEm ?? 16);
 
   if (!glyphSet) return null;
   const { meta } = glyphSet;
 
-  function commitPixelsPerEm() {
+  async function commitPixelsPerEm() {
     const next = Number(pixelsPerEmDraft);
     if (!Number.isFinite(next) || next < 1 || next === meta.pixelsPerEm) {
       setPixelsPerEmDraft(meta.pixelsPerEm);
@@ -48,9 +49,9 @@ export function FontMetadataPanel() {
     }
     if (
       glyphSet.glyphs.size > 0 &&
-      !window.confirm(
+      !(await requestConfirm(
         `Changing pixels-per-em from ${meta.pixelsPerEm} to ${next} crops or pads every existing glyph's grid — already-drawn pixels near the edge may be cut off. Continue?`,
-      )
+      ))
     ) {
       setPixelsPerEmDraft(meta.pixelsPerEm);
       return;

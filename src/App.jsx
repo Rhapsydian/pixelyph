@@ -13,6 +13,7 @@ import { ExportModal } from './ui/ExportModal.jsx';
 import { ImportImageModal } from './ui/ImportImageModal.jsx';
 import { ReferenceImageModal } from './ui/ReferenceImageModal.jsx';
 import { AboutModal } from './ui/AboutModal.jsx';
+import { ConfirmModal } from './ui/ConfirmModal.jsx';
 import { IconButton } from './ui/IconButton.jsx';
 import { FullscreenIcon, FullscreenExitIcon } from './ui/icons.jsx';
 import { useFullscreen } from './ui/useFullscreen.js';
@@ -242,6 +243,7 @@ export default function App() {
         )}
         <ExportModal />
         <AboutModal />
+        <ConfirmModal />
       </div>
       {!projectOpen && <StartupScreen />}
     </>

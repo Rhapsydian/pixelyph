@@ -110,6 +110,7 @@ export function MenuBar() {
   const setImportImageModalOpen = useStore((s) => s.setImportImageModalOpen);
   const setReferenceImageModalOpen = useStore((s) => s.setReferenceImageModalOpen);
   const setAboutModalOpen = useStore((s) => s.setAboutModalOpen);
+  const requestConfirm = useStore((s) => s.requestConfirm);
 
   const canUndo = useStore((s) => s.canUndo);
   const canRedo = useStore((s) => s.canRedo);
@@ -162,8 +163,8 @@ export function MenuBar() {
     };
   }
 
-  function handleNewProject() {
-    if (!window.confirm('Discard the current project and return to the start screen?')) return;
+  async function handleNewProject() {
+    if (!(await requestConfirm('Discard the current project and return to the start screen?'))) return;
     closeProject();
   }
 

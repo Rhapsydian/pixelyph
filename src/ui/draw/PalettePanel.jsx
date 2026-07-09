@@ -55,6 +55,7 @@ function ColorsGroup({ tier }) {
   const addPaletteColor = useStore((s) => s.addPaletteColor);
   const removePaletteEntry = useStore((s) => s.removePaletteEntry);
   const applyPaletteEntryToActiveGrid = useStore((s) => s.applyPaletteEntryToActiveGrid);
+  const requestConfirm = useStore((s) => s.requestConfirm);
   const [draftColor, setDraftColor] = useState('#000000');
 
   function selectColor(color) {
@@ -62,8 +63,8 @@ function ColorsGroup({ tier }) {
     if (tier === 'advanced') applyPaletteEntryToActiveGrid('colors', color);
   }
 
-  function confirmDelete(color) {
-    if (window.confirm(`Remove ${color} from the palette?`)) removePaletteEntry('colors', color);
+  async function confirmDelete(color) {
+    if (await requestConfirm(`Remove ${color} from the palette?`)) removePaletteEntry('colors', color);
   }
 
   return (
@@ -111,11 +112,12 @@ function FillsGroup() {
   const addPaletteFill = useStore((s) => s.addPaletteFill);
   const removePaletteEntry = useStore((s) => s.removePaletteEntry);
   const applyPaletteEntryToActiveGrid = useStore((s) => s.applyPaletteEntryToActiveGrid);
+  const requestConfirm = useStore((s) => s.requestConfirm);
   const [selected, setSelected] = useState(null);
   const [draftGradient, setDraftGradient] = useState(null); // non-null while the "add" modal is open
 
-  function confirmDelete(entry) {
-    if (window.confirm('Remove this gradient from the palette?')) removePaletteEntry('fills', entry.id);
+  async function confirmDelete(entry) {
+    if (await requestConfirm('Remove this gradient from the palette?')) removePaletteEntry('fills', entry.id);
   }
 
   function cancelAddGradient() {
@@ -163,10 +165,11 @@ function StylesGroup() {
   const styles = useStore((s) => s.canvas.palette.styles);
   const removePaletteEntry = useStore((s) => s.removePaletteEntry);
   const applyPaletteEntryToActiveGrid = useStore((s) => s.applyPaletteEntryToActiveGrid);
+  const requestConfirm = useStore((s) => s.requestConfirm);
   const [selected, setSelected] = useState(null);
 
-  function confirmDelete(entry) {
-    if (window.confirm('Remove this saved style from the palette?')) removePaletteEntry('styles', entry.id);
+  async function confirmDelete(entry) {
+    if (await requestConfirm('Remove this saved style from the palette?')) removePaletteEntry('styles', entry.id);
   }
 
   return (

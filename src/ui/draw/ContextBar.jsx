@@ -99,18 +99,19 @@ export function ContextBar() {
   const setTier = useStore((s) => s.setTier);
   const selectionScope = useStore((s) => s.selectionScope);
   const setSelectionScope = useStore((s) => s.setSelectionScope);
+  const requestConfirm = useStore((s) => s.requestConfirm);
 
   const isGlyphMode = mode === 'glyph';
   const showsShapeToggle = activeTool === 'rectangle' || activeTool === 'ellipse';
   const symmetryMode = isGlyphMode ? (glyphCanvas?.symmetryMode ?? 'none') : canvasSymmetryMode;
 
-  function handleTierChange(newTier) {
+  async function handleTierChange(newTier) {
     if (newTier === tier) return;
     if (
       newTier === 'simple' &&
-      !window.confirm(
+      !(await requestConfirm(
         "Switching to Pixel tier collapses each layer's own shapes to its topmost visible color per cell — gradients, stroke, effects, and multiple shapes per layer are lost, and overlapping same-color shapes within a layer merge. Layer count, order, names, lock, and opacity are preserved. This cannot be undone by switching back. Continue?",
-      )
+      ))
     ) {
       return;
     }

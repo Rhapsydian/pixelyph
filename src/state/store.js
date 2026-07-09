@@ -583,6 +583,17 @@ export const useStore = create((set, get) => {
     aboutModalOpen: false,
     setAboutModalOpen: (open) => set({ aboutModalOpen: open }),
 
+    // Promise-based replacement for window.confirm — `confirmDialog` holds
+    // the pending message + its resolver while a confirm modal is open, so
+    // both React components and store actions (which can't use hooks) can
+    // `await requestConfirm(message)` the same way.
+    confirmDialog: null,
+    requestConfirm: (message) => new Promise((resolve) => set({ confirmDialog: { message, resolve } })),
+    resolveConfirm: (result) => {
+      get().confirmDialog?.resolve(result);
+      set({ confirmDialog: null });
+    },
+
     // --- Project lifecycle (Phase 4) ---
 
     /**
@@ -591,8 +602,8 @@ export const useStore = create((set, get) => {
      * the discard (the header button does this) — but there's a safety confirm
      * here too in case newProject is called programmatically with projectOpen true.
      */
-    newProject: (mode, options = {}) => {
-      if (get().projectOpen && !window.confirm('Discard the current project and start a new one?')) return;
+    newProject: async (mode, options = {}) => {
+      if (get().projectOpen && !(await get().requestConfirm('Discard the current project and start a new one?'))) return;
       stopPlaybackTimer();
       set({ isPlaying: false });
       if (mode === 'glyph') {
@@ -1011,7 +1022,7 @@ export const useStore = create((set, get) => {
     saveAnyProject: () => (get().mode === 'glyph' ? get().saveGlyphProject() : get().saveProject()),
     /** Opens a `.pixelyph` file and starts the matching project (kind-dispatching). */
     openAnyProject: async () => {
-      if (get().projectOpen && !window.confirm('Discard the current project and open another one?')) return;
+      if (get().projectOpen && !(await get().requestConfirm('Discard the current project and open another one?'))) return;
       const result = await openFile('.pixelyph');
       if (!result) return;
       const text = await result.blob.text();

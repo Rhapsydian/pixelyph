@@ -57,6 +57,7 @@ export function GlyphSetPanel() {
   const activeCodepoint = useStore((s) => s.activeCodepoint);
   const selectGlyph = useStore((s) => s.selectGlyph);
   const removeGlyphAction = useStore((s) => s.removeGlyphAction);
+  const requestConfirm = useStore((s) => s.requestConfirm);
   const addIconGlyph = useStore((s) => s.addIconGlyph);
   const updateGlyphMeta = useStore((s) => s.updateGlyphMeta);
   const [query, setQuery] = useState('');
@@ -151,9 +152,9 @@ export function GlyphSetPanel() {
             <GlyphThumbnail glyph={glyph} />
             {hoveredCodepoint === codepoint && (
               <button
-                onClick={(e) => {
+                onClick={async (e) => {
                   e.stopPropagation();
-                  if (window.confirm(`Remove glyph ${glyphLabel(codepoint, glyph, glyphSet.kind)}?`)) {
+                  if (await requestConfirm(`Remove glyph ${glyphLabel(codepoint, glyph, glyphSet.kind)}?`)) {
                     removeGlyphAction(codepoint);
                   }
                 }}

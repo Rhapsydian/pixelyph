@@ -29,10 +29,14 @@ globalThis.indexedDB = {
 };
 
 // newProject()/openAnyProject() confirm before discarding an already-open
-// project (see store.js) — a `window.confirm` call, unavailable under plain
-// `node --test`. Each test file's project starts fresh in-process, so always
-// confirming is equivalent to a user clicking "OK" every time.
-globalThis.window = { confirm: () => true };
+// project (see store.js's `requestConfirm`, a Promise-based window.confirm
+// replacement) — the real version opens a modal and waits on a user click,
+// which nothing drives under plain `node --test`. Each test file's project
+// starts fresh in-process, so always confirming is equivalent to a user
+// clicking "OK" every time; tests call newProject/openAnyProject without
+// awaiting, so this must resolve synchronously rather than via a real
+// pending Promise.
+useStore.setState({ requestConfirm: () => Promise.resolve(true) });
 
 function paintColumn(x, height, color) {
   for (let y = 0; y < height; y++) useStore.getState().paintCellLive(x, y, color);
@@ -56,9 +60,9 @@ function onlyColumnFilled(glyph, expectedX) {
   return true;
 }
 
-test('cross-glyph copy-paste: selecting in glyph A, switching to glyph B, and pasting only affects B', () => {
+test('cross-glyph copy-paste: selecting in glyph A, switching to glyph B, and pasting only affects B', async () => {
   const store = useStore.getState();
-  store.newProject('glyph', { kind: 'characters', familyName: 'Cross Glyph Test' });
+  await store.newProject('glyph', { kind: 'characters', familyName: 'Cross Glyph Test' });
 
   store.assignCodepoint(65, {}); // glyph A, active
   paintColumn(0, useStore.getState().glyphSet.meta.pixelsPerEm, '#000000'); // a "stem" at x=0
@@ -89,9 +93,9 @@ test('cross-glyph copy-paste: selecting in glyph A, switching to glyph B, and pa
   assert.ok(columnIsFilled(glyphB, 5), "glyph B received the pasted stem (centered paste at x=floor((12-1)/2)=5)");
 });
 
-test('palette actions (add/remove/reorder/clear) are undo-tracked, same as any other structural edit', () => {
+test('palette actions (add/remove/reorder/clear) are undo-tracked, same as any other structural edit', async () => {
   const store = useStore.getState();
-  store.newProject('draw');
+  await store.newProject('draw');
   store.clearPaletteGroup('colors'); // newProject seeds the standard default palette; start from a known-empty state
 
   store.addPaletteColor('#ff0000');
@@ -111,9 +115,9 @@ test('palette actions (add/remove/reorder/clear) are undo-tracked, same as any o
   assert.deepEqual(useStore.getState().canvas.palette.colors, []);
 });
 
-test('renamePaletteEntry sets a name on a fills entry, undo-tracked', () => {
+test('renamePaletteEntry sets a name on a fills entry, undo-tracked', async () => {
   const store = useStore.getState();
-  store.newProject('draw');
+  await store.newProject('draw');
   store.addPaletteFill({ type: 'linear-gradient', angle: 0, stops: [] });
   const fill = useStore.getState().canvas.palette.fills.at(-1);
 
@@ -124,9 +128,9 @@ test('renamePaletteEntry sets a name on a fills entry, undo-tracked', () => {
   assert.equal(useStore.getState().canvas.palette.fills.find((f) => f.id === fill.id).name, undefined);
 });
 
-test('applyPaletteEntryToActiveGrid: a saved fill (gradient) clones onto the active shape\'s fill, independent of the palette entry afterward', () => {
+test('applyPaletteEntryToActiveGrid: a saved fill (gradient) clones onto the active shape\'s fill, independent of the palette entry afterward', async () => {
   const store = useStore.getState();
-  store.newProject('draw');
+  await store.newProject('draw');
   store.setTier('advanced');
   const layer = useStore.getState().canvas.layers[0];
   store.addGrid(layer.id);
@@ -144,9 +148,9 @@ test('applyPaletteEntryToActiveGrid: a saved fill (gradient) clones onto the act
   assert.equal(fillEntry.stops.length, 2, 'mutating the applied fill must not affect the palette entry it came from');
 });
 
-test('selectionScope defaults to "activeShape"; copy honors it, excluding a different shape in the same layer', () => {
+test('selectionScope defaults to "activeShape"; copy honors it, excluding a different shape in the same layer', async () => {
   const store = useStore.getState();
-  store.newProject('draw');
+  await store.newProject('draw');
   store.setTier('advanced');
   assert.equal(useStore.getState().selectionScope, 'activeShape');
 
@@ -171,9 +175,9 @@ test('selectionScope defaults to "activeShape"; copy honors it, excluding a diff
   );
 });
 
-test('applyPaletteEntryToActiveGrid: a saved style replaces fill+stroke+effects wholesale', () => {
+test('applyPaletteEntryToActiveGrid: a saved style replaces fill+stroke+effects wholesale', async () => {
   const store = useStore.getState();
-  store.newProject('draw');
+  await store.newProject('draw');
   store.setTier('advanced');
   const layer = useStore.getState().canvas.layers[0];
   store.addGrid(layer.id);
@@ -190,13 +194,13 @@ test('applyPaletteEntryToActiveGrid: a saved style replaces fill+stroke+effects 
   assert.equal(appliedStyle.effects.length, 1);
 });
 
-test('applyPaletteEntryToActiveGrid: every default palette style (projectFactory.js\'s DEFAULT_STYLES) applies without throwing', () => {
+test('applyPaletteEntryToActiveGrid: every default palette style (projectFactory.js\'s DEFAULT_STYLES) applies without throwing', async () => {
   // Regression test: DEFAULT_STYLES's "Outlined" entry originally omitted
   // `effects`, which cloneLayerStyle (Canvas.js) requires as an array (it
   // calls .map() on it unconditionally) — applying that style silently threw
   // and never reached the shape at all.
   const store = useStore.getState();
-  store.newProject('draw');
+  await store.newProject('draw');
   store.setTier('advanced');
   const layer = useStore.getState().canvas.layers[0];
   store.addGrid(layer.id);
@@ -209,9 +213,9 @@ test('applyPaletteEntryToActiveGrid: every default palette style (projectFactory
   }
 });
 
-test('importPixelyphPalette replaces the whole palette (colors + fills + styles); importLospecPalette only replaces colors', () => {
+test('importPixelyphPalette replaces the whole palette (colors + fills + styles); importLospecPalette only replaces colors', async () => {
   const store = useStore.getState();
-  store.newProject('draw');
+  await store.newProject('draw');
   store.addPaletteFill({ type: 'radial-gradient', cx: 0.5, cy: 0.5, r: 0.5, stops: [] });
   store.addPaletteStyle({ fill: '#000000', effects: [] });
 
@@ -226,9 +230,9 @@ test('importPixelyphPalette replaces the whole palette (colors + fills + styles)
   assert.equal(palette.fills.length, 1, 'importLospecPalette must not touch the fills group');
 });
 
-test('importPixelyphPalette returns false and leaves the palette untouched for invalid/non-palette JSON', () => {
+test('importPixelyphPalette returns false and leaves the palette untouched for invalid/non-palette JSON', async () => {
   const store = useStore.getState();
-  store.newProject('draw');
+  await store.newProject('draw');
   store.addPaletteColor('#ff0000');
   const before = useStore.getState().canvas.palette;
   const ok = store.importPixelyphPalette('not json');
@@ -236,9 +240,9 @@ test('importPixelyphPalette returns false and leaves the palette untouched for i
   assert.equal(useStore.getState().canvas.palette, before, 'palette reference is unchanged on a failed import');
 });
 
-test('addFrame/duplicateFrame/removeFrame are undo-tracked; setActiveFrame is a working-session pointer move that isn\'t', () => {
+test('addFrame/duplicateFrame/removeFrame are undo-tracked; setActiveFrame is a working-session pointer move that isn\'t', async () => {
   const store = useStore.getState();
-  store.newProject('draw');
+  await store.newProject('draw');
   useStore.getState().paintCellLive(0, 0, '#ff0000');
   useStore.getState().commitStroke();
 
@@ -266,9 +270,9 @@ test('addFrame/duplicateFrame/removeFrame are undo-tracked; setActiveFrame is a 
   assert.equal(useStore.getState().canvas.frameCount, 1);
 });
 
-test('setFrameDuration is undo-tracked, like any other structural edit', () => {
+test('setFrameDuration is undo-tracked, like any other structural edit', async () => {
   const store = useStore.getState();
-  store.newProject('draw');
+  await store.newProject('draw');
   store.addFrame();
   assert.equal(useStore.getState().canvas.frameDurations.length, 2);
 
@@ -283,9 +287,9 @@ test('setFrameDuration is undo-tracked, like any other structural edit', () => {
   assert.equal(useStore.getState().canvas.frameDurations[1], 500);
 });
 
-test('playAnimation is a no-op for a single-frame canvas (nothing to animate)', () => {
+test('playAnimation is a no-op for a single-frame canvas (nothing to animate)', async () => {
   const store = useStore.getState();
-  store.newProject('draw');
+  await store.newProject('draw');
   assert.equal(useStore.getState().canvas.frameCount, 1);
   store.playAnimation();
   assert.equal(useStore.getState().isPlaying, false);
@@ -293,7 +297,7 @@ test('playAnimation is a no-op for a single-frame canvas (nothing to animate)', 
 
 test('playAnimation advances activeFrame on a timer using each frame\'s own duration, looping; pauseAnimation stops it', async () => {
   const store = useStore.getState();
-  store.newProject('draw');
+  await store.newProject('draw');
   store.addFrame(); // 2 frames, activeFrame now 1
   store.setFrameDuration(0, 5);
   store.setFrameDuration(1, 5);
@@ -313,9 +317,9 @@ test('playAnimation advances activeFrame on a timer using each frame\'s own dura
   assert.equal(useStore.getState().canvas.activeFrame, frameAfterPause, 'paused — no further advancement');
 });
 
-test('manually navigating to a frame during playback pauses it (scrubbing takes back control)', () => {
+test('manually navigating to a frame during playback pauses it (scrubbing takes back control)', async () => {
   const store = useStore.getState();
-  store.newProject('draw');
+  await store.newProject('draw');
   store.addFrame();
   store.setFrameDuration(0, 5);
   store.setFrameDuration(1, 5);
@@ -327,9 +331,9 @@ test('manually navigating to a frame during playback pauses it (scrubbing takes 
   assert.equal(useStore.getState().isPlaying, false);
 });
 
-test('closeProject stops any running playback', () => {
+test('closeProject stops any running playback', async () => {
   const store = useStore.getState();
-  store.newProject('draw');
+  await store.newProject('draw');
   store.addFrame();
   store.setFrameDuration(0, 5);
   store.setFrameDuration(1, 5);
