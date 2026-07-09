@@ -25,12 +25,20 @@ const TIER_TOOLTIPS = {
   advanced: 'Shape tier: manually author shapes, fills, stroke, and effects',
 };
 
-const SYMMETRY_OPTIONS = [
-  { value: 'none', label: 'None', shortLabel: 'None' },
-  { value: 'x', label: 'Mirror X', shortLabel: 'X' },
-  { value: 'y', label: 'Mirror Y', shortLabel: 'Y' },
-  { value: 'both', label: 'Mirror Both', shortLabel: 'Both' },
-];
+// canvas.symmetryMode/glyphCanvas.symmetryMode is still one of
+// 'none'/'x'/'y'/'both' in the store — these two independent X/Y toggles
+// are a UI-only decomposition of that single value (each button reflects
+// and flips its own axis; 'none' and 'both' are just the "neither" and
+// "both" combinations, not separate buttons).
+function symmetryAxes(mode) {
+  return { x: mode === 'x' || mode === 'both', y: mode === 'y' || mode === 'both' };
+}
+function symmetryModeFromAxes(x, y) {
+  if (x && y) return 'both';
+  if (x) return 'x';
+  if (y) return 'y';
+  return 'none';
+}
 
 const ANCHORS = ['top-left', 'top', 'top-right', 'left', 'center', 'right', 'bottom-left', 'bottom', 'bottom-right'];
 
@@ -154,25 +162,34 @@ export function ContextBar() {
         </label>
       )}
 
-      {(!isGlyphMode || glyphCanvas) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          Symmetry:
-          <div style={{ display: 'flex', gap: 4 }}>
-            {SYMMETRY_OPTIONS.map((opt) => (
+      {(!isGlyphMode || glyphCanvas) && (() => {
+        const { x: xOn, y: yOn } = symmetryAxes(symmetryMode);
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            Symmetry:
+            <div style={{ display: 'flex', gap: 4 }}>
               <button
-                key={opt.value}
-                className={symmetryMode === opt.value ? 'btn active' : 'btn'}
-                onClick={() => setSymmetryMode(opt.value)}
-                style={{ fontWeight: symmetryMode === opt.value ? 500 : 400 }}
-                aria-pressed={symmetryMode === opt.value}
-                title={opt.label}
+                className={xOn ? 'btn active' : 'btn'}
+                onClick={() => setSymmetryMode(symmetryModeFromAxes(!xOn, yOn))}
+                style={{ fontWeight: xOn ? 500 : 400 }}
+                aria-pressed={xOn}
+                title="Mirror X"
               >
-                {opt.shortLabel}
+                X
               </button>
-            ))}
+              <button
+                className={yOn ? 'btn active' : 'btn'}
+                onClick={() => setSymmetryMode(symmetryModeFromAxes(xOn, !yOn))}
+                style={{ fontWeight: yOn ? 500 : 400 }}
+                aria-pressed={yOn}
+                title="Mirror Y"
+              >
+                Y
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <IconButton icon={<GridIcon />} label="Toggle grid" active={showGrid} onClick={toggleGrid} />
 
