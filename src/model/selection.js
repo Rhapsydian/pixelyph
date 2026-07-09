@@ -18,6 +18,7 @@
 // flattens onto it on drop, it doesn't reconstruct the original layers.
 
 import { colorAt, paintCell, topVisibleLayerAt, eraseFromLayer, topGridAt } from './Canvas.js';
+import { get } from './Grid.js';
 
 /** Used as a floating-selection preview color when a cell's source layer has a non-solid (gradient) fill, which can't be represented per-cell. */
 const NON_SOLID_FILL_PREVIEW_COLOR = '#888888';
@@ -70,6 +71,35 @@ export function extractRectFromActiveLayer(canvas, rect) {
       const grid = topGridAt(frame, x, y);
       if (!grid) continue;
       const color = typeof grid.style.fill === 'string' ? grid.style.fill : NON_SOLID_FILL_PREVIEW_COLOR;
+      cells.push({ dx: x - rect.x0, dy: y - rect.y0, color });
+    }
+  }
+  return cells;
+}
+
+/**
+ * Reads only the active Grid's (Shape's) own cells in `rect` — the
+ * narrowest advanced-tier selection scope, isolating one shape even when a
+ * different shape in the *same* layer (or stacked elsewhere) overlaps it. A
+ * cell counts only if this exact grid (by id) has a pixel set there;
+ * contrast with extractRectFromActiveLayer's topGridAt-wins scan across
+ * every shape in the layer.
+ *
+ * @param {object} canvas
+ * @param {{x0:number,y0:number,x1:number,y1:number}} rect
+ * @returns {{dx:number,dy:number,color:string}[]}
+ */
+export function extractRectFromActiveGrid(canvas, rect) {
+  const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
+  if (!layer) return [];
+  const frame = layer.frames[Math.max(0, Math.min(canvas.activeFrame ?? 0, layer.frames.length - 1))];
+  const grid = frame.grids.find((g) => g.id === canvas.activeGridId);
+  if (!grid) return [];
+  const color = typeof grid.style.fill === 'string' ? grid.style.fill : NON_SOLID_FILL_PREVIEW_COLOR;
+  const cells = [];
+  for (let y = rect.y0; y <= rect.y1; y++) {
+    for (let x = rect.x0; x <= rect.x1; x++) {
+      if (!get(grid, x - grid.offsetX, y - grid.offsetY)) continue;
       cells.push({ dx: x - rect.x0, dy: y - rect.y0, color });
     }
   }

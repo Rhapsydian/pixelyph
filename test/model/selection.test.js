@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createCanvas, paintCell, colorAt, addLayer } from '../../src/model/Canvas.js';
-import { normalizeRect, extractRectColors, extractRectFromActiveLayer, clearRect, clearRectAllLayers, pasteCells } from '../../src/model/selection.js';
+import { createCanvas, paintCell, colorAt, addLayer, addGrid } from '../../src/model/Canvas.js';
+import { normalizeRect, extractRectColors, extractRectFromActiveLayer, extractRectFromActiveGrid, clearRect, clearRectAllLayers, pasteCells } from '../../src/model/selection.js';
 
 test('normalizeRect handles corners given in any order', () => {
   assert.deepEqual(normalizeRect(3, 3, 0, 0), { x0: 0, y0: 0, x1: 3, y1: 3 });
@@ -87,6 +87,39 @@ test('extractRectFromActiveLayer returns nothing when there is no active layer',
   const canvas = createCanvas({ width: 2, height: 2 });
   canvas.tier = 'advanced';
   assert.deepEqual(extractRectFromActiveLayer(canvas, { x0: 0, y0: 0, x1: 1, y1: 1 }), []);
+});
+
+test('extractRectFromActiveGrid only reads the active shape\'s own cells, ignoring a different shape in the same layer', () => {
+  const canvas = createCanvas({ width: 2, height: 1 });
+  canvas.tier = 'advanced';
+  addLayer(canvas, { name: 'layer' });
+  paintCell(canvas, 0, 0, '#0000ff'); // shape A, becomes active
+  const shapeAId = canvas.activeGridId;
+  canvas.activeGridId = null; // deselect so the next paint starts a separate shape
+  paintCell(canvas, 1, 0, '#ff0000'); // shape B, becomes active, covers (1,0)
+  canvas.activeGridId = shapeAId; // re-select shape A explicitly (ShapeRow click)
+
+  const cells = extractRectFromActiveGrid(canvas, { x0: 0, y0: 0, x1: 1, y1: 0 });
+  assert.deepEqual(cells, [{ dx: 0, dy: 0, color: '#0000ff' }]); // only shape A's own cell
+});
+
+test('extractRectFromActiveGrid falls back to a placeholder color for a non-solid (gradient) fill', () => {
+  const canvas = createCanvas({ width: 1, height: 1 });
+  canvas.tier = 'advanced';
+  addLayer(canvas, { name: 'grad' });
+  paintCell(canvas, 0, 0, '#ffffff');
+  canvas.layers[0].frames[0].grids[0].style.fill = { type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] };
+  const cells = extractRectFromActiveGrid(canvas, { x0: 0, y0: 0, x1: 0, y1: 0 });
+  assert.equal(cells.length, 1);
+  assert.equal(typeof cells[0].color, 'string');
+});
+
+test('extractRectFromActiveGrid returns nothing when there is no active shape', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  addLayer(canvas);
+  canvas.activeGridId = null;
+  assert.deepEqual(extractRectFromActiveGrid(canvas, { x0: 0, y0: 0, x1: 1, y1: 1 }), []);
 });
 
 test('clearRectAllLayers clears each cell from whichever layer actually owns it, not just the active layer', () => {

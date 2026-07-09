@@ -45,7 +45,7 @@ import {
 } from '../model/Canvas.js';
 import { mirrorPoints } from '../model/mirror.js';
 import { createHistory, pushSnapshot, undo as historyUndo, redo as historyRedo, canUndo as historyCanUndo, canRedo as historyCanRedo } from '../model/history.js';
-import { normalizeRect, extractRectColors, extractRectFromActiveLayer, clearRect, clearRectAllLayers, pasteCells } from '../model/selection.js';
+import { normalizeRect, extractRectColors, extractRectFromActiveLayer, extractRectFromActiveGrid, clearRect, clearRectAllLayers, pasteCells } from '../model/selection.js';
 import { parseLospecPalette } from '../model/paletteImport.js';
 import {
   addColor as addPaletteColorModel,
@@ -127,6 +127,7 @@ function applyGlyphContentSnapshot(glyphSet, snapshot) {
 
 /** Read side of a selection, honoring `selectionScope` in advanced tier. */
 function extractSelection(canvas, selectionScope, rect) {
+  if (canvas.tier === 'advanced' && selectionScope === 'activeShape') return extractRectFromActiveGrid(canvas, rect);
   if (canvas.tier === 'advanced' && selectionScope === 'activeLayer') return extractRectFromActiveLayer(canvas, rect);
   return extractRectColors(canvas, rect);
 }
@@ -231,7 +232,7 @@ export const useStore = create((set, get) => {
 
     selection: null,
     floatingSelection: null,
-    selectionScope: 'activeLayer',
+    selectionScope: 'activeShape',
 
     setActiveTool: (tool) => set({ activeTool: tool }),
     setActiveColor: (color) => set({ activeColor: color }),

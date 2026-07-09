@@ -144,6 +144,33 @@ test('applyPaletteEntryToActiveGrid: a saved fill (gradient) clones onto the act
   assert.equal(fillEntry.stops.length, 2, 'mutating the applied fill must not affect the palette entry it came from');
 });
 
+test('selectionScope defaults to "activeShape"; copy honors it, excluding a different shape in the same layer', () => {
+  const store = useStore.getState();
+  store.newProject('draw');
+  store.setTier('advanced');
+  assert.equal(useStore.getState().selectionScope, 'activeShape');
+
+  const layer = useStore.getState().canvas.layers[0];
+  store.paintCellLive(0, 0, '#0000ff');
+  store.commitStroke(); // shape A, active, covers (0,0)
+  const shapeAId = useStore.getState().canvas.activeGridId;
+
+  store.addGrid(layer.id); // shape B, active, empty
+  store.paintCellLive(1, 0, '#ff0000');
+  store.commitStroke(); // grows shape B to cover (1,0)
+
+  store.setActiveGridId(layer.id, shapeAId); // re-select shape A (ShapeRow click)
+  store.startSelection(0, 0);
+  store.updateSelection(1, 0); // spans both shapes' cells
+  store.copySelection();
+
+  assert.deepEqual(
+    useStore.getState().clipboard.cells,
+    [{ dx: 0, dy: 0, color: '#0000ff' }],
+    "only shape A's own cell, not shape B's, despite both being in the rect and the same layer",
+  );
+});
+
 test('applyPaletteEntryToActiveGrid: a saved style replaces fill+stroke+effects wholesale', () => {
   const store = useStore.getState();
   store.newProject('draw');

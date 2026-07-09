@@ -129,9 +129,10 @@ export function ContextBar() {
       )}
 
       {!isGlyphMode && tier === 'advanced' && (
-        <label title="Whether Select/Copy/Cut read only the active layer, or whichever visible layer is topmost at each cell">
+        <label title="Whether Select/Copy/Cut read only the active shape, only the active layer, or whichever visible layer is topmost at each cell">
           Select from:{' '}
           <select value={selectionScope} onChange={(e) => setSelectionScope(e.target.value)}>
+            <option value="activeShape">Active shape</option>
             <option value="activeLayer">Active layer</option>
             <option value="allVisible">All visible layers</option>
           </select>
