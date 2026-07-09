@@ -1,8 +1,17 @@
-// Advanced tier only: edits the active layer's `style` — fill (solid /
-// gradient / none), stroke (color/width/cap/join/dash), and effects
-// (drop-shadow, "glow" as a drop-shadow preset, blur). See the plan's v1
-// LayerStyle scope note for why these are the only primitives offered
-// here. (Pattern fills were tried and removed — see BACKLOG.md.)
+// Advanced tier only: edits the active Shape's (Grid's) `style` — fill
+// (solid / gradient / none), stroke (color/width/cap/join/dash), and
+// effects (drop-shadow, "glow" as a drop-shadow preset, blur). See the
+// plan's v1 LayerStyle scope note for why these are the only primitives
+// offered here. (Pattern fills were tried and removed — see BACKLOG.md.)
+//
+// Session 3 (Layer/Frame/Grid redesign): style moved off Layer onto Grid
+// (docs/data-model.md), so this panel now resolves canvas.activeGridId
+// within the active layer's active frame instead of the layer itself.
+// FillEditor/StrokeEditor/EffectsEditor below are unchanged internally —
+// they only ever read `.style`/`.id` off whatever's passed as `layer` and
+// call the passed `updateLayerStyle(id, patch)` generically, so passing a
+// Grid in place of a Layer (plus a bound update closure) satisfies their
+// existing prop contract with no changes to those three components.
 
 import { useState } from 'react';
 import { useStore } from '../../state/store.js';
@@ -206,28 +215,37 @@ function EffectsEditor({ layer, updateLayerStyle }) {
 export function LayerStylePanel() {
   // Subscribes to the whole `canvas` object, not a nested field like
   // `canvas.layers`/`canvas.activeLayerId` — those are frequently mutated
-  // in place (a layer's .style reassigned, not the layers array itself),
+  // in place (a shape's .style reassigned, not the layers array itself),
   // so a narrower selector's reference wouldn't change and this panel would
   // silently miss the update. `canvas` itself gets a fresh top-level
   // reference on every commit()/touchCanvas() (see state/store.js), so
   // subscribing to it is what SvgPixelEditor already does for the same reason.
   const canvas = useStore((s) => s.canvas);
-  const updateLayerStyle = useStore((s) => s.updateLayerStyle);
+  const updateGridStyle = useStore((s) => s.updateGridStyle);
   const addPaletteStyle = useStore((s) => s.addPaletteStyle);
 
   if (canvas.tier !== 'advanced') return null;
   const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
-  if (!layer) return <div className="panel" style={{ color: 'var(--chrome-text-muted)' }}>Select a layer to edit its style.</div>;
+  const grid = layer?.frames[canvas.activeFrame]?.grids.find((g) => g.id === canvas.activeGridId);
+  if (!grid) {
+    return (
+      <div className="panel" style={{ color: 'var(--chrome-text-muted)' }}>
+        No shape selected — click a layer's shape above, or paint a cell to create one.
+      </div>
+    );
+  }
+
+  const boundUpdate = (id, patch) => updateGridStyle(layer.id, id, patch);
 
   return (
     <div className="panel">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <strong>Style — {layer.name}</strong>
-        <IconButton icon={<SaveToPaletteIcon size={20} />} label="Save style" onClick={() => addPaletteStyle(layer.style)} />
+        <strong>Style — {grid.name}</strong>
+        <IconButton icon={<SaveToPaletteIcon size={20} />} label="Save style" onClick={() => addPaletteStyle(grid.style)} />
       </div>
-      <FillEditor layer={layer} updateLayerStyle={updateLayerStyle} />
-      <StrokeEditor layer={layer} updateLayerStyle={updateLayerStyle} />
-      <EffectsEditor layer={layer} updateLayerStyle={updateLayerStyle} />
+      <FillEditor layer={grid} updateLayerStyle={boundUpdate} />
+      <StrokeEditor layer={grid} updateLayerStyle={boundUpdate} />
+      <EffectsEditor layer={grid} updateLayerStyle={boundUpdate} />
     </div>
   );
 }
