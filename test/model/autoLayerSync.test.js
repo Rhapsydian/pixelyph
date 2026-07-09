@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createCanvas, paintCell, colorAt, addFrame, setActiveFrame } from '../../src/model/Canvas.js';
+import { createCanvas, paintCell, colorAt, addFrame, setActiveFrame, addLayer } from '../../src/model/Canvas.js';
 
 // Simple tier's pre-migration per-color auto-managed Layer
 // (`layer.autoManaged`/`layer.autoColor`, one full-canvas Layer per color,
@@ -97,4 +97,33 @@ test('each frame\'s shapes are garbage-collected independently — clearing one 
   setActiveFrame(canvas, 1);
   assert.equal(canvas.layers[0].frames[1].grids.length, 1); // frame 1's shape is untouched
   assert.equal(colorAt(canvas, 1, 1), '#ff0000');
+});
+
+test('Simple/Pixel tier paints into the active layer, not always layers[0]', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  paintCell(canvas, 0, 0, '#ff0000'); // creates and targets layer 1
+  const second = addLayer(canvas); // becomes active, canvas.layers[1]
+  paintCell(canvas, 1, 1, '#00ff00');
+  assert.equal(canvas.layers[0].frames[0].grids.length, 1); // layer 1 untouched
+  assert.deepEqual(canvas.layers[0].frames[0].grids.map((g) => g.style.fill), ['#ff0000']);
+  assert.equal(second.frames[0].grids.length, 1); // the new active layer got the second stroke
+  assert.deepEqual(second.frames[0].grids.map((g) => g.style.fill), ['#00ff00']);
+});
+
+test('painting on a locked layer is a no-op', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  const layer = addLayer(canvas);
+  layer.locked = true;
+  paintCell(canvas, 0, 0, '#ff0000');
+  assert.equal(layer.frames[0].grids.length, 0);
+  assert.equal(colorAt(canvas, 0, 0), null);
+});
+
+test('painting on a layer hidden in the active frame is a no-op', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  const layer = addLayer(canvas);
+  layer.frames[0].visible = false;
+  paintCell(canvas, 0, 0, '#ff0000');
+  assert.equal(layer.frames[0].grids.length, 0);
+  assert.equal(colorAt(canvas, 0, 0), null);
 });
