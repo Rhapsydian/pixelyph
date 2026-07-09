@@ -469,17 +469,31 @@ export function clampActiveLayer(canvas) {
 }
 
 /**
- * Re-derives `activeGridId` from scratch (no previously-active-shape
- * carryover) for the current `activeLayerId`/active frame — the "a
- * structural edit changed which layer/frames exist" case. Frame-to-frame
- * scrubbing (`setActiveFrame`) uses `resolveActiveGrid` directly instead,
- * with a real `prevGrid`, since sticky selection only matters there.
+ * Re-derives `activeGridId` for the current `activeLayerId`/active frame —
+ * the "a structural edit changed which layer/frames exist" case. Frame-to-
+ * frame scrubbing (`setActiveFrame`) uses `resolveActiveGrid` directly
+ * instead, with a real `prevGrid`, since sticky selection only matters
+ * there.
+ *
+ * By default this carries no previously-active-shape selection over (a
+ * real layer change has no "same shape" to keep). `prevLayerId`, if passed
+ * and equal to the (already-mutated) `canvas.activeLayerId`, signals the
+ * layer didn't actually change — e.g. re-clicking the already-active layer
+ * row, or an eyedropper click landing back on it — in which case the
+ * currently-active grid is passed through as `prevGrid` so
+ * `resolveActiveGrid`'s id-match branch keeps it selected instead of
+ * falling through to the layer's first shape.
  *
  * @param {object} canvas
+ * @param {string|null} [prevLayerId] `canvas.activeLayerId`'s value before
+ *   the caller changed it, if known.
  */
-export function refreshActiveGrid(canvas) {
+export function refreshActiveGrid(canvas, prevLayerId = null) {
   const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
-  canvas.activeGridId = resolveActiveGrid(layer, currentFrameIndex(canvas), null);
+  const frameIndex = currentFrameIndex(canvas);
+  const sameLayer = prevLayerId != null && prevLayerId === canvas.activeLayerId;
+  const prevGrid = sameLayer ? layer?.frames[frameIndex]?.grids.find((g) => g.id === canvas.activeGridId) : null;
+  canvas.activeGridId = resolveActiveGrid(layer, frameIndex, prevGrid);
 }
 
 /**

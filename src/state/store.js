@@ -295,8 +295,9 @@ export const useStore = create((set, get) => {
     // --- Advanced tier: layers panel + per-layer/per-shape style ---
     setActiveLayerId: (layerId) => {
       const { canvas } = get();
+      const prevLayerId = canvas.activeLayerId;
       canvas.activeLayerId = layerId;
-      refreshActiveGridModel(canvas);
+      refreshActiveGridModel(canvas, prevLayerId);
       touchCanvas();
     },
     /** Advanced-tier eyedropper: activates the topmost layer at (x, y). */
@@ -304,8 +305,9 @@ export const useStore = create((set, get) => {
       const { canvas } = get();
       const layer = topVisibleLayerAt(canvas, x, y);
       if (!layer) return;
+      const prevLayerId = canvas.activeLayerId;
       canvas.activeLayerId = layer.id;
-      refreshActiveGridModel(canvas);
+      refreshActiveGridModel(canvas, prevLayerId);
       touchCanvas();
     },
     /** Explicit shape selection (Layers panel row click) — sets both fields directly, deliberately bypassing resolveActiveGrid's sticky-selection heuristic, which only applies to automatic frame/layer-switch resolution. */

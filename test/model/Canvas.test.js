@@ -6,6 +6,7 @@ import {
   resizeCanvas,
   colorAt,
   addLayer,
+  addGrid,
   removeLayer,
   reorderLayer,
   duplicateLayer,
@@ -23,6 +24,7 @@ import {
   cloneLayerStyle,
   cloneFillValue,
   resolveActiveGrid,
+  refreshActiveGrid,
 } from '../../src/model/Canvas.js';
 
 test('colorAt reads the topmost (last) visible layer that owns a cell', () => {
@@ -725,6 +727,31 @@ test('resolveActiveGrid: returns null for an empty frame, a missing layer, or no
 test('resolveActiveGrid: with no prior selection but a non-empty frame, defaults to the first shape', () => {
   const layer = { frames: [{ grids: [{ id: 'g1', style: { fill: '#f00', effects: [] } }, { id: 'g2', style: { fill: '#0f0', effects: [] } }] }] };
   assert.equal(resolveActiveGrid(layer, 0, null), 'g1');
+});
+
+test('refreshActiveGrid keeps the active shape selected when re-derived for the same (already-active) layer', () => {
+  const canvas = createCanvas({ width: 3, height: 3 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas);
+  paintCell(canvas, 0, 0, '#ff0000'); // shape A, active
+  addGrid(canvas, layer.id, {}); // shape B, active — a separate shape in the same layer
+  const shapeBId = canvas.activeGridId;
+
+  refreshActiveGrid(canvas, layer.id); // simulate re-clicking the already-active layer row
+  assert.equal(canvas.activeGridId, shapeBId, 're-deriving for the same layer must not override the active shape');
+});
+
+test('refreshActiveGrid still resets to the first shape when the layer actually changes', () => {
+  const canvas = createCanvas({ width: 3, height: 3 });
+  canvas.tier = 'advanced';
+  const layerA = addLayer(canvas, { name: 'A' });
+  paintCell(canvas, 0, 0, '#ff0000');
+  addGrid(canvas, layerA.id, {}); // second shape in A, active
+  const layerB = addLayer(canvas, { name: 'B' }); // becomes active
+
+  canvas.activeLayerId = layerA.id; // switch back to A directly (bypassing the store)
+  refreshActiveGrid(canvas, layerB.id); // prevLayerId (B) differs from the new activeLayerId (A) -> real change
+  assert.equal(canvas.activeGridId, layerA.frames[0].grids[0].id, 'falls through to the first shape, no carryover across a real layer switch');
 });
 
 test('setActiveFrame keeps the same shape selected across a scrub when its id survives (duplicateFrame case)', () => {
