@@ -142,6 +142,37 @@ export function PlusIcon(props) {
   );
 }
 
+// Shared by AddLayerIcon/AddShapeIcon below — a small "+" badge in the
+// viewBox's top-right corner, kept out of the way of each glyph's own
+// bottom-left-weighted artwork.
+function PlusBadge() {
+  return (
+    <>
+      <circle cx="15.5" cy="4.5" r="3.5" />
+      <path d="M15.5 2.8v3.4M13.8 4.5h3.4" />
+    </>
+  );
+}
+
+export function AddLayerIcon(props) {
+  return (
+    <Svg {...props}>
+      <path d="M8 8 13 11 8 14 3 11 8 8Z" />
+      <path d="M3 13.5 8 16.5 13 13.5" />
+      <PlusBadge />
+    </Svg>
+  );
+}
+
+export function AddShapeIcon(props) {
+  return (
+    <Svg {...props}>
+      <rect x="3" y="9" width="9" height="9" rx="1" />
+      <PlusBadge />
+    </Svg>
+  );
+}
+
 export function DuplicateIcon(props) {
   return (
     <Svg {...props}>

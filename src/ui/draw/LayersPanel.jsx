@@ -24,17 +24,19 @@
 // a shape via resolveActiveGrid (Canvas.js) even on a plain layer click
 // (per docs/data-model.md section 2), which would otherwise make
 // layer-level actions unreachable on any non-empty layer. "Add" stays two
-// distinct, always-visible buttons (Add Layer here, Add Shape inline per
-// expanded layer) rather than folding into the context switch too — unlike
-// the other four, "add" isn't an action *on* the current selection, so
-// silently flipping its meaning would be an easy way to add the wrong kind
-// of thing by habit.
+// distinct, always-visible buttons in that same top toolbar (Add Layer,
+// Add Shape — the latter targeting canvas.activeLayerId) rather than
+// folding into the context switch too — unlike the other four, "add" isn't
+// an action *on* the current selection, so silently flipping its meaning
+// would be an easy way to add the wrong kind of thing by habit. The
+// heading itself stays a static "Layers" regardless of mode — no editor
+// worth copying repeats the selected name in a toolbar (see LayersToolbar).
 
 import { useEffect, useState } from 'react';
 import { useStore } from '../../state/store.js';
 import { composeFrameBody } from '../../export/svg/composeLayersSvg.js';
 import { IconButton } from '../IconButton.jsx';
-import { EyeIcon, EyeOffIcon, LockIcon, UnlockIcon, MoveUpIcon, MoveDownIcon, TrashIcon, DuplicateIcon, MergeDownIcon, PlusIcon, ChevronDownIcon } from '../icons.jsx';
+import { EyeIcon, EyeOffIcon, LockIcon, UnlockIcon, MoveUpIcon, MoveDownIcon, TrashIcon, DuplicateIcon, MergeDownIcon, AddLayerIcon, AddShapeIcon, ChevronDownIcon } from '../icons.jsx';
 
 const THUMBNAIL_SIZE = 28;
 
@@ -212,11 +214,18 @@ function ShapeRow({ canvas, layer, grid, isActive, onSelect }) {
  * actions whenever there's no real active shape to act on (e.g. the active
  * shape was since deleted, or nothing's ever been clicked yet) even if
  * `selectionKind` still says 'shape' — see the file header for why this
- * doesn't just derive from `canvas.activeGridId` directly. "Add Layer" is
- * always visible regardless of mode; "Add Shape" lives inline per expanded
- * layer instead (below).
+ * doesn't just derive from `canvas.activeGridId` directly. The heading
+ * stays a static "Layers" regardless of mode — no editor worth copying
+ * (Photoshop/Illustrator/Figma/Affinity/Aseprite) repeats the selected
+ * name in a toolbar; they all just rely on the highlighted row, which this
+ * panel already has. Add Layer and Add Shape are two distinct, always-
+ * visible buttons here rather than folding into the context switch too —
+ * unlike the other four, "add" isn't an action *on* the current selection,
+ * so silently flipping its meaning would be an easy way to add the wrong
+ * kind of thing by habit. Add Shape targets `canvas.activeLayerId`
+ * (disabled when there isn't one).
  */
-function LayersToolbar({ canvas, selectionKind }) {
+function LayersToolbar({ canvas, selectionKind, onAddShape }) {
   const addLayer = useStore((s) => s.addLayer);
   const reorderLayer = useStore((s) => s.reorderLayer);
   const duplicateLayer = useStore((s) => s.duplicateLayer);
@@ -231,14 +240,12 @@ function LayersToolbar({ canvas, selectionKind }) {
   const activeGrid = activeLayer?.frames[canvas.activeFrame]?.grids.find((g) => g.id === canvas.activeGridId);
   const showShapeActions = selectionKind === 'shape' && !!activeGrid;
 
-  let label;
   let actionButtons;
   if (showShapeActions) {
     const grids = activeLayer.frames[canvas.activeFrame].grids;
     const index = grids.findIndex((g) => g.id === activeGrid.id);
     const isTop = index === grids.length - 1;
     const isBottom = index === 0;
-    label = `Shape: ${activeGrid.name}`;
     actionButtons = (
       <>
         <IconButton icon={<MoveUpIcon />} label="Move shape up" disabled={isTop} onClick={() => reorderGrid(activeLayer.id, activeGrid.id, 1)} />
@@ -253,7 +260,6 @@ function LayersToolbar({ canvas, selectionKind }) {
     const hasActive = activeIndex >= 0;
     const isTop = activeIndex === canvas.layers.length - 1;
     const isBottom = activeIndex === 0;
-    label = 'Layers';
     actionButtons = (
       <>
         <IconButton icon={<MoveUpIcon />} label="Move up" disabled={!hasActive || isTop} onClick={() => reorderLayer(canvas.activeLayerId, 1)} />
@@ -267,21 +273,12 @@ function LayersToolbar({ canvas, selectionKind }) {
 
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <strong>{label}</strong>
+      <strong>Layers</strong>
       <span style={{ display: 'inline-flex', gap: 2 }}>
         {actionButtons}
-        <IconButton icon={<PlusIcon />} label="Add layer" onClick={addLayer} />
+        <IconButton icon={<AddLayerIcon />} label="Add layer" onClick={addLayer} />
+        <IconButton icon={<AddShapeIcon />} label="Add shape" disabled={!canvas.activeLayerId} onClick={onAddShape} />
       </span>
-    </div>
-  );
-}
-
-/** Inline per-layer "+ Add Shape" — the layer-scoped half of the two-add-buttons split (see file header); everything else a shape needs (move/duplicate/merge/delete) goes through the shared LayersToolbar once the new shape is selected. */
-function AddShapeRow({ onAdd }) {
-  return (
-    <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: 'var(--space-6)' }}>
-      <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>Shapes</span>
-      <IconButton icon={<PlusIcon />} label="Add shape" onClick={onAdd} />
     </div>
   );
 }
@@ -323,7 +320,15 @@ export function LayersPanel() {
 
   return (
     <div className="panel">
-      <LayersToolbar canvas={canvas} selectionKind={selectionKind} />
+      <LayersToolbar
+        canvas={canvas}
+        selectionKind={selectionKind}
+        onAddShape={() => {
+          if (!canvas.activeLayerId) return;
+          addGrid(canvas.activeLayerId);
+          setSelectionKind('shape');
+        }}
+      />
       {canvas.layers.length === 0 && <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No layers yet — add one to start painting.</span>}
       {canvas.layers
         .slice()
@@ -343,12 +348,6 @@ export function LayersPanel() {
               />
               {isExpanded && (
                 <>
-                  <AddShapeRow
-                    onAdd={() => {
-                      addGrid(layer.id);
-                      setSelectionKind('shape');
-                    }}
-                  />
                   {grids.length === 0 && (
                     <div style={{ paddingLeft: 'var(--space-6)', color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No shapes in this frame yet.</div>
                   )}
