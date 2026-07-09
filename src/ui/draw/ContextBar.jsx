@@ -12,6 +12,19 @@ import { useStore } from '../../state/store.js';
 import { IconButton } from '../IconButton.jsx';
 import { GridIcon, UndoIcon, RedoIcon } from '../icons.jsx';
 
+// Display-only: `canvas.tier` keeps its stored 'simple'/'advanced' values
+// everywhere (no save-format bump, no migration) — these two maps are the
+// only place the Pixel/Shape names appear. Pixel (paint colors, shapes
+// auto-managed) and Shape (author shapes manually) name the real axis this
+// tier now controls, now that both tiers get real multi-layer support (see
+// docs/data-model.md) and the only thing still tier-gated is manual
+// shape/style authoring.
+const TIER_LABELS = { simple: 'Pixel', advanced: 'Shape' };
+const TIER_TOOLTIPS = {
+  simple: 'Pixel tier: paint colors, shapes are auto-managed one per color',
+  advanced: 'Shape tier: manually author shapes, fills, stroke, and effects',
+};
+
 const SYMMETRY_OPTIONS = [
   { value: 'none', label: 'None' },
   { value: 'x', label: 'Mirror X' },
@@ -96,7 +109,7 @@ export function ContextBar() {
     if (
       newTier === 'simple' &&
       !window.confirm(
-        'Switching to simple tier collapses every layer to its topmost visible color per cell — gradients, stroke, effects, and free-floating layer positions are lost, and overlapping same-color layers merge. This cannot be undone by switching back. Continue?',
+        "Switching to Pixel tier collapses each layer's own shapes to its topmost visible color per cell — gradients, stroke, effects, and multiple shapes per layer are lost, and overlapping same-color shapes within a layer merge. Layer count, order, names, lock, and opacity are preserved. This cannot be undone by switching back. Continue?",
       )
     ) {
       return;
@@ -107,16 +120,17 @@ export function ContextBar() {
   return (
     <div className="app-context-bar">
       {!isGlyphMode && (
-        <div style={{ display: 'flex', gap: 4 }} title="Simple tier hides layer management; advanced tier exposes it">
+        <div style={{ display: 'flex', gap: 4 }} title="Pixel tier auto-manages shapes by color; Shape tier exposes manual shape/style authoring">
           {['simple', 'advanced'].map((t) => (
             <button
               key={t}
               className={tier === t ? 'btn active' : 'btn'}
               onClick={() => handleTierChange(t)}
-              style={{ textTransform: 'capitalize', fontWeight: tier === t ? 500 : 400 }}
+              style={{ fontWeight: tier === t ? 500 : 400 }}
               aria-pressed={tier === t}
+              title={TIER_TOOLTIPS[t]}
             >
-              {t}
+              {TIER_LABELS[t]}
             </button>
           ))}
         </div>
