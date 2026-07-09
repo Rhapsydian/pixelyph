@@ -1,4 +1,4 @@
-// Advanced tier only: add/remove/reorder/select layers, and per-layer
+// Shown in both tiers: add/remove/reorder/select layers, and per-layer
 // visible/locked/opacity. Rendered top-to-bottom in the panel
 // (canvas.layers is back-to-front, so the panel reverses it for display —
 // same convention most layer-panel tools use). Visibility is per-*frame*
@@ -14,11 +14,11 @@
 // the same buttons on every row.
 //
 // Session 3 (Layer/Frame/Grid redesign, see docs/data-model.md section 4):
-// each layer row gets an expand caret revealing that layer's Shapes (model
-// name `Grid`) *in the active frame* as sub-rows — a Shape row carries the
-// exact same control set as a Layer row. Rather than a second nested
-// toolbar, the shared toolbar itself context-switches between layer
-// actions and shape actions depending on which kind of row was last
+// in Advanced/Shape tier, each layer row gets an expand caret revealing that
+// layer's Shapes (model name `Grid`) *in the active frame* as sub-rows — a
+// Shape row carries the exact same control set as a Layer row. Rather than a
+// second nested toolbar, the shared toolbar itself context-switches between
+// layer actions and shape actions depending on which kind of row was last
 // clicked (`selectionKind`, local state below) — deliberately tracked
 // separately from `canvas.activeGridId`, since that field auto-resolves to
 // a shape via resolveActiveGrid (Canvas.js) even on a plain layer click
@@ -31,6 +31,14 @@
 // would be an easy way to add the wrong kind of thing by habit. The
 // heading itself stays a static "Layers" regardless of mode — no editor
 // worth copying repeats the selected name in a toolbar (see LayersToolbar).
+//
+// Session 19 (Pixel/Shape tier rename): Simple/Pixel tier shows this same
+// panel, but with no expand caret, no shape sub-rows, and no "Add Shape"
+// button (`showShapes`, threaded down from `canvas.tier === 'advanced'`) —
+// Pixel-tier shapes are auto-managed by color (autoLayerSync.js), not
+// something to browse or select individually, so `selectionKind` can never
+// become `'shape'` there and the toolbar stays locked to its layer-action
+// branch.
 
 import { useEffect, useState } from 'react';
 import { useStore } from '../../state/store.js';
@@ -149,7 +157,7 @@ function ExpandCaret({ expanded }) {
   );
 }
 
-function LayerRow({ canvas, layer, isActive, isExpanded, onToggleExpand, onSelect }) {
+function LayerRow({ canvas, layer, isActive, isExpanded, onToggleExpand, onSelect, showShapes }) {
   const setActiveLayerId = useStore((s) => s.setActiveLayerId);
   const setLayerProps = useStore((s) => s.setLayerProps);
   const setLayerFrameVisibility = useStore((s) => s.setLayerFrameVisibility);
@@ -175,14 +183,16 @@ function LayerRow({ canvas, layer, isActive, isExpanded, onToggleExpand, onSelec
         alignItems: 'center',
       }}
     >
-      <span onClick={(e) => e.stopPropagation()} style={{ display: 'inline-flex' }}>
-        <IconButton
-          icon={<ExpandCaret expanded={isExpanded} />}
-          label={isExpanded ? 'Collapse shapes' : 'Expand shapes'}
-          onClick={onToggleExpand}
-          style={{ width: 20, height: 20 }}
-        />
-      </span>
+      {showShapes && (
+        <span onClick={(e) => e.stopPropagation()} style={{ display: 'inline-flex' }}>
+          <IconButton
+            icon={<ExpandCaret expanded={isExpanded} />}
+            label={isExpanded ? 'Collapse shapes' : 'Expand shapes'}
+            onClick={onToggleExpand}
+            style={{ width: 20, height: 20 }}
+          />
+        </span>
+      )}
       <LayerThumbnail canvas={canvas} layer={layer} />
       <EntityControls
         visible={visibleInActiveFrame}
@@ -259,9 +269,13 @@ function ShapeRow({ canvas, layer, grid, isActive, onSelect }) {
  * unlike the other four, "add" isn't an action *on* the current selection,
  * so silently flipping its meaning would be an easy way to add the wrong
  * kind of thing by habit. Add Shape targets `canvas.activeLayerId`
- * (disabled when there isn't one).
+ * (disabled when there isn't one); it's hidden entirely in Pixel tier
+ * (`showShapes` false), where shapes are auto-managed, not authored — the
+ * shape-action button set above is also unreachable there, since
+ * `selectionKind` can only become `'shape'` by clicking a ShapeRow, which
+ * Pixel tier never renders (see LayerRow's `showShapes`).
  */
-function LayersToolbar({ canvas, selectionKind, onAddShape }) {
+function LayersToolbar({ canvas, selectionKind, onAddShape, showShapes }) {
   const addLayer = useStore((s) => s.addLayer);
   const reorderLayer = useStore((s) => s.reorderLayer);
   const duplicateLayer = useStore((s) => s.duplicateLayer);
@@ -313,7 +327,7 @@ function LayersToolbar({ canvas, selectionKind, onAddShape }) {
       <span style={{ display: 'inline-flex', gap: 2 }}>
         {actionButtons}
         <IconButton icon={<AddLayerIcon />} label="Add layer" onClick={addLayer} />
-        <IconButton icon={<AddShapeIcon />} label="Add shape" disabled={!canvas.activeLayerId} onClick={onAddShape} />
+        {showShapes && <IconButton icon={<AddShapeIcon />} label="Add shape" disabled={!canvas.activeLayerId} onClick={onAddShape} />}
       </span>
     </div>
   );
@@ -335,15 +349,15 @@ export function LayersPanel() {
   // Whenever a shape becomes active via the sticky frame/layer-switch
   // resolution (resolveActiveGrid, Canvas.js), make sure its owning layer's
   // row is expanded so the newly-active shape is never hidden behind a
-  // collapsed group.
+  // collapsed group. Advanced/Shape tier only — Pixel tier never renders
+  // shape rows to expand into (see LayerRow's `showShapes`).
+  const showShapes = canvas.tier === 'advanced';
   useEffect(() => {
-    if (!canvas.activeGridId) return;
+    if (!showShapes || !canvas.activeGridId) return;
     const owner = canvas.layers.find((l) => l.frames[canvas.activeFrame]?.grids.some((g) => g.id === canvas.activeGridId));
     if (!owner) return;
     setExpandedLayerIds((prev) => (prev.has(owner.id) ? prev : new Set(prev).add(owner.id)));
-  }, [canvas.activeGridId, canvas.activeFrame, canvas.layers]);
-
-  if (canvas.tier !== 'advanced') return null;
+  }, [showShapes, canvas.activeGridId, canvas.activeFrame, canvas.layers]);
 
   function toggleExpand(layerId) {
     setExpandedLayerIds((prev) => {
@@ -359,6 +373,7 @@ export function LayersPanel() {
       <LayersToolbar
         canvas={canvas}
         selectionKind={selectionKind}
+        showShapes={showShapes}
         onAddShape={() => {
           if (!canvas.activeLayerId) return;
           addGrid(canvas.activeLayerId);
@@ -381,8 +396,9 @@ export function LayersPanel() {
                 isExpanded={isExpanded}
                 onToggleExpand={() => toggleExpand(layer.id)}
                 onSelect={() => setSelectionKind('layer')}
+                showShapes={showShapes}
               />
-              {isExpanded && (
+              {showShapes && isExpanded && (
                 // marginTop separates the layer row's own border from the
                 // first shape row's — without it, an active layer and an
                 // active shape directly below it would have their

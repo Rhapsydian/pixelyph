@@ -18,9 +18,12 @@ import { GlyphSetPanel } from './glyph/GlyphSetPanel.jsx';
 import { FontMetadataPanel } from './glyph/FontMetadataPanel.jsx';
 
 function drawTabs(tier) {
+  // Layers is available in both tiers (Pixel tier's layers are just
+  // auto-managed instead of manually authored — see LayersPanel); Style
+  // (manual fill/stroke/effects) stays Advanced/Shape-tier only.
   const tabs = [{ id: 'palette', label: 'Palette', Content: PalettePanel }];
+  tabs.push({ id: 'layers', label: 'Layers', Content: LayersPanel });
   if (tier === 'advanced') {
-    tabs.push({ id: 'layers', label: 'Layers', Content: LayersPanel });
     tabs.push({ id: 'style', label: 'Style', Content: LayerStylePanel });
   }
   tabs.push({ id: 'tile', label: 'Tile Preview', Content: TilePreviewPanel });
