@@ -9,6 +9,69 @@ blocking issue is fixed); and open ideas flagged for later discussion
 rather than acted on immediately. Review this list once all
 currently-planned phases are complete.
 
+## NEXT SESSION: Narrow the tier distinction to one axis, and rename it (Pixel / Shape)
+
+**Pre-scoped — the next `/dev-session` should start directly on this plan**
+(full checkpointed plan, code snippets included, already discussed and
+approved) rather than asking what to work on. Fed by two Tokenote items:
+"what would it take to add layers to Simple mode?" and "should Simple/
+Advanced be renamed to something more descriptive?"
+
+**Why:** today's `canvas.tier` bundles two independent things — "how many
+layers can exist" and "how much manual control you have over a shape's
+style" — into one flag. The plan splits them: every tier gets real
+multi-layer support; the only thing that stays tier-gated is *manual*
+shape/style authoring (gradients, stroke, effects, multiple shapes per
+layer, per-shape selection). Once that's the real axis, "Simple/Advanced"
+stops describing it, so the display labels become **"Pixel"** (paint
+colors, shapes auto-managed) and **"Shape"** (author shapes manually) — a
+**display-only** rename: `canvas.tier` keeps its stored values
+`'simple'`/`'advanced'` everywhere, no save-format bump, no migration.
+
+**Four checkpoints** (each independently committable; pause for
+confirmation after each — same pattern as the last session's four fixes):
+
+1. **Retarget `autoLayerSync` to the active layer** (`src/model/autoLayerSync.js`) —
+   `getSimpleLayer` stops hardcoding `canvas.layers[0]`, resolves
+   `canvas.activeLayerId` instead (falling back to topmost existing, then
+   lazy-create for a blank canvas). Also add lock/per-frame-visibility
+   guards to `paintSimpleCell` (matches `paintCell`'s advanced branch),
+   needed once Checkpoint 3 exposes those toggles on Pixel-tier layers.
+2. **Per-layer `convertTier` collapse + a merge-dedup fix** (`src/model/Canvas.js`) —
+   Advanced→Simple currently flattens the *whole canvas* via cross-layer
+   `colorAt` into one layer; rewrite to collapse *each layer's own* grids
+   independently (new `collapseLayerToAutoGrids`, mirroring
+   `extractRectFromActiveLayer`'s `topGridAt` scan), preserving layer
+   count/order/names/lock/opacity/visibility. Also: `mergeLayerDown`
+   concatenates two layers' grids per frame with no color-dedup, so two
+   Simple-tier layers each auto-managing their own "red" Grid would leave
+   two same-color Grids after a merge — fix with a new
+   `dedupeSolidColorGrids(frame)` + `unionGridInto` pixel-OR helper, run
+   *after* the existing concatenation, gated on `canvas.tier === 'simple'`
+   only (Shape/Advanced tier legitimately keeps same-color shapes
+   separate). The existing `Canvas.test.js:604-619` `convertTier` test
+   asserts `layers.length === 1` post-collapse and must be rewritten.
+3. **Pixel-tier Layers panel** (`src/ui/SidePanel.jsx`, `src/ui/draw/LayersPanel.jsx`) —
+   show the Layers tab in both tiers (Style tab stays Advanced/Shape-only);
+   relax `LayersPanel`'s `tier !== 'advanced'` gate to a tier-aware render:
+   no expand caret, no shape sub-rows, no "Add Shape" button, toolbar
+   locked to its layer-action branch in Pixel tier. All the underlying
+   store actions (`addLayer`/`removeLayer`/`reorderLayer`/`duplicateLayer`/
+   `mergeLayerDown`/`setLayerProps`/`setLayerFrameVisibility`) are already
+   tier-agnostic — no new store wiring needed.
+4. **Rename tier labels to Pixel/Shape** (`src/ui/draw/ContextBar.jsx`) —
+   display text only (`TIER_LABELS`/`TIER_TOOLTIPS` maps with honest
+   per-tier tooltip copy), plus a reworded Advanced→Simple confirm dialog
+   describing the new per-layer collapse instead of "collapses every
+   layer."
+
+Full plan with exact code for every change (including an ASCII wireframe
+comparing the Pixel-tier vs. Shape-tier Layers panel layout) is preserved
+in this session's transcript/plan file; re-derive from the summary above
+plus the actual current source if the standalone plan file isn't
+available — the checkpoint structure and code shapes above are complete
+enough to execute from directly.
+
 ## DONE: Layer/Frame/Grid model redesign
 
 Shipped across 5 sessions (0-4); merged `layer-frame-grid-redesign` into
