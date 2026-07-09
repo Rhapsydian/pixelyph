@@ -8,12 +8,6 @@ test('normalizeRect handles corners given in any order', () => {
   assert.deepEqual(normalizeRect(0, 3, 3, 0), { x0: 0, y0: 0, x1: 3, y1: 3 });
 });
 
-// Session 4: asserts the retired autoManaged/autoColor fields (Simple tier
-// is now a single Layer with per-frame Grids scanned by style — see
-// BACKLOG.md). Equivalent coverage (including the relocation itself) is
-// the new test just below.
-test.skip('a move spanning two colors relocates both layers correctly (selection/paste across multiple auto-managed layers)', () => {});
-
 test('a move spanning two colors relocates both shapes correctly (selection/paste across multiple simple-tier Grids)', () => {
   const canvas = createCanvas({ width: 4, height: 4 });
   // a 2x1 selection covering one red cell and one green cell
@@ -63,13 +57,6 @@ test('extractRectColors omits empty cells rather than recording them as null', (
 
 // --- Advanced tier: per-layer selection scoping ---
 
-// Session 4: creates layers via addLayer's retired `fill` option and expects
-// a placeholder paint color ('x') to still read back as that fill — style
-// now comes from the actual paint color, since Grids are styled per-shape,
-// not via a Layer-level fill set at creation (see BACKLOG.md). Equivalent
-// coverage is the new test just below.
-test.skip('extractRectFromActiveLayer only reads the active layer, ignoring a non-active layer stacked on top of it', () => {});
-
 test('extractRectFromActiveLayer only reads the active layer\'s own shapes, ignoring a non-active layer stacked on top of it', () => {
   const canvas = createCanvas({ width: 2, height: 1 });
   canvas.tier = 'advanced';
@@ -83,10 +70,6 @@ test('extractRectFromActiveLayer only reads the active layer\'s own shapes, igno
   const cells = extractRectFromActiveLayer(canvas, { x0: 0, y0: 0, x1: 1, y1: 0 });
   assert.deepEqual(cells, [{ dx: 0, dy: 0, color: '#0000ff' }]); // only the active (bottom) layer's own cell
 });
-
-// Session 4: sets `layer.style.fill` directly — style now lives on Grid, not
-// Layer (see BACKLOG.md). Equivalent coverage is the new test just below.
-test.skip('extractRectFromActiveLayer falls back to a placeholder color for a non-solid (gradient) fill', () => {});
 
 test('extractRectFromActiveLayer falls back to a placeholder color for a non-solid (gradient) fill', () => {
   const canvas = createCanvas({ width: 1, height: 1 });

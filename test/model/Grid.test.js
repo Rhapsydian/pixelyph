@@ -164,6 +164,24 @@ test('growGridToInclude grows towards negative x/y, shifting offset and preservi
   assert.equal(get(grid, 0, 0), 0);
 });
 
+test('growGridToInclude growing in only one negative direction leaves the other axis untouched', () => {
+  const grid = createShapeGrid({ offsetX: 3, offsetY: 3, style: { fill: '#000', effects: [] } });
+  growGridToInclude(grid, 1, 3); // only x moves negative; y stays inside bounds
+  assert.equal(grid.offsetX, 1);
+  assert.equal(grid.offsetY, 3);
+  assert.equal(grid.width, 3);
+  assert.equal(grid.height, 1);
+  assert.equal(get(grid, 2, 0), 1); // original cell, now at local (2,0) relative to the new offset
+});
+
+test('growGridToInclude on an unfilled shape leaves it empty — resizing the buffer never sets a pixel', () => {
+  const grid = createShapeGrid({ offsetX: 0, offsetY: 0, style: { fill: '#000', effects: [] }, filled: false });
+  growGridToInclude(grid, 2, 2);
+  assert.equal(grid.width, 3);
+  assert.equal(grid.height, 3);
+  assert.equal(minimalBounds(grid), null);
+});
+
 test('minimalBounds returns null for a fully-empty grid, and the tight box otherwise', () => {
   assert.equal(minimalBounds(createGrid(3, 3)), null);
   // prettier-ignore

@@ -2,21 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createCanvas, paintCell, colorAt, addFrame, setActiveFrame } from '../../src/model/Canvas.js';
 
-// Session 4: these all depend on the pre-migration per-color auto-managed
-// Layer (`layer.autoManaged`/`layer.autoColor`, one full-canvas Layer per
-// color, GC'd only once every frame is empty). Simple tier is now a single
-// Layer whose current-frame Grids are scanned/created by style instead (see
-// BACKLOG.md's Layer/Frame/Grid redesign entry) — equivalent coverage is
-// added below against the new shape.
-
-test.skip('painting a color creates an auto-managed full-canvas layer lazily', () => {});
-test.skip('painting color B over a cell clears it from color A layer (mutual exclusivity)', () => {});
-test.skip('a color layer is garbage-collected once its last cell is overwritten', () => {});
-test.skip('a color layer survives if it still has other cells set', () => {});
-test.skip('multi-color strokes decompose the same way regardless of paint order', () => {});
-test.skip('erasing (null color) clears a cell without creating a layer', () => {});
-test.skip('simple-tier auto-layer paint targets the active frame only, and an auto layer created mid-animation gets every frame', () => {});
-test.skip('auto-layer GC only collects a layer once every frame is empty, not just the active one', () => {});
+// Simple tier's pre-migration per-color auto-managed Layer
+// (`layer.autoManaged`/`layer.autoColor`, one full-canvas Layer per color,
+// GC'd only once every frame is empty) is now a single Layer whose
+// current-frame Grids are scanned/created by style instead (see
+// docs/data-model.md) — coverage below exercises the new shape directly.
 
 function shapeColors(canvas) {
   const layer = canvas.layers[0];

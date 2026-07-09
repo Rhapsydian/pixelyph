@@ -2,17 +2,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createLayer } from '../../src/model/Layer.js';
 
-// Session 4: these all exercised growToInclude/isEmpty, which moved to
-// Grid.js as growGridToInclude/shrinkGridToFit, scoped to one Grid instead
-// of a whole Layer's frames array (see BACKLOG.md's Layer/Frame/Grid
-// redesign entry). Equivalent coverage now lives in Grid.test.js.
-
-test.skip('growToInclude is a no-op when the point is already inside bounds', () => {});
-test.skip('growToInclude grows towards positive x/y, preserving content and offset', () => {});
-test.skip('growToInclude grows towards negative x/y, shifting offset and preserving content at its new local position', () => {});
-test.skip('growToInclude growing in only one negative direction leaves the other axis untouched', () => {});
-test.skip('growToInclude reallocates every frame, not just the first', () => {});
-test.skip('isEmpty is unaffected by growToInclude when no cell was ever set', () => {});
+// growToInclude/isEmpty moved to Grid.js as growGridToInclude/
+// shrinkGridToFit, scoped to one Grid instead of a whole Layer's frames
+// array (see docs/data-model.md section 3) — coverage lives in
+// Grid.test.js, including the growing-in-one-direction-only and
+// still-empty-after-growth edge cases the old Layer-level tests wanted.
+// "reallocates every frame" has no replacement here: growGridToInclude
+// only ever takes one Grid, so there's no frames array to reallocate —
+// the sparsity property it was guarding (painting frame 3 doesn't touch
+// frame 0's grids) is covered at the Canvas.js level instead.
 
 test('createLayer is pure identity — no style, offset, or size, just frames of empty {visible,grids} slots', () => {
   const layer = createLayer({ name: 'Ink', frameCount: 3 });

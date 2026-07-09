@@ -21,12 +21,6 @@ test('serializeProject stamps the current pixelyphVersion and kind: draw', () =>
   assert.equal(doc.kind, 'draw');
 });
 
-// Session 4: reads pixels straight off frame (frame.pixels), which was the
-// pre-migration dense-per-frame shape — pixels now live per-Grid, nested
-// under frame.grids[i].pixels (see BACKLOG.md). Equivalent coverage is the
-// new test just below.
-test.skip('pixel data is base64-encoded, not a raw JSON array', () => {});
-
 test('a Grid\'s pixel data is base64-encoded, not a raw JSON array', () => {
   const canvas = createCanvas({ width: 2, height: 2 });
   paintCell(canvas, 0, 0, '#ff0000');
@@ -35,10 +29,6 @@ test('a Grid\'s pixel data is base64-encoded, not a raw JSON array', () => {
   assert.equal(typeof encoded, 'string');
   assert.doesNotMatch(encoded, /^\[/);
 });
-
-// Session 4: reads frame.pixels directly (see BACKLOG.md). Equivalent
-// coverage is the new test just below.
-test.skip('a painted layer round-trips through bit-packed pixels with a much shorter base64 string than unpacked would be', () => {});
 
 test('a painted Grid round-trips through bit-packed pixels with a much shorter base64 string than unpacked would be', () => {
   const canvas = createCanvas({ width: 16, height: 16 });
@@ -50,14 +40,6 @@ test('a painted Grid round-trips through bit-packed pixels with a much shorter b
   const restored = loadProjectFromString(saveProjectToString(canvas));
   assert.deepStrictEqual(restored, canvas);
 });
-
-// Session 4: hand-builds a "legacy" doc from the *current* (already v3,
-// Grid-shaped) in-memory canvas, which no longer has frame.pixels to
-// re-encode — the real v1/v2 shape had it on the Layer, not per-Grid. The
-// new tests below hand-build an actual pre-migration-shaped document
-// instead, covering both the pixel-decode version branch and the v1/v2 ->
-// v3 structural migration (crop-to-bounds, Simple-tier collapse) together.
-test.skip('deserializeProject reads a pre-bit-packing (pixelyphVersion 1) file, where pixels were one unpacked byte per cell', () => {});
 
 function legacyBytesToBase64(bytes) {
   let binary = '';
@@ -223,11 +205,6 @@ test('deserializeProject migrates a pre-Phase-9 bare-array palette into the { co
 test('deserializeProject rejects a non-draw document', () => {
   assert.throws(() => deserializeProject({ pixelyphVersion: 1, kind: 'glyph', glyphSet: {} }), /expected kind 'draw'/);
 });
-
-// Session 4: sets layer.style/layer.offset directly — style/offset now
-// live on Grid, not Layer (see BACKLOG.md). Equivalent coverage is the new
-// test just below.
-test.skip('round-trips an advanced-tier canvas with gradient fill, stroke, effects, and activeLayerId exactly', () => {});
 
 test('round-trips an advanced-tier canvas with a gradient-filled, stroked, effect-bearing shape, and activeLayerId/activeGridId exactly', () => {
   const canvas = createCanvas({ width: 3, height: 3 });
