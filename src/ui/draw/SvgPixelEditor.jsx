@@ -205,6 +205,21 @@ export function SvgPixelEditor() {
       get shapeFilled() {
         return useStore.getState().shapeFilled;
       },
+      get brushWidth() {
+        return useStore.getState().brushWidth;
+      },
+      get ditherEnabled() {
+        return useStore.getState().ditherEnabled;
+      },
+      get fillGlobal() {
+        return useStore.getState().fillGlobal;
+      },
+      get fillTolerance() {
+        return useStore.getState().fillTolerance;
+      },
+      get pixelPerfect() {
+        return useStore.getState().pixelPerfect;
+      },
       get canvasWidth() {
         return getActiveDocument()?.width ?? 0;
       },
