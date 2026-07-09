@@ -26,10 +26,10 @@ const TIER_TOOLTIPS = {
 };
 
 const SYMMETRY_OPTIONS = [
-  { value: 'none', label: 'None' },
-  { value: 'x', label: 'Mirror X' },
-  { value: 'y', label: 'Mirror Y' },
-  { value: 'both', label: 'Mirror Both' },
+  { value: 'none', label: 'None', shortLabel: 'None' },
+  { value: 'x', label: 'Mirror X', shortLabel: 'X' },
+  { value: 'y', label: 'Mirror Y', shortLabel: 'Y' },
+  { value: 'both', label: 'Mirror Both', shortLabel: 'Both' },
 ];
 
 const ANCHORS = ['top-left', 'top', 'top-right', 'left', 'center', 'right', 'bottom-left', 'bottom', 'bottom-right'];
@@ -155,16 +155,23 @@ export function ContextBar() {
       )}
 
       {(!isGlyphMode || glyphCanvas) && (
-        <label>
-          Symmetry:{' '}
-          <select value={symmetryMode} onChange={(e) => setSymmetryMode(e.target.value)}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          Symmetry:
+          <div style={{ display: 'flex', gap: 4 }}>
             {SYMMETRY_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
+              <button
+                key={opt.value}
+                className={symmetryMode === opt.value ? 'btn active' : 'btn'}
+                onClick={() => setSymmetryMode(opt.value)}
+                style={{ fontWeight: symmetryMode === opt.value ? 500 : 400 }}
+                aria-pressed={symmetryMode === opt.value}
+                title={opt.label}
+              >
+                {opt.shortLabel}
+              </button>
             ))}
-          </select>
-        </label>
+          </div>
+        </div>
       )}
 
       <IconButton icon={<GridIcon />} label="Toggle grid" active={showGrid} onClick={toggleGrid} />
