@@ -38,7 +38,7 @@ import { composeFrameBody } from '../../export/svg/composeLayersSvg.js';
 import { IconButton } from '../IconButton.jsx';
 import { EyeIcon, EyeOffIcon, LockIcon, UnlockIcon, MoveUpIcon, MoveDownIcon, TrashIcon, DuplicateIcon, MergeDownIcon, AddLayerIcon, AddShapeIcon, ChevronDownIcon } from '../icons.jsx';
 
-const THUMBNAIL_SIZE = 28;
+const THUMBNAIL_SIZE = 56;
 
 /** Shared SVG wrapper both thumbnail flavors below render into — same fixed size/border/background either way, just fed a different `body`/`defs`. */
 function ThumbnailFrame({ canvas, body, defs }) {
@@ -70,7 +70,14 @@ function ShapeThumbnail({ canvas, grid }) {
   return <ThumbnailFrame canvas={canvas} body={body} defs={defs} />;
 }
 
-/** The shared eye/lock/name/opacity chrome common to a Layer row and a Shape row (a Shape carries the exact same control set — see the file header). Owns the local editing state for name/opacity (committed on blur/Enter) so callers just pass current values and change callbacks. */
+/**
+ * The shared name/visibility/lock/opacity chrome common to a Layer row and
+ * a Shape row (a Shape carries the exact same control set — see the file
+ * header). Two stacked rows to the right of the thumbnail: name alone on
+ * top, then visibility/lock/opacity below. Owns the local editing state
+ * for name/opacity (committed on blur/Enter) so callers just pass current
+ * values and change callbacks.
+ */
 function EntityControls({ visible, onToggleVisible, hideLabel, showLabel, locked, onToggleLocked, lockLabel, unlockLabel, name, onRename, opacity, onOpacityChange }) {
   const [localName, setLocalName] = useState(name);
   const [opacityPercent, setOpacityPercent] = useState(Math.round(opacity * 100));
@@ -84,8 +91,16 @@ function EntityControls({ visible, onToggleVisible, hideLabel, showLabel, locked
   }
 
   return (
-    <>
-      <span onClick={(e) => e.stopPropagation()} style={{ display: 'inline-flex' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0 }}>
+      <input
+        type="text"
+        value={localName}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => setLocalName(e.target.value)}
+        onBlur={() => localName !== name && onRename(localName)}
+        style={{ width: '100%' }}
+      />
+      <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <IconButton
           icon={visible ? <EyeIcon /> : <EyeOffIcon />}
           label={visible ? hideLabel : showLabel}
@@ -98,29 +113,21 @@ function EntityControls({ visible, onToggleVisible, hideLabel, showLabel, locked
           active={locked}
           onClick={() => onToggleLocked(!locked)}
         />
-      </span>
-      <input
-        type="text"
-        value={localName}
-        onClick={(e) => e.stopPropagation()}
-        onChange={(e) => setLocalName(e.target.value)}
-        onBlur={() => localName !== name && onRename(localName)}
-        style={{ width: 90 }}
-      />
-      <label onClick={(e) => e.stopPropagation()} title="Opacity" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <input
-          type="number"
-          min={0}
-          max={100}
-          value={opacityPercent}
-          onChange={(e) => setOpacityPercent(Number(e.target.value))}
-          onBlur={commitOpacity}
-          onKeyDown={(e) => e.key === 'Enter' && commitOpacity()}
-          style={{ width: 48 }}
-        />
-        <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>%</span>
-      </label>
-    </>
+        <label title="Opacity" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            value={opacityPercent}
+            onChange={(e) => setOpacityPercent(Number(e.target.value))}
+            onBlur={commitOpacity}
+            onKeyDown={(e) => e.key === 'Enter' && commitOpacity()}
+            style={{ width: 48 }}
+          />
+          <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>%</span>
+        </label>
+      </div>
+    </div>
   );
 }
 
@@ -148,7 +155,7 @@ function LayerRow({ canvas, layer, isActive, isExpanded, onToggleExpand, onSelec
         onSelect();
       }}
       className={isActive ? 'row active' : 'row'}
-      style={{ flexWrap: 'wrap', padding: 'var(--space-2)', cursor: 'pointer', alignItems: 'center' }}
+      style={{ flexWrap: 'nowrap', padding: 'var(--space-2)', cursor: 'pointer', alignItems: 'center' }}
     >
       <span onClick={(e) => e.stopPropagation()} style={{ display: 'inline-flex' }}>
         <IconButton icon={<ExpandCaret expanded={isExpanded} />} label={isExpanded ? 'Collapse shapes' : 'Expand shapes'} onClick={onToggleExpand} />
@@ -183,7 +190,7 @@ function ShapeRow({ canvas, layer, grid, isActive, onSelect }) {
         onSelect();
       }}
       className={isActive ? 'row active' : 'row'}
-      style={{ flexWrap: 'wrap', padding: 'var(--space-2)', paddingLeft: 'var(--space-6)', cursor: 'pointer', alignItems: 'center' }}
+      style={{ flexWrap: 'nowrap', padding: 'var(--space-2)', paddingLeft: 64, cursor: 'pointer', alignItems: 'center' }}
     >
       <ShapeThumbnail canvas={canvas} grid={grid} />
       <EntityControls
@@ -200,9 +207,6 @@ function ShapeRow({ canvas, layer, grid, isActive, onSelect }) {
         opacity={grid.opacity}
         onOpacityChange={(opacity) => setGridProps(layer.id, grid.id, { opacity })}
       />
-      <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>
-        ({grid.offsetX},{grid.offsetY}) {grid.width}×{grid.height}
-      </span>
     </div>
   );
 }
@@ -349,7 +353,7 @@ export function LayersPanel() {
               {isExpanded && (
                 <>
                   {grids.length === 0 && (
-                    <div style={{ paddingLeft: 'var(--space-6)', color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No shapes in this frame yet.</div>
+                    <div style={{ paddingLeft: 64, color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No shapes in this frame yet.</div>
                   )}
                   {grids
                     .slice()
