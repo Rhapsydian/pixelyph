@@ -318,6 +318,30 @@ export function FullscreenIcon(props) {
   );
 }
 
+// Mirror/symmetry toggles: a dashed axis line with two triangles pointing
+// toward each other across it, the standard "flip"-style glyph — the dashed
+// line marks the mirror axis itself (vertical for left/right symmetry,
+// horizontal for top/bottom), not a literal X/Y label.
+export function HorizontalSymmetryIcon(props) {
+  return (
+    <Svg {...props}>
+      <path d="M10 2v16" strokeDasharray="2 2" />
+      <path d="M4 6v8l4-4Z" />
+      <path d="M16 6v8l-4-4Z" />
+    </Svg>
+  );
+}
+
+export function VerticalSymmetryIcon(props) {
+  return (
+    <Svg {...props}>
+      <path d="M2 10h16" strokeDasharray="2 2" />
+      <path d="M6 4h8l-4 4Z" />
+      <path d="M6 16h8l-4-4Z" />
+    </Svg>
+  );
+}
+
 export function FullscreenExitIcon(props) {
   return (
     <Svg {...props}>

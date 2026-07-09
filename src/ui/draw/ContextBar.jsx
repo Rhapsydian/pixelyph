@@ -10,7 +10,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../../state/store.js';
 import { IconButton } from '../IconButton.jsx';
-import { GridIcon, UndoIcon, RedoIcon } from '../icons.jsx';
+import { GridIcon, UndoIcon, RedoIcon, HorizontalSymmetryIcon, VerticalSymmetryIcon } from '../icons.jsx';
 
 // Display-only: `canvas.tier` keeps its stored 'simple'/'advanced' values
 // everywhere (no save-format bump, no migration) — these two maps are the
@@ -168,24 +168,18 @@ export function ContextBar() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             Symmetry:
             <div style={{ display: 'flex', gap: 4 }}>
-              <button
-                className={xOn ? 'btn active' : 'btn'}
+              <IconButton
+                icon={<HorizontalSymmetryIcon />}
+                label="Horizontal symmetry"
+                active={xOn}
                 onClick={() => setSymmetryMode(symmetryModeFromAxes(!xOn, yOn))}
-                style={{ fontWeight: xOn ? 500 : 400 }}
-                aria-pressed={xOn}
-                title="Mirror X"
-              >
-                X
-              </button>
-              <button
-                className={yOn ? 'btn active' : 'btn'}
+              />
+              <IconButton
+                icon={<VerticalSymmetryIcon />}
+                label="Vertical symmetry"
+                active={yOn}
                 onClick={() => setSymmetryMode(symmetryModeFromAxes(xOn, !yOn))}
-                style={{ fontWeight: yOn ? 500 : 400 }}
-                aria-pressed={yOn}
-                title="Mirror Y"
-              >
-                Y
-              </button>
+              />
             </div>
           </div>
         );
