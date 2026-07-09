@@ -173,6 +173,16 @@ export function AddShapeIcon(props) {
   );
 }
 
+/** The standard half-filled-circle glyph for opacity/alpha (same convention as Feather's "circle-half" or most design tools' opacity dial) — the one icon in this set with a filled region, since there's no other way to suggest "partial" with pure strokes. */
+export function AlphaIcon(props) {
+  return (
+    <Svg {...props}>
+      <circle cx="10" cy="10" r="7" />
+      <path d="M10 3a7 7 0 0 1 0 14Z" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
 export function DuplicateIcon(props) {
   return (
     <Svg {...props}>

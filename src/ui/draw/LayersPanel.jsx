@@ -36,7 +36,7 @@ import { useEffect, useState } from 'react';
 import { useStore } from '../../state/store.js';
 import { composeFrameBody } from '../../export/svg/composeLayersSvg.js';
 import { IconButton } from '../IconButton.jsx';
-import { EyeIcon, EyeOffIcon, LockIcon, UnlockIcon, MoveUpIcon, MoveDownIcon, TrashIcon, DuplicateIcon, MergeDownIcon, AddLayerIcon, AddShapeIcon, ChevronDownIcon } from '../icons.jsx';
+import { EyeIcon, EyeOffIcon, LockIcon, UnlockIcon, MoveUpIcon, MoveDownIcon, TrashIcon, DuplicateIcon, MergeDownIcon, AddLayerIcon, AddShapeIcon, AlphaIcon, ChevronDownIcon } from '../icons.jsx';
 
 // Matches the two-row name/controls block's actual rendered height (a text
 // input plus a 4px gap plus a row of 32px icon buttons) — an SVG has no
@@ -113,15 +113,17 @@ function EntityControls({ visible, onToggleVisible, hideLabel, showLabel, locked
           label={visible ? hideLabel : showLabel}
           active={visible}
           onClick={() => onToggleVisible(!visible)}
+          style={{ flexShrink: 0 }}
         />
         <IconButton
           icon={locked ? <LockIcon /> : <UnlockIcon />}
           label={locked ? unlockLabel : lockLabel}
           active={locked}
           onClick={() => onToggleLocked(!locked)}
+          style={{ flexShrink: 0 }}
         />
         <label title="Opacity" style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto', textAlign: 'right' }}>
-          <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>Alpha:</span>
+          <AlphaIcon size={14} />
           <input
             type="number"
             min={0}
@@ -217,7 +219,7 @@ function ShapeRow({ canvas, layer, grid, isActive, onSelect }) {
         paddingRight: 'var(--space-2)',
         paddingBottom: 'var(--space-2)',
         paddingLeft: 'var(--space-2)',
-        marginLeft: 64,
+        marginLeft: 48,
         cursor: 'pointer',
         alignItems: 'center',
       }}
@@ -383,7 +385,7 @@ export function LayersPanel() {
               {isExpanded && (
                 <>
                   {grids.length === 0 && (
-                    <div style={{ marginLeft: 64, color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No shapes in this frame yet.</div>
+                    <div style={{ marginLeft: 48, color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No shapes in this frame yet.</div>
                   )}
                   {grids
                     .slice()
