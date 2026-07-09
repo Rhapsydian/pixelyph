@@ -1,11 +1,12 @@
 # Data model: Layer / Frame / Grid
 
-**Status:** this is the target model for an in-progress migration, developed
-on the `layer-frame-grid-redesign` branch across several sessions (Session 0:
+**Status:** shipped. Built directly on `main` across five sessions (Session 0:
 this document. Session 1: model layer. Session 2: export. Session 3: UI.
-Session 4: tests). `main` still runs the pre-migration model described in
-`BACKLOG.md` until the branch merges. See `BACKLOG.md`'s "Layer/Frame/Grid
-model redesign" entry for the session-by-session breakdown and status.
+Session 4: tests) — see `BACKLOG.md`'s "Layer/Frame/Grid model redesign"
+entry (marked DONE) for the session-by-session breakdown. Everything below
+describes the current model, not a target. See "Pixel/Shape tier rename"
+at the end of this document for one later change that postdates the
+original Session 0-4 write-up.
 
 ## Why this model exists
 
@@ -518,6 +519,55 @@ otherwise show up in the Draw-mode file list above.
   rewriting/adding against this shape. **Session 1.**
 - The ~7 test files referencing the pre-migration `Layer.frames`/
   `Canvas.layers` shape directly. **Session 4.**
+
+## Pixel/Shape tier rename (post-Session-4 change)
+
+A later session narrowed `canvas.tier` to one real axis and renamed its
+display labels — this section documents what changed against the model
+above, since it postdates the original Session 0-4 write-up.
+
+**What stayed the same:** `canvas.tier`'s two stored values are still the
+literal strings `'simple'`/`'advanced'` everywhere in code and in saved
+projects — this was a **display-only** rename, no save-format migration.
+The UI shows **Pixel** (was "Simple") and **Shape** (was "Advanced")
+instead.
+
+**What actually changed — the axis itself:** before this, `canvas.tier`
+bundled two independent things into one flag: how many layers can exist,
+and how much manual control a Grid's style gets. Both tiers now get full
+multi-layer support (any number, reorderable, lockable, per-frame
+visibility) — the *only* thing still tier-gated is manual shape/style
+authoring (gradients, stroke, effects, multiple shapes per layer,
+per-shape selection). Once that's the real axis, "Simple/Advanced" no
+longer described it; "Pixel" (paint colors, shapes auto-managed) and
+"Shape" (author shapes manually) do.
+
+**`autoLayerSync.js`'s `getSimpleLayer`** (the function backing Pixel-tier
+auto-managed painting) no longer hardcodes `canvas.layers[0]` — it
+resolves `canvas.activeLayerId`, falling back to the topmost layer, then
+lazy-creating one for a blank canvas. This is what makes Pixel tier's
+multi-layer support real: painting always targets whichever layer is
+active, not always the first one.
+
+**`Canvas.js`'s `convertTier`** (Shape → Pixel) used to flatten the whole
+canvas into one layer via a cross-layer `colorAt` scan. It now runs a new
+per-layer helper, `collapseLayerToAutoGrids`, independently on each layer
+— scanning only that layer's own current-frame shapes (`topGridAt`-wins
+within the layer, mirroring `selection.js`'s
+`extractRectFromActiveLayer`) and rebuilding it into one Grid per solid
+color. Layer count, order, names, lock, and opacity all survive; only
+each layer's *shapes* are rebuilt, same lossy-per-layer trade-off the
+pre-rename version had per-canvas.
+
+**`Canvas.js`'s `mergeLayerDown`** gained a dedup pass, `dedupeSolidColorGrids`,
+gated on `canvas.tier === 'simple'`. Since two Pixel-tier layers can each
+independently auto-manage a same-color Grid, a plain concatenation (3a's
+original behavior) would leave two same-color Grids in the merged frame
+instead of one — breaking Pixel tier's one-Grid-per-color invariant.
+`dedupeSolidColorGrids` folds later same-color duplicates into the first
+Grid of that color via a new pixel-OR helper, `unionGridInto` (`Grid.js`,
+factored out of `mergeGridDown`/3b). Shape tier is exempt — it legitimately
+keeps same-color shapes separate.
 
 ## Critical files
 
