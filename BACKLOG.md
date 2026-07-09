@@ -202,67 +202,22 @@ in general.
 pencil, eraser, line, etc width options. Look for missing pixel art and
 vector art tools that would be appropriate for Pixelyph.") with a properly
 scoped item, per session 20's tool-review checkpoint (spec-only — nothing
-below was implemented this session). The next `/dev-session` should start
+here was implemented this session). The next `/dev-session` should start
 here directly rather than asking what to work on.
 
-**Current tool set** (`src/ui/draw/tools/index.js`): pencil, eraser,
-bucketFill, eyedropper, line, rectangle, ellipse, marqueeSelect — confirmed
-by reading each tool file that **none has a width/size option today**;
-`pencil.js`/`eraser.js`/`line.js` all paint exactly one cell (or one
-Bresenham-line cell) per pointer position, with no brush-radius concept
-anywhere in the paint path.
+**Full spec: [`docs/tool-options.md`](./docs/tool-options.md).** Four gaps,
+each with current-state grounding (exact file/line references, not
+guesswork), a proposed design, and a real implementation-cost estimate:
+brush width for pencil/eraser/line, freehand lasso select, a dithering
+brush, and bucket fill tolerance/global (non-contiguous) mode — in that
+order, smallest to largest. Also covers what's *not* a real gap (a
+separate "move" tool, a "gradient tool" — both already covered by existing
+features) and the shared `ctx`/store-field pattern (`shapeFilled` is the
+precedent) any of these would follow.
 
-**Width/size options — which tools, and where the control lives:**
-- Pencil, eraser, and line are the natural candidates (a brush radius that
-  expands each touched cell into an NxN or diamond stamp before painting).
-  Bucket fill (flood-fill by matching color, `bucketFill.js`) and
-  eyedropper (`eyedropper.js`) don't have a "width" concept to add.
-  Rectangle/ellipse already have a related but distinct control — the
-  existing `shapeFilled` checkbox (`ContextBar.jsx`, "Filled") toggles
-  solid-fill vs. outline-only, not stroke *width*.
-- **Do not confuse this with the Shape-tier style stroke width that
-  already exists**: `LayerStylePanel.jsx`'s stroke `Width:` input
-  (`stroke.width`, a fractional SVG stroke value) controls a *shape's*
-  outline thickness at render/export time, applied to the whole path
-  after the fact — it has nothing to do with how many cells a pencil/
-  eraser stroke paints as you draw. These are genuinely different
-  features that happen to share the word "width."
-- UI surface question to resolve when this is picked up: a per-tool width
-  field that only appears for pencil/eraser/line (mirroring how `Filled`
-  only shows for rectangle/ellipse today, `ContextBar.jsx`'s
-  `showsShapeToggle` gate), vs. a dedicated options row under the tool
-  rail. The context bar is already tool-conditional in exactly this way,
-  so extending that pattern is the more consistent option — but a row of
-  per-tool options could get crowded if more tool-specific settings
-  (see below) get added later.
-
-**Gap analysis against typical pixel-art/vector tool sets** (Aseprite,
-Photoshop-style raster tools, and basic vector editors):
-- **Freehand/lasso select is missing.** `marqueeSelect.js` is
-  rectangle-only (`normalizeRect`/`pointInRect`) — there's no polygon or
-  freehand selection tool. Selection *moving*/*copying* (drag inside an
-  existing selection, shift-drag to copy) is already well-covered by
-  `marqueeSelectTool`, so this gap is specifically about the initial
-  selection *shape*, not selection manipulation.
-- **No dithering/pattern brush.** Pencil paints a single solid color only
-  — no built-in checkerboard/ordered-dither stamp, a common pixel-art
-  staple for faking gradients within a limited palette.
-- **Bucket fill has no tolerance or "global" mode.** `bucketFill.js`'s
-  `findMatchingRegion` is a strict flood-fill (exact color match,
-  contiguous region only) — no "fill all matching cells on the canvas"
-  (non-contiguous) variant, and no color-tolerance threshold.
-- **Not actually gaps, already covered elsewhere:** a "move tool" is
-  unnecessary as a separate tool — `marqueeSelectTool` already handles
-  moving a selection/floating buffer by dragging inside it. A gradient
-  *tool* isn't needed either — gradients are already a first-class Shape-
-  tier fill type (`LayerStylePanel.jsx`, the palette's Gradients group),
-  just authored via the style panel rather than painted with a drag
-  gesture. Symmetry/mirror painting already shipped (session 20,
-  `mirror.js`).
-
-**To resolve:** scope width options and pick which (if any) gap-analysis
-items to pursue in their own planning session — this entry is a starting
-point for that discussion, not a commitment to build all of it.
+**To resolve:** pick which (if any) of the four to pursue in their own
+planning/implementation session — this doc is a starting point for that
+discussion, not a commitment to build all of it.
 
 ## Explore: making Pixelyph's capabilities more leverageable by AI agents
 
