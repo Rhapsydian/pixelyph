@@ -162,29 +162,26 @@ export function ContextBar() {
         </label>
       )}
 
-      <div style={{ display: 'flex', gap: 4 }}>
-        {(!isGlyphMode || glyphCanvas) && (() => {
-          const { x: xOn, y: yOn } = symmetryAxes(symmetryMode);
-          return (
-            <>
-              <IconButton
-                icon={<HorizontalSymmetryIcon />}
-                label="Horizontal symmetry"
-                active={xOn}
-                onClick={() => setSymmetryMode(symmetryModeFromAxes(!xOn, yOn))}
-              />
-              <IconButton
-                icon={<VerticalSymmetryIcon />}
-                label="Vertical symmetry"
-                active={yOn}
-                onClick={() => setSymmetryMode(symmetryModeFromAxes(xOn, !yOn))}
-              />
-            </>
-          );
-        })()}
-
-        <IconButton icon={<GridIcon />} label="Toggle grid" active={showGrid} onClick={toggleGrid} />
-      </div>
+      {(!isGlyphMode || glyphCanvas) && (() => {
+        const { x: xOn, y: yOn } = symmetryAxes(symmetryMode);
+        return (
+          <div style={{ display: 'flex', gap: 4 }}>
+            <IconButton
+              icon={<HorizontalSymmetryIcon />}
+              label="Horizontal symmetry"
+              active={xOn}
+              onClick={() => setSymmetryMode(symmetryModeFromAxes(!xOn, yOn))}
+            />
+            <IconButton
+              icon={<VerticalSymmetryIcon />}
+              label="Vertical symmetry"
+              active={yOn}
+              onClick={() => setSymmetryMode(symmetryModeFromAxes(xOn, !yOn))}
+            />
+            <IconButton icon={<GridIcon />} label="Toggle grid" active={showGrid} onClick={toggleGrid} />
+          </div>
+        );
+      })()}
 
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginLeft: 'auto' }}>
         {isGlyphMode ? <GlyphSizeControl /> : <CanvasSizeControl />}
