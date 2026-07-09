@@ -196,28 +196,55 @@ in general.
 3. Restore the `{ key: 'woff2', label: 'WOFF2' }` row to `CHECKBOX_ROWS` in
    `FontExportPanel.jsx` (and its `selected` default state).
 
-## NEXT SESSION: Tool review — brush/tool width options and a real gap analysis
+## NEXT SESSION: Tool roadmap — 7-checkpoint implementation plan
 
 **Replaces a vague Tokenote item** ("Full tool review, eg: Add additional
 pencil, eraser, line, etc width options. Look for missing pixel art and
-vector art tools that would be appropriate for Pixelyph.") with a properly
-scoped item, per session 20's tool-review checkpoint (spec-only — nothing
-here was implemented this session). The next `/dev-session` should start
-here directly rather than asking what to work on.
+vector art tools that would be appropriate for Pixelyph.") — session 20
+did a full 23-item survey of Pixel-mode gaps vs. standard pixel-art tools
+and Shape-mode gaps vs. standard vector-art tools, sorted every item into
+implement/backlog/dismiss, then scoped the 11 "implement" items into
+seven real checkpoints (spec-only — nothing here was implemented this
+session). The next `/dev-session` should start at Checkpoint 1 directly
+rather than asking what to work on.
 
-**Full spec: [`docs/tool-options.md`](./docs/tool-options.md).** Four gaps,
-each with current-state grounding (exact file/line references, not
-guesswork), a proposed design, and a real implementation-cost estimate:
-brush width for pencil/eraser/line, freehand lasso select, a dithering
-brush, and bucket fill tolerance/global (non-contiguous) mode — in that
-order, smallest to largest. Also covers what's *not* a real gap (a
-separate "move" tool, a "gradient tool" — both already covered by existing
-features) and the shared `ctx`/store-field pattern (`shapeFilled` is the
-precedent) any of these would follow.
+**Full spec: [`docs/tool-roadmap.md`](./docs/tool-roadmap.md)** (which in
+turn points to [`docs/tool-options.md`](./docs/tool-options.md) for
+Checkpoint 1's deep technical detail). Covers, in sequenced checkpoints:
+the pixel paint-tool cluster (brush width, dithering, bucket fill
+global+tolerance, pixel-perfect), nudge, generate-palette-from-image, a
+configurable tile guide overlay, OS-clipboard paste-in, whole-canvas/
+layer/shape flip+90°-rotation (resolves the two entries below), and an
+interactive on-canvas gradient tool. Also has the full sort accounting
+(backlog/long-term-backlog/dismissed items) so nothing from the 23-item
+pass is lost even though only 11 are scheduled.
 
-**To resolve:** pick which (if any) of the four to pursue in their own
-planning/implementation session — this doc is a starting point for that
-discussion, not a commitment to build all of it.
+**To resolve:** work through the seven checkpoints, one `/dev-session` (or
+more) at a time, per the doc's suggested sequencing.
+
+## Explore: masks — clipping masks and color-adjustment layers
+
+**Not scoped — a discussion topic, not a planned feature.** Surfaced
+during session 20's tool-gap-analysis pass, deliberately filed here in
+the general project backlog rather than in
+[`docs/tool-roadmap.md`](./docs/tool-roadmap.md)'s tools-specific list,
+since it's bigger and more cross-cutting than anything else that pass
+scoped. Two related but distinct ideas:
+- **Clipping masks** — a mask gating visibility, using another pixel
+  buffer as the mask shape. No blocker in principle, but touches export
+  (`composeLayersSvg.js` and friends), the data model (a new per-shape or
+  per-layer mask reference), and the UI simultaneously.
+- **Color-adjustment/blend-mode layers** — Photoshop-style adjustment
+  layers that shift hue, multiply/blend color, etc. against whatever's
+  beneath them, not just gate visibility. Implies a real
+  compositing-model question (what "on top of" means beyond simple
+  z-order + opacity) — `composeLayersSvg.js` doesn't currently do
+  anything beyond stacking + opacity, so this is a new feature area, not
+  an extension of an existing one.
+
+**To resolve:** needs its own research/scoping pass before it's
+backlog-ready in the normal sense — too vague and cross-cutting to write
+as a scoped implementation item today.
 
 ## Explore: making Pixelyph's capabilities more leverageable by AI agents
 
@@ -308,15 +335,20 @@ a small tile-drawing surface (reusing the pixel-grid editing primitives
 already in `src/model`) rather than a paste-a-string textarea — scoped as
 its own planning session, not a slice of a larger phase.
 
-## Canvas and layer axis flipping
+## Canvas and layer axis flipping — scoped, see tool roadmap
 
-**Not scoped.** Flip the whole canvas, or a single layer, horizontally
-and/or vertically.
+**Now scoped**, along with 90° rotation and shape-level flip/rotate, as
+Checkpoint 6 of [`docs/tool-roadmap.md`](./docs/tool-roadmap.md) — see the
+"NEXT SESSION: Tool roadmap" entry above. Flip the whole canvas, a single
+layer, or a single shape, horizontally and/or vertically.
 
-## Whole-image and layer 90° rotations
+## Whole-image and layer 90° rotations — scoped, see tool roadmap
 
-**Not scoped.** Rotate the whole canvas, or a single layer, in 90°
-increments.
+**Now scoped** alongside axis flipping above, as Checkpoint 6 of
+[`docs/tool-roadmap.md`](./docs/tool-roadmap.md). Rotate the whole canvas,
+a single layer, or a single shape, in 90° increments — including the
+resolved Glyph-mode behavior (re-crop/pad back to `pixelsPerEm`, behind a
+warning confirmation).
 
 ## Demo projects
 
