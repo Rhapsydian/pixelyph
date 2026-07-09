@@ -94,6 +94,16 @@ export function ContextBar() {
   const activeTool = useStore((s) => s.activeTool);
   const shapeFilled = useStore((s) => s.shapeFilled);
   const setShapeFilled = useStore((s) => s.setShapeFilled);
+  const brushWidth = useStore((s) => s.brushWidth);
+  const setBrushWidth = useStore((s) => s.setBrushWidth);
+  const ditherEnabled = useStore((s) => s.ditherEnabled);
+  const setDitherEnabled = useStore((s) => s.setDitherEnabled);
+  const pixelPerfect = useStore((s) => s.pixelPerfect);
+  const setPixelPerfect = useStore((s) => s.setPixelPerfect);
+  const fillGlobal = useStore((s) => s.fillGlobal);
+  const setFillGlobal = useStore((s) => s.setFillGlobal);
+  const fillTolerance = useStore((s) => s.fillTolerance);
+  const setFillTolerance = useStore((s) => s.setFillTolerance);
   const canvasSymmetryMode = useStore((s) => s.canvas.symmetryMode);
   const glyphCanvas = useStore((s) => s.glyphCanvas);
   const setSymmetryMode = useStore((s) => s.setSymmetryMode);
@@ -111,6 +121,11 @@ export function ContextBar() {
 
   const isGlyphMode = mode === 'glyph';
   const showsShapeToggle = activeTool === 'rectangle' || activeTool === 'ellipse';
+  const showsBrushWidth = activeTool === 'pencil' || activeTool === 'eraser' || activeTool === 'line';
+  const showsDither = activeTool === 'pencil';
+  const showsPixelPerfect = activeTool === 'pencil' || activeTool === 'line';
+  const showsFillOptions = activeTool === 'bucketFill';
+  const showsToolOptions = showsBrushWidth || showsDither || showsPixelPerfect || showsFillOptions;
   const symmetryMode = isGlyphMode ? (glyphCanvas?.symmetryMode ?? 'none') : canvasSymmetryMode;
 
   async function handleTierChange(newTier) {
@@ -182,6 +197,60 @@ export function ContextBar() {
           </div>
         );
       })()}
+
+      {showsToolOptions && (
+        <div
+          style={{
+            display: 'flex',
+            gap: 12,
+            alignItems: 'center',
+            borderLeft: '1px solid var(--chrome-border)',
+            paddingLeft: 12,
+          }}
+        >
+          {showsBrushWidth && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="Brush width in cells">
+              Width:
+              <input
+                type="number"
+                min={1}
+                max={8}
+                value={brushWidth}
+                onChange={(e) => setBrushWidth(Math.max(1, Math.min(8, Number(e.target.value))))}
+                style={{ width: 40 }}
+              />
+            </label>
+          )}
+          {showsDither && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="Paint a 50%-density checkerboard texture instead of a solid stroke">
+              <input type="checkbox" checked={ditherEnabled} onChange={(e) => setDitherEnabled(e.target.checked)} /> Dither
+            </label>
+          )}
+          {showsPixelPerfect && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="Remove redundant staircase-corner pixels from freehand/line strokes">
+              <input type="checkbox" checked={pixelPerfect} onChange={(e) => setPixelPerfect(e.target.checked)} /> Pixel-perfect
+            </label>
+          )}
+          {showsFillOptions && (
+            <>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="Fill matching cells everywhere on the canvas, not just the contiguous region">
+                <input type="checkbox" checked={fillGlobal} onChange={(e) => setFillGlobal(e.target.checked)} /> Global
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="How close a color must be to match (0 = exact match only)">
+                Tolerance:
+                <input
+                  type="number"
+                  min={0}
+                  max={255}
+                  value={fillTolerance}
+                  onChange={(e) => setFillTolerance(Math.max(0, Math.min(255, Number(e.target.value))))}
+                  style={{ width: 48 }}
+                />
+              </label>
+            </>
+          )}
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginLeft: 'auto' }}>
         {isGlyphMode ? <GlyphSizeControl /> : <CanvasSizeControl />}
