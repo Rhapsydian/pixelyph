@@ -485,3 +485,17 @@ input[type="range"] {
   border-left: 1px solid var(--chrome-border);
   overflow: auto;
 }
+
+/* TilePreviewPanel re-embeds composeLayersSvg's raw <svg> markup verbatim,
+   which has no width/height/display of its own, so it defaults to inline
+   display and picks up a baseline/descender gap that throws off the tile
+   grid's `auto` row sizing. Forcing block display makes row sizing as
+   deterministic as the grid's explicit `1fr` column tracks. */
+.tile-preview-cell {
+  line-height: 0;
+}
+.tile-preview-cell svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

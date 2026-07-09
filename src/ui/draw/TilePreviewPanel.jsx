@@ -54,11 +54,12 @@ export function TilePreviewPanel() {
           aspectRatio: '1 / 1',
           display: 'grid',
           gridTemplateColumns: `repeat(${repeat}, 1fr)`,
+          gridTemplateRows: `repeat(${repeat}, 1fr)`,
           ...BACKGROUNDS[bg],
         }}
       >
         {Array.from({ length: repeat * repeat }, (_, i) => (
-          <div key={i} style={{ width: '100%', height: '100%' }} dangerouslySetInnerHTML={{ __html: svgMarkup }} />
+          <div key={i} className="tile-preview-cell" style={{ width: '100%', height: '100%' }} dangerouslySetInnerHTML={{ __html: svgMarkup }} />
         ))}
       </div>
     </div>
