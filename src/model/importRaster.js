@@ -5,6 +5,7 @@
 // needed in its tests.
 
 import quantize from 'quantize';
+import { hexToRgb } from './colorDistance.js';
 
 const ALPHA_THRESHOLD = 128; // source pixels below this alpha are treated as transparent (unpainted)
 
@@ -72,11 +73,6 @@ export function downsampleImage(image, targetWidth, targetHeight, mode = 'neares
 /** @param {number[]} rgb */
 function toHex([r, g, b]) {
   return `#${[r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('')}`;
-}
-
-function hexToRgb(hex) {
-  const stripped = hex.replace('#', '');
-  return [parseInt(stripped.slice(0, 2), 16), parseInt(stripped.slice(2, 4), 16), parseInt(stripped.slice(4, 6), 16)];
 }
 
 function nearestPaletteIndex(rgb, paletteRgb) {
