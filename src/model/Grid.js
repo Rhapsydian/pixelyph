@@ -126,14 +126,18 @@ export function makeGridId() {
 }
 
 /**
- * Creates a new 1x1 Shape at canvas-space (offsetX, offsetY) — the "first
- * paint allocates a shape" case `paintCell`/`paintSimpleCell` both need when
- * there's nothing yet to grow into.
+ * Creates a new 1x1 Shape at canvas-space (offsetX, offsetY). `filled`
+ * defaults to true for the "first paint allocates a shape" case
+ * `paintCell`/`paintSimpleCell` both need (that one cell really is being
+ * painted right now) — pass `filled: false` for an explicit "add a new
+ * empty shape" action (the Layers panel's "+ Add Shape", per
+ * docs/data-model.md section 1), which shouldn't paint a cell nobody asked
+ * for; it just sits invisible until the first real paint stroke grows it.
  *
- * @param {{ name?: string, offsetX: number, offsetY: number, style: ShapeStyle }} options
+ * @param {{ name?: string, offsetX: number, offsetY: number, style: ShapeStyle, filled?: boolean }} options
  * @returns {Grid}
  */
-export function createShapeGrid({ name = 'Shape', offsetX, offsetY, style }) {
+export function createShapeGrid({ name = 'Shape', offsetX, offsetY, style, filled = true }) {
   return {
     id: makeGridId(),
     name,
@@ -141,7 +145,7 @@ export function createShapeGrid({ name = 'Shape', offsetX, offsetY, style }) {
     offsetY,
     width: 1,
     height: 1,
-    pixels: new Uint8Array([1]),
+    pixels: new Uint8Array([filled ? 1 : 0]),
     style,
     visible: true,
     locked: false,

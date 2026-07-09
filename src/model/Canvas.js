@@ -333,6 +333,7 @@ export function addGrid(canvas, layerId, { name, style } = {}) {
     offsetX: Math.floor(canvas.width / 2),
     offsetY: Math.floor(canvas.height / 2),
     style: style ?? { fill: '#808080', effects: [] },
+    filled: false,
   });
   frame.grids.push(grid);
   canvas.activeLayerId = layerId;
