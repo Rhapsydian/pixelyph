@@ -9,68 +9,56 @@ blocking issue is fixed); and open ideas flagged for later discussion
 rather than acted on immediately. Review this list once all
 currently-planned phases are complete.
 
-## NEXT SESSION: Narrow the tier distinction to one axis, and rename it (Pixel / Shape)
+## DONE: Narrow the tier distinction to one axis, and rename it (Pixel / Shape)
 
-**Pre-scoped — the next `/dev-session` should start directly on this plan**
-(full checkpointed plan, code snippets included, already discussed and
-approved) rather than asking what to work on. Fed by two Tokenote items:
-"what would it take to add layers to Simple mode?" and "should Simple/
-Advanced be renamed to something more descriptive?"
+Shipped in session 19 (2026-07-09), 4 commits on `main`. Fed by two Tokenote
+items: "what would it take to add layers to Simple mode?" and "should
+Simple/Advanced be renamed to something more descriptive?"
 
-**Why:** today's `canvas.tier` bundles two independent things — "how many
+**Why:** `canvas.tier` used to bundle two independent things — "how many
 layers can exist" and "how much manual control you have over a shape's
-style" — into one flag. The plan splits them: every tier gets real
-multi-layer support; the only thing that stays tier-gated is *manual*
-shape/style authoring (gradients, stroke, effects, multiple shapes per
-layer, per-shape selection). Once that's the real axis, "Simple/Advanced"
-stops describing it, so the display labels become **"Pixel"** (paint
+style" — into one flag. Split them: every tier now gets real multi-layer
+support; the only thing that stays tier-gated is *manual* shape/style
+authoring (gradients, stroke, effects, multiple shapes per layer,
+per-shape selection). Once that was the real axis, "Simple/Advanced" no
+longer described it, so the display labels became **"Pixel"** (paint
 colors, shapes auto-managed) and **"Shape"** (author shapes manually) — a
 **display-only** rename: `canvas.tier` keeps its stored values
 `'simple'`/`'advanced'` everywhere, no save-format bump, no migration.
 
-**Four checkpoints** (each independently committable; pause for
-confirmation after each — same pattern as the last session's four fixes):
+**Four checkpoints, each committed independently:**
 
 1. **Retarget `autoLayerSync` to the active layer** (`src/model/autoLayerSync.js`) —
-   `getSimpleLayer` stops hardcoding `canvas.layers[0]`, resolves
-   `canvas.activeLayerId` instead (falling back to topmost existing, then
-   lazy-create for a blank canvas). Also add lock/per-frame-visibility
-   guards to `paintSimpleCell` (matches `paintCell`'s advanced branch),
-   needed once Checkpoint 3 exposes those toggles on Pixel-tier layers.
+   `getSimpleLayer` no longer hardcodes `canvas.layers[0]`; it resolves
+   `canvas.activeLayerId` (falling back to the topmost layer, then
+   lazy-creating one for a blank canvas). `paintSimpleCell` also gained
+   lock/per-frame-visibility guards matching `paintCell`'s advanced branch.
 2. **Per-layer `convertTier` collapse + a merge-dedup fix** (`src/model/Canvas.js`) —
-   Advanced→Simple currently flattens the *whole canvas* via cross-layer
-   `colorAt` into one layer; rewrite to collapse *each layer's own* grids
-   independently (new `collapseLayerToAutoGrids`, mirroring
-   `extractRectFromActiveLayer`'s `topGridAt` scan), preserving layer
-   count/order/names/lock/opacity/visibility. Also: `mergeLayerDown`
-   concatenates two layers' grids per frame with no color-dedup, so two
-   Simple-tier layers each auto-managing their own "red" Grid would leave
-   two same-color Grids after a merge — fix with a new
-   `dedupeSolidColorGrids(frame)` + `unionGridInto` pixel-OR helper, run
-   *after* the existing concatenation, gated on `canvas.tier === 'simple'`
-   only (Shape/Advanced tier legitimately keeps same-color shapes
-   separate). The existing `Canvas.test.js:604-619` `convertTier` test
-   asserts `layers.length === 1` post-collapse and must be rewritten.
+   Shape→Pixel used to flatten the whole canvas via cross-layer `colorAt`
+   into one layer; `collapseLayerToAutoGrids` now collapses each layer's own
+   grids independently (mirroring `extractRectFromActiveLayer`'s
+   `topGridAt` scan), preserving layer count/order/names/lock/opacity/
+   visibility. `mergeLayerDown` also gained a `dedupeSolidColorGrids` pass
+   (built on a new `unionGridInto` pixel-OR helper in `Grid.js`, factored
+   out of `mergeGridDown`), gated to `canvas.tier === 'simple'`, so two
+   Pixel-tier layers each auto-managing their own same-color Grid fold into
+   one on merge instead of leaving two.
 3. **Pixel-tier Layers panel** (`src/ui/SidePanel.jsx`, `src/ui/draw/LayersPanel.jsx`) —
-   show the Layers tab in both tiers (Style tab stays Advanced/Shape-only);
-   relax `LayersPanel`'s `tier !== 'advanced'` gate to a tier-aware render:
-   no expand caret, no shape sub-rows, no "Add Shape" button, toolbar
-   locked to its layer-action branch in Pixel tier. All the underlying
-   store actions (`addLayer`/`removeLayer`/`reorderLayer`/`duplicateLayer`/
-   `mergeLayerDown`/`setLayerProps`/`setLayerFrameVisibility`) are already
-   tier-agnostic — no new store wiring needed.
+   the Layers tab now shows in both tiers (Style stays Shape-tier only);
+   `LayersPanel` renders tier-aware via a `showShapes` flag: no expand
+   caret, no shape sub-rows, no "Add Shape" button in Pixel tier, toolbar
+   locked to its layer-action branch. No store wiring changes needed — the
+   underlying actions were already tier-agnostic.
 4. **Rename tier labels to Pixel/Shape** (`src/ui/draw/ContextBar.jsx`) —
-   display text only (`TIER_LABELS`/`TIER_TOOLTIPS` maps with honest
-   per-tier tooltip copy), plus a reworded Advanced→Simple confirm dialog
-   describing the new per-layer collapse instead of "collapses every
-   layer."
+   `TIER_LABELS`/`TIER_TOOLTIPS` maps with honest per-tier tooltip copy,
+   plus a reworded Shape→Pixel confirm dialog describing the new per-layer
+   collapse instead of the old "collapses every layer" wording.
 
-Full plan with exact code for every change (including an ASCII wireframe
-comparing the Pixel-tier vs. Shape-tier Layers panel layout) is preserved
-in this session's transcript/plan file; re-derive from the summary above
-plus the actual current source if the standalone plan file isn't
-available — the checkpoint structure and code shapes above are complete
-enough to execute from directly.
+Test suite: 332/332 → 338/338 passing (new coverage: active-layer paint
+targeting + lock/visibility guards, per-layer `convertTier` preserving
+identity, and the merge-dedup fix). Manually verified live in the browser:
+paint isolation across layers, Layers panel rendering in Pixel tier, and
+merge-down dedup, all with no console errors.
 
 ## DONE: Layer/Frame/Grid model redesign
 
