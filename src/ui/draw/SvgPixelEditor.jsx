@@ -62,6 +62,9 @@ export function SvgPixelEditor() {
   // this ref is the one extra bit handlePointerUp needs, since it otherwise
   // calls the tool unconditionally).
   const suppressGestureRef = useRef(false);
+  // True while a right-button drag is in flight — see the contextmenu
+  // effect below for why this needs to be tracked at all.
+  const rightDragRef = useRef(false);
   const [tickCount, tick] = useState(0);
   const [preview, setPreview] = useState(null);
   const [cursorCell, setCursorCell] = useState(null);
@@ -133,6 +136,26 @@ export function SvgPixelEditor() {
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  // Closes a gap left by setPointerCapture (handlePointerDown): pointer
+  // capture redirects pointermove/pointerup back to the svg no matter where
+  // the cursor physically is, but has no effect on `contextmenu`, which
+  // always hit-tests whatever's actually under the cursor. Without this, a
+  // right-button drag-erase that's released outside the svg's bounds lets
+  // the native context menu open on whatever's there, instead of the svg's
+  // own onContextMenu below (which only helps when the event targets it
+  // directly). One listener for the component's whole lifetime, gated by a
+  // ref rather than added/removed per-gesture: contextmenu fires
+  // synchronously right after pointerup for the same button release, so a
+  // listener torn down inside handlePointerUp could lose that race and be
+  // gone before its own gesture's contextmenu event arrives.
+  useEffect(() => {
+    function blockContextMenu(evt) {
+      if (rightDragRef.current) evt.preventDefault();
+    }
+    document.addEventListener('contextmenu', blockContextMenu);
+    return () => document.removeEventListener('contextmenu', blockContextMenu);
   }, []);
 
   // Scroll wheel controls zoom directly (rather than scrolling the
@@ -259,6 +282,7 @@ export function SvgPixelEditor() {
     // reports the button that changed state, so it reads 0 on move events
     // even while the right button is held for the whole drag.
     ctx.erasing = evt.button === 2;
+    rightDragRef.current = ctx.erasing;
     tools[activeTool].onPointerDown(ctx, x, y);
   }
   function handlePointerMove(evt) {
@@ -270,12 +294,30 @@ export function SvgPixelEditor() {
   }
   function handlePointerUp(evt) {
     isPointerDownRef.current = false;
+    releaseRightDrag();
     const { x, y } = clientToCell(evt);
     if (suppressGestureRef.current) {
       suppressGestureRef.current = false;
       return;
     }
     tools[activeTool].onPointerUp(ctx, x, y);
+  }
+  function handlePointerCancel() {
+    // Safety net for lost pointer capture (e.g. an OS-level interrupt)
+    // without a normal pointerup ever arriving.
+    isPointerDownRef.current = false;
+    releaseRightDrag();
+  }
+  function releaseRightDrag() {
+    if (!rightDragRef.current) return;
+    // Deferred: this gesture's own contextmenu (if any) fires synchronously
+    // right after this handler returns, so clearing the ref immediately
+    // would unblock it before it arrives. The macrotask delay lets that
+    // event get blocked first, then frees the ref for the next, unrelated
+    // right-click anywhere else in the app.
+    setTimeout(() => {
+      rightDragRef.current = false;
+    }, 0);
   }
   function handlePointerLeave() {
     setCursorCell(null); // hide the hover highlight once the pointer is no longer over the canvas
@@ -376,6 +418,7 @@ export function SvgPixelEditor() {
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
         onPointerLeave={handlePointerLeave}
         onContextMenu={(evt) => evt.preventDefault()}
       >
