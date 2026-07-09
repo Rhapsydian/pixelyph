@@ -483,6 +483,34 @@ test('mergeLayerDown concatenates shapes per frame (bottom stays back, top stays
   assert.equal(colorAt(canvas, 3, 3), '#ff0000');
 });
 
+test('mergeLayerDown dedupes same-color Grids left over from two Simple/Pixel-tier layers, but not in Advanced/Shape tier', () => {
+  const simple = createCanvas({ width: 4, height: 4 });
+  const bottom = addLayer(simple);
+  simple.activeLayerId = bottom.id;
+  paintCell(simple, 0, 0, '#ff0000'); // bottom's own auto-managed red Grid
+  const top = addLayer(simple);
+  simple.activeLayerId = top.id;
+  paintCell(simple, 3, 3, '#ff0000'); // top's own auto-managed red Grid — same color, different layer
+
+  mergeLayerDown(simple, top.id);
+
+  const merged = simple.layers[0];
+  assert.equal(merged.frames[0].grids.length, 1); // the two red Grids folded into one
+  assert.equal(colorAt(simple, 0, 0), '#ff0000');
+  assert.equal(colorAt(simple, 3, 3), '#ff0000');
+
+  const advanced = createCanvas({ width: 4, height: 4 });
+  advanced.tier = 'advanced';
+  addLayer(advanced, { name: 'Bottom' });
+  paintCell(advanced, 0, 0, '#ff0000');
+  const advTop = addLayer(advanced, { name: 'Top' });
+  paintCell(advanced, 3, 3, '#ff0000');
+
+  mergeLayerDown(advanced, advTop.id);
+
+  assert.equal(advanced.layers[0].frames[0].grids.length, 2); // Advanced/Shape tier keeps them separate
+});
+
 test('mergeLayerDown translates a hidden top-frame\'s visibility onto each of its incoming shapes', () => {
   const canvas = createCanvas({ width: 2, height: 2 });
   canvas.tier = 'advanced';
@@ -601,10 +629,10 @@ test('convertTier simple -> advanced just flips the tier flag on the existing si
   assert.equal(canvas.activeLayerId, layerId);
 });
 
-test('convertTier advanced -> simple rebuilds a single style-scanned layer from the composited active frame, dropping non-solid fills', () => {
+test('convertTier advanced -> simple collapses each layer\'s own shapes independently, preserving layer count/order/names', () => {
   const canvas = createCanvas({ width: 2, height: 1 });
   canvas.tier = 'advanced';
-  addLayer(canvas, { name: 'solid' });
+  const solidLayer = addLayer(canvas, { name: 'solid' });
   paintCell(canvas, 0, 0, '#ff0000');
   const gradientLayer = addLayer(canvas, { name: 'gradient' });
   paintCell(canvas, 1, 0, '#00ff00');
@@ -613,9 +641,44 @@ test('convertTier advanced -> simple rebuilds a single style-scanned layer from 
   convertTier(canvas, 'simple');
 
   assert.equal(canvas.tier, 'simple');
-  assert.equal(canvas.layers.length, 1);
+  assert.equal(canvas.layers.length, 2); // layer count preserved, not flattened to one
+  assert.deepEqual(canvas.layers.map((l) => l.name), ['solid', 'gradient']); // order/names preserved
+  assert.equal(canvas.layers[0].id, solidLayer.id);
+  assert.equal(canvas.layers[1].id, gradientLayer.id);
   assert.equal(colorAt(canvas, 0, 0), '#ff0000');
-  assert.equal(colorAt(canvas, 1, 0), null); // gradient cell has no simple-tier equivalent
+  assert.equal(colorAt(canvas, 1, 0), null); // gradient cell has no simple-tier equivalent, dropped
+});
+
+test('convertTier advanced -> simple preserves each layer\'s lock/opacity/per-frame visibility', () => {
+  const canvas = createCanvas({ width: 2, height: 1 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas, { name: 'A' });
+  paintCell(canvas, 0, 0, '#ff0000');
+  layer.locked = true;
+  layer.opacity = 0.5;
+  layer.frames[0].visible = false;
+
+  convertTier(canvas, 'simple');
+
+  assert.equal(canvas.layers[0].locked, true);
+  assert.equal(canvas.layers[0].opacity, 0.5);
+  assert.equal(canvas.layers[0].frames[0].visible, false);
+});
+
+test('convertTier advanced -> simple merges overlapping same-color shapes within a layer into one Grid', () => {
+  const canvas = createCanvas({ width: 2, height: 1 });
+  canvas.tier = 'advanced';
+  addLayer(canvas, { name: 'A' });
+  paintCell(canvas, 0, 0, '#ff0000');
+  const second = addGrid(canvas, canvas.activeLayerId);
+  second.style.fill = '#ff0000'; // a second, independent red shape in the same layer
+  paintCell(canvas, 1, 0, '#ff0000');
+
+  convertTier(canvas, 'simple');
+
+  assert.equal(canvas.layers[0].frames[0].grids.length, 1); // both red shapes merged into one
+  assert.equal(colorAt(canvas, 0, 0), '#ff0000');
+  assert.equal(colorAt(canvas, 1, 0), '#ff0000');
 });
 
 test('addFrame inserts an empty-grids frame into every layer, keeping frameCount uniform, and makes it active', () => {

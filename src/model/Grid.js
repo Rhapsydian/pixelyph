@@ -221,13 +221,46 @@ export function shrinkGridToFit(grid) {
 }
 
 /**
+ * Pixel-ORs `source` into `target` in place, growing `target`'s bounds to
+ * cover both — the shared bounding-box + pixel-OR fusion `mergeGridDown`
+ * (below, "bottom wins") and Canvas.js's `dedupeSolidColorGrids` (folding
+ * duplicate same-color Simple/Pixel-tier Grids after a layer merge) both
+ * need; `target` keeps its own id/name/style/visible/locked/opacity either
+ * way, only its geometry/pixels change.
+ *
+ * @param {Grid} target mutated in place
+ * @param {Grid} source read-only
+ */
+export function unionGridInto(target, source) {
+  const minX = Math.min(target.offsetX, source.offsetX);
+  const minY = Math.min(target.offsetY, source.offsetY);
+  const maxX = Math.max(target.offsetX + target.width, source.offsetX + source.width);
+  const maxY = Math.max(target.offsetY + target.height, source.offsetY + source.height);
+  const width = maxX - minX;
+  const height = maxY - minY;
+  const pixels = new Uint8Array(width * height);
+  for (const grid of [target, source]) {
+    for (let y = 0; y < grid.height; y++) {
+      for (let x = 0; x < grid.width; x++) {
+        if (!grid.pixels[y * grid.width + x]) continue;
+        pixels[(grid.offsetY + y - minY) * width + (grid.offsetX + x - minX)] = 1;
+      }
+    }
+  }
+  target.offsetX = minX;
+  target.offsetY = minY;
+  target.width = width;
+  target.height = height;
+  target.pixels = pixels;
+}
+
+/**
  * Merges `gridId` into the shape directly below it in `frame.grids` (a
- * "shape merge down"): bounding-box + pixel-OR, same algorithm the
- * pre-migration Layer merge used — a single Grid can only have one style,
- * so fusing two shapes must collapse onto one. The result keeps the
- * *bottom* shape's id/name/style/visible/locked/opacity ("bottom wins",
- * mirroring Canvas.js's mergeLayerDown convention). No-ops if `gridId` is
- * already the bottom-most shape in the frame.
+ * "shape merge down"): a single Grid can only have one style, so fusing two
+ * shapes must collapse onto one — the result keeps the *bottom* shape's
+ * id/name/style/visible/locked/opacity ("bottom wins", mirroring Canvas.js's
+ * mergeLayerDown convention). No-ops if `gridId` is already the bottom-most
+ * shape in the frame.
  *
  * @param {{grids: Grid[]}} frame
  * @param {string} gridId the *top* shape of the pair being merged
@@ -237,26 +270,7 @@ export function mergeGridDown(frame, gridId) {
   if (index <= 0) return;
   const top = frame.grids[index];
   const bottom = frame.grids[index - 1];
-  const minX = Math.min(top.offsetX, bottom.offsetX);
-  const minY = Math.min(top.offsetY, bottom.offsetY);
-  const maxX = Math.max(top.offsetX + top.width, bottom.offsetX + bottom.width);
-  const maxY = Math.max(top.offsetY + top.height, bottom.offsetY + bottom.height);
-  const width = maxX - minX;
-  const height = maxY - minY;
-  const pixels = new Uint8Array(width * height);
-  for (const grid of [bottom, top]) {
-    for (let y = 0; y < grid.height; y++) {
-      for (let x = 0; x < grid.width; x++) {
-        if (!grid.pixels[y * grid.width + x]) continue;
-        pixels[(grid.offsetY + y - minY) * width + (grid.offsetX + x - minX)] = 1;
-      }
-    }
-  }
-  bottom.offsetX = minX;
-  bottom.offsetY = minY;
-  bottom.width = width;
-  bottom.height = height;
-  bottom.pixels = pixels;
+  unionGridInto(bottom, top);
   frame.grids.splice(index, 1);
 }
 

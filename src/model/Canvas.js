@@ -11,7 +11,7 @@
 // UI) is the actual styled, auto-cropped pixel content, one or more per
 // layer per frame.
 
-import { resizeAt, anchorOffset, ANCHOR_X_FRACS, ANCHOR_Y_FRACS, get, set, createShapeGrid, growGridToInclude, shrinkGridToFit, mergeGridDown as mergeGridInFrame, stylesEqual, makeGridId } from './Grid.js';
+import { resizeAt, anchorOffset, ANCHOR_X_FRACS, ANCHOR_Y_FRACS, get, set, createShapeGrid, growGridToInclude, shrinkGridToFit, mergeGridDown as mergeGridInFrame, unionGridInto, stylesEqual, makeGridId } from './Grid.js';
 import { paintSimpleCell } from './autoLayerSync.js';
 import { createLayer } from './Layer.js';
 import { normalizePalette } from './Palette.js';
@@ -283,6 +283,36 @@ export function duplicateLayer(canvas, layerId) {
 }
 
 /**
+ * Folds duplicate same-solid-color Grids in `frame` down to one per color,
+ * pixel-ORing each later duplicate into the first Grid of that color (via
+ * `unionGridInto`, Grid.js) and dropping the duplicate. `mergeLayerDown`
+ * runs this after concatenating two Simple/Pixel-tier layers' grids: each
+ * layer independently auto-manages its own one-Grid-per-color shapes (see
+ * autoLayerSync.js), so two layers each holding, say, a "red" Grid would
+ * otherwise leave two red Grids after a plain concatenation — breaking
+ * Simple/Pixel tier's one-Grid-per-color invariant. Non-solid fills can't
+ * collide by definition (Simple/Pixel tier never creates them) and are left
+ * alone. Grids keep the stacking position of their *first* appearance.
+ *
+ * @param {{grids: object[]}} frame
+ */
+function dedupeSolidColorGrids(frame) {
+  const byColor = new Map();
+  const kept = [];
+  for (const grid of frame.grids) {
+    const color = grid.style.fill;
+    const owner = typeof color === 'string' ? byColor.get(color) : null;
+    if (owner) {
+      unionGridInto(owner, grid);
+    } else {
+      kept.push(grid);
+      if (typeof color === 'string') byColor.set(color, grid);
+    }
+  }
+  frame.grids = kept;
+}
+
+/**
  * Merges a layer into the one directly below it in the stack (a "merge
  * down"): every frame's shapes are concatenated, bottom's staying toward
  * the back and top's toward the front — no pixel math or bounding-box
@@ -290,7 +320,11 @@ export function duplicateLayer(canvas, layerId) {
  * offset/size/style (contrast with `mergeGridDown` in Grid.js, which fuses
  * two shapes into one and does need that). A frame where the top layer was
  * hidden translates that into `visible: false` on each of its incoming
- * shapes, rather than dropping it silently. The top layer is removed;
+ * shapes, rather than dropping it silently. In Simple/Pixel tier, the
+ * concatenation runs through `dedupeSolidColorGrids` afterward, since each
+ * layer's own auto-managed same-color Grid would otherwise survive as two
+ * separate Grids instead of one — Advanced/Shape tier is exempt, since it
+ * legitimately keeps same-color shapes separate. The top layer is removed;
  * no-ops if `layerId` is already the bottom-most layer.
  *
  * @param {object} canvas
@@ -305,6 +339,7 @@ export function mergeLayerDown(canvas, layerId) {
     const topFrame = top.frames[i];
     const incoming = topFrame.visible ? topFrame.grids : topFrame.grids.map((g) => ({ ...g, visible: false }));
     bottomFrame.grids = [...bottomFrame.grids, ...incoming];
+    if (canvas.tier === 'simple') dedupeSolidColorGrids(bottomFrame);
   });
   canvas.layers.splice(index, 1);
   canvas.activeLayerId = bottom.id;
@@ -519,20 +554,60 @@ export function topVisibleLayerAt(canvas, x, y) {
 }
 
 /**
- * Switches `canvas.tier`. Simple -> advanced is always safe: Simple tier is
- * already just a single Layer (see autoLayerSync.js), so this just flips the
- * tier flag and hands that layer over as a free-floating one — or, for a
- * blank canvas with no layers yet, creates one so advanced tier never opens
- * onto an unpaintable empty layer stack (matching the "+ Add Layer" button's
- * own default). Advanced -> simple is potentially lossy (the caller should
- * confirm first): every layer is discarded and rebuilt as a single
- * style-scanned Layer by re-painting each *currently active frame's*
- * composited cell's `colorAt` result through the simple-tier path — other
- * frames' advanced-tier content is not preserved (matches the pre-migration
- * behavior, which only ever reconstructed the active frame the same way);
- * cells under a non-solid fill (gradient) have no simple-tier equivalent and
- * are dropped, and overlapping shapes of the same color merge, exactly as
- * "lossy" implies.
+ * Collapses one layer's Advanced/Shape-tier shapes in the canvas's active
+ * frame into Simple/Pixel tier's one-Grid-per-color shape, mutating `layer`
+ * in place — `convertTier`'s per-layer building block. Scans this layer's
+ * own frame only (`topGridAt`-wins across this layer's own shapes, mirroring
+ * `selection.js`'s `extractRectFromActiveLayer`), so a multi-layer canvas
+ * keeps its layer count/order/names/lock/opacity/per-frame visibility
+ * instead of flattening onto one layer. Cells under a non-solid fill
+ * (gradient) have no simple-tier equivalent and are dropped, same as before
+ * this was made per-layer. Only the active frame is rebuilt — every other
+ * frame's shapes are discarded (`frame.visible` is left untouched), matching
+ * the pre-migration behavior of only ever reconstructing the active frame.
+ *
+ * @param {object} canvas
+ * @param {object} layer
+ */
+function collapseLayerToAutoGrids(canvas, layer) {
+  const frameIndex = currentFrameIndex(canvas);
+  const sourceFrame = layer.frames[frameIndex];
+  const cells = [];
+  for (let y = 0; y < canvas.height; y++) {
+    for (let x = 0; x < canvas.width; x++) {
+      const grid = topGridAt(sourceFrame, x, y);
+      if (grid && typeof grid.style.fill === 'string') cells.push({ x, y, color: grid.style.fill });
+    }
+  }
+  layer.frames.forEach((frame) => {
+    frame.grids = [];
+  });
+  const targetFrame = layer.frames[frameIndex];
+  for (const cell of cells) {
+    let target = targetFrame.grids.find((g) => g.style.fill === cell.color);
+    if (!target) {
+      target = createShapeGrid({ name: cell.color, offsetX: cell.x, offsetY: cell.y, style: { fill: cell.color, effects: [] } });
+      targetFrame.grids.push(target);
+    } else {
+      growGridToInclude(target, cell.x, cell.y);
+    }
+    set(target, cell.x - target.offsetX, cell.y - target.offsetY, 1);
+  }
+}
+
+/**
+ * Switches `canvas.tier`. Simple -> advanced is always safe: every Simple-
+ * tier layer is already a real Layer (see autoLayerSync.js), so this just
+ * flips the tier flag and hands the existing layers over as free-floating
+ * ones — or, for a blank canvas with no layers yet, creates one so advanced
+ * tier never opens onto an unpaintable empty layer stack (matching the
+ * "+ Add Layer" button's own default). Advanced -> simple is potentially
+ * lossy per layer (the caller should confirm first): each layer is
+ * collapsed independently via `collapseLayerToAutoGrids` — layer count,
+ * order, names, lock, and opacity all survive; only each layer's *shapes*
+ * are rebuilt into Simple tier's one-Grid-per-color form, dropping
+ * gradients/stroke/effects and merging overlapping same-color shapes within
+ * that layer.
  *
  * @param {object} canvas
  * @param {'simple'|'advanced'} newTier
@@ -545,19 +620,9 @@ export function convertTier(canvas, newTier) {
     clampActiveLayer(canvas);
     return;
   }
-  const cells = [];
-  for (let y = 0; y < canvas.height; y++) {
-    for (let x = 0; x < canvas.width; x++) {
-      const color = colorAt(canvas, x, y);
-      if (color) cells.push({ x, y, color });
-    }
-  }
-  canvas.layers = [];
   canvas.tier = 'simple';
-  canvas.activeLayerId = null;
-  canvas.activeGridId = null;
-  for (const cell of cells) paintSimpleCell(canvas, cell.x, cell.y, cell.color);
-  clampActiveLayer(canvas);
+  for (const layer of canvas.layers) collapseLayerToAutoGrids(canvas, layer);
+  refreshActiveGrid(canvas);
 }
 
 /**
