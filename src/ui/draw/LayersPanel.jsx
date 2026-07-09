@@ -383,7 +383,11 @@ export function LayersPanel() {
                 onSelect={() => setSelectionKind('layer')}
               />
               {isExpanded && (
-                <>
+                // marginTop separates the layer row's own border from the
+                // first shape row's — without it, an active layer and an
+                // active shape directly below it would have their
+                // highlight borders touching/merging into one box.
+                <div style={{ marginTop: 'var(--space-1)' }}>
                   {grids.length === 0 && (
                     <div style={{ marginLeft: 48, color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No shapes in this frame yet.</div>
                   )}
@@ -400,7 +404,7 @@ export function LayersPanel() {
                         onSelect={() => setSelectionKind('shape')}
                       />
                     ))}
-                </>
+                </div>
               )}
             </div>
           );
