@@ -196,7 +196,7 @@ in general.
 3. Restore the `{ key: 'woff2', label: 'WOFF2' }` row to `CHECKBOX_ROWS` in
    `FontExportPanel.jsx` (and its `selected` default state).
 
-## NEXT SESSION: Tool roadmap — resume mid-Checkpoint 6 verification
+## DONE: Tool roadmap Checkpoints 1-6, and Checkpoint 7 sub-step 1
 
 **Replaces a vague Tokenote item** ("Full tool review, eg: Add additional
 pencil, eraser, line, etc width options. Look for missing pixel art and
@@ -209,70 +209,120 @@ checkpoints. **Full spec: [`docs/tool-roadmap.md`](./docs/tool-roadmap.md)**
 for Checkpoint 1's deep technical detail); also has the full sort
 accounting (backlog/long-term-backlog/dismissed items).
 
-**Shipped so far (session 21, 2026-07-10):**
-- **Checkpoint 1** — pixel paint-tool cluster (brush width, dithering,
-  pixel-perfect, bucket fill global+tolerance). Fully verified.
-- **Checkpoint 2** — nudge (arrow keys, floating selection/active
-  shape/active layer, Shift for a 10px step). Fully verified.
-- **Checkpoint 3** — generate palette from image (Add/Replace prompt).
-  Fully verified.
-- **Checkpoint 4** — configurable tile/sub-grid guide overlay. Fully
+**Shipped:**
+- **Checkpoint 1** (session 21) — pixel paint-tool cluster (brush width,
+  dithering, pixel-perfect, bucket fill global+tolerance). Fully verified.
+- **Checkpoint 2** (session 21) — nudge (arrow keys, floating
+  selection/active shape/active layer, Shift for a 10px step). Fully
   verified.
-- **Checkpoint 5** — OS-clipboard image paste-in. Verified in both the
-  web build and the Electron dev build (user-confirmed).
-- **Checkpoint 6** — whole-canvas/layer/shape flip + 90° rotation.
-  **Implemented and unit-tested (385/385 passing, 14 new tests covering
-  the flip/rotate primitive and every scope's offset-remap math), but
-  manual browser verification is only partial** — see the next entry.
+- **Checkpoint 3** (session 21) — generate palette from image (Add/Replace
+  prompt). Fully verified.
+- **Checkpoint 4** (session 21) — configurable tile/sub-grid guide
+  overlay. Fully verified.
+- **Checkpoint 5** (session 21) — OS-clipboard image paste-in. Verified in
+  both the web build and the Electron dev build (user-confirmed).
+- **Checkpoint 6** (sessions 21-22) — whole-canvas/layer/shape flip + 90°
+  rotation. Fully verified in session 22: canvas-level rotate math exact
+  (hand-derived offset matched the rendered SVG `translate()` exactly),
+  shape/layer flip+rotate correct in both tiers, "All frames" scoping
+  confirmed both directions on a real multi-frame animation. One notable,
+  non-bug edge case found: rotating a single layer (not the whole canvas)
+  on a non-square canvas can push its content outside visible bounds —
+  consistent with this doc's own "off-canvas content is preserved, not
+  deleted" convention below, not something to fix.
+- **Checkpoint 7 sub-step 1** (session 22) — interactive on-canvas linear-
+  gradient angle handle: drag a handle directly on the artwork to rotate a
+  Shape-tier grid's gradient angle, instead of only typing a number into
+  the gradient editor modal. Gated behind a new "Show angle handle on
+  canvas" checkbox in the Style tab's Fill section (per-shape, always
+  starts off on a newly-selected shape) — the handle only shows when both
+  that toggle is on and the Style tab is the visible side-panel tab. A
+  real bug was caught and fixed during manual verification: the handle's
+  drag gesture didn't stop propagation on `pointerup`/`pointermove`, so it
+  bubbled into the canvas's own paint-tool tracking and fired a spurious
+  extra undo commit — every drag was silently creating two undo steps
+  instead of one. Radial gradients are still out of scope (sub-step 2,
+  not started).
 
-**To resolve:** work through the remaining checkpoints (6's leftover
-verification, then 7) one `/dev-session` at a time.
+**To resolve:** Checkpoint 7 sub-step 2 (radial gradient cx/cy/r on-canvas
+handle) is unscheduled — the tool-roadmap doc's own sequencing note called
+this "the biggest, most architecturally novel item... best done last/
+alone," and sub-step 1 already absorbed a full session. Pick up when
+ready; re-read `docs/tool-roadmap.md`'s Checkpoint 7 section first, since
+the linear sub-step's design (drag math, live/commit split) generalizes
+directly to radial once picked back up.
 
-## NEXT SESSION: finish Checkpoint 6 manual verification, then Checkpoint 7
+## NEXT SESSION: finish the toolbar reorganization (Checkpoint E + a target-picker refinement)
 
-Checkpoint 6 (flip/rotate, see above) is implemented and unit-tested, but
-the manual-in-browser pass was interrupted partway through. Start here
-before moving to Checkpoint 7.
+Session 22 pivoted mid-stream from the tool-roadmap work above into a
+toolbar reorganization the user asked for directly (not tracked in
+`docs/tool-roadmap.md`): move Undo/Redo up next to the fullscreen toggle,
+add a **Transform** menu (Resize/Flip/Rotate, replacing the old inline
+`ContextBar` controls) with proper modals including a 3×3 anchor-grid
+picker, and establish a left/right split in `ContextBar` (interface-
+behavior controls vs. active-tool-specific settings). Broken into
+checkpoints, tracked in the session's plan file
+(`functional-dreaming-firefly.md`, not committed to the repo — session log
+below has the durable record).
 
-**Verified already (real UI clicks, not just unit tests):**
-- Glyph mode: flip horizontal, and rotate on a non-square (12×16) glyph —
-  both the Cancel path (no-op, confirmed) and the Confirm path (re-crops/
-  pads back to pixelsPerEm, content landed exactly where hand-derived
-  math predicted, one undo reverts rotate+recrop together).
-- Draw mode, canvas-level: flip horizontal (asymmetric mark landed at the
-  exact predicted offset after resizing to a non-square 10×16 canvas).
+**Shipped and committed (session 22):**
+- New rotation directions: `rotateCanvas180`/`rotateCanvasCCW90` (Draw) and
+  `rotateActiveGlyph180`/`rotateActiveGlyphCCW90` (Glyph), both built by
+  looping the existing tested 90°-clockwise primitives rather than new
+  pixel math — one commit per call regardless of internal pass count.
+- A **Transform** menu (between Palette and Window, both modes): **Resize…**
+  opens a modal with a new reusable `AnchorGrid` 3×3 picker (drop-in
+  replacement for the old plain anchor `<select>`); Flip/Rotate run
+  instantly when there's nothing to choose (Glyph mode, or originally a
+  single-frame Draw project — see below for how this gating changed),
+  otherwise open a scope modal. All math verified exactly against
+  hand-derived predictions via the rendered SVG's `translate()`.
 
-**Still needs a real-UI pass:**
-- Draw mode, canvas-level: Rotate 90° (was mid-verification when the
-  session was interrupted — set up a non-square canvas, paint an
-  asymmetric mark, rotate, confirm the offset and the canvas.width/height
-  swap match the same math already unit-tested).
-- Shape-level flip/rotate (Shape tier's `LayersToolbar` shape-action
-  buttons).
-- Layer-level flip/rotate (`LayersToolbar` layer-action buttons), in both
-  Pixel and Shape tier.
-- The "All frames" checkbox's actual effect — flip/rotate a layer or the
-  whole canvas on a multi-frame animation with it off (current frame only)
-  vs. on (every frame), confirming other frames are/aren't touched as
-  expected.
+**In progress, NOT committed — start here:**
+Mid-session feedback: the Transform menu's Flip/Rotate should let you pick
+a *target* (Canvas/Layer in Pixel tier; Canvas/Layer/Shape in Shape tier),
+not just always operate on the whole canvas — confirmed this should
+**always** show as a choice (even with one layer), and that Layer/Shape
+should gain 180°/CCW rotation too (previously 90°-CW-only), so every
+target offers the same 5 operations. Work done, uncommitted:
+- `rotateActiveShape180`/`rotateActiveShapeCCW90` and
+  `rotateActiveLayer180`/`rotateActiveLayerCCW90` added to `store.js`
+  (same repeated-90°-primitive approach), with round-trip unit tests —
+  **401/401 tests passing** as of the last run.
+- `TransformScopeModal.jsx` rewritten to add a target radio-picker above
+  the existing "apply to all frames" checkbox (which now hides when Shape
+  is picked — shape-level flip/rotate has no frame-scope concept).
+- `MenuBar.jsx` reworked so Draw-mode Flip/Rotate **always** opens the
+  scope modal now (no more single-frame shortcut — target choice is always
+  meaningful); builds per-target action maps, omitting Shape when Shape
+  tier has no active grid to target.
 
-**Testing-methodology note for whoever picks this up:** a fresh
+**Not yet done:**
+1. Re-run `npm test` — the last edit (`MenuBar.jsx`) was never re-verified
+   after this rewrite; real risk of a stray bug from mid-edit.
+2. Manual browser verification (none done yet for this sub-round): Pixel
+   tier should offer Canvas/Layer only; Shape tier with an active shape
+   should offer all three; Shape tier with *no* active shape should hide
+   the Shape option; the frame-scope checkbox should disappear only when
+   Shape is picked. Verify actual rotation results per target the same way
+   Checkpoint 6 was verified (inspect the rendered SVG's `translate()`
+   against hand-derived math) — none of the new Layer/Shape 180°/CCW store
+   actions have been exercised in the live app yet, only unit-tested.
+3. Commit once verified.
+4. **Checkpoint E** (fully unstarted): move Undo/Redo from `ContextBar`
+   into the header next to the fullscreen toggle; restructure `ContextBar`
+   into the left (interface behavior: tier toggle, symmetry, grid, tile)
+   / right (active-tool settings: shape-filled, select-scope, brush
+   width/dither/pixel-perfect/fill options) split, with a new shared
+   `.context-bar-divider` class; remove the now-redundant old inline
+   resize/flip/rotate/all-frames controls the Transform menu replaced.
+
+**Testing-methodology note, still applies:** a fresh
 `import('/src/state/store.js')` via `preview_eval` can resolve to a store
 instance disconnected from the one the actually-rendered React app uses —
-programmatic `s.getState()` checks then silently diverge from what's on
-screen (confirm dialogs that are genuinely pending don't visually render,
-mutations don't show up, etc.), without erroring. Real DOM clicks/events
-(`preview_click`, or dispatching real events via `eval`) don't have this
-problem. Prefer driving the UI through real clicks and reading state back
-via the DOM/accessibility snapshot/SVG inspection, not a separately
-imported store reference — only reach for the store import to set up
-otherwise-tedious preconditions, and verify the result visually too, not
-just programmatically.
-
-**To resolve:** finish the manual pass above, commit if anything needed
-fixing, then move to Checkpoint 7 (interactive on-canvas gradient tool —
-the biggest, most architecturally novel item, per the roadmap's own
-sequencing note, best done last/alone).
+prefer driving the UI through real DOM clicks/events and reading state
+back via the accessibility snapshot/SVG inspection, not a separately
+imported store reference.
 
 ## Explore: optional truncation of off-canvas content
 
