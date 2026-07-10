@@ -252,20 +252,20 @@ ready; re-read `docs/tool-roadmap.md`'s Checkpoint 7 section first, since
 the linear sub-step's design (drag math, live/commit split) generalizes
 directly to radial once picked back up.
 
-## NEXT SESSION: finish the toolbar reorganization (Checkpoint E + a target-picker refinement)
+## DONE: Toolbar reorganization (Transform menu target-picker + Checkpoint E)
 
-Session 22 pivoted mid-stream from the tool-roadmap work above into a
-toolbar reorganization the user asked for directly (not tracked in
-`docs/tool-roadmap.md`): move Undo/Redo up next to the fullscreen toggle,
-add a **Transform** menu (Resize/Flip/Rotate, replacing the old inline
-`ContextBar` controls) with proper modals including a 3×3 anchor-grid
-picker, and establish a left/right split in `ContextBar` (interface-
-behavior controls vs. active-tool-specific settings). Broken into
-checkpoints, tracked in the session's plan file
-(`functional-dreaming-firefly.md`, not committed to the repo — session log
-below has the durable record).
+Shipped across sessions 22-23. Pivoted mid-stream from the tool-roadmap work
+above into a toolbar reorganization the user asked for directly (not
+tracked in `docs/tool-roadmap.md`): a **Transform** menu (Resize/Flip/
+Rotate, replacing the old inline `ContextBar` controls) with proper modals
+including a 3×3 anchor-grid picker and a Canvas/Layer/Shape target picker,
+Undo/Redo moved up next to the fullscreen toggle, and a left/right split in
+`ContextBar` (interface-behavior controls vs. active-tool-specific
+settings). Checkpoints were tracked in session plan files
+(`functional-dreaming-firefly.md`, `gentle-humming-journal.md` — not
+committed to the repo; session logs below have the durable record).
 
-**Shipped and committed (session 22):**
+**Session 22:**
 - New rotation directions: `rotateCanvas180`/`rotateCanvasCCW90` (Draw) and
   `rotateActiveGlyph180`/`rotateActiveGlyphCCW90` (Glyph), both built by
   looping the existing tested 90°-clockwise primitives rather than new
@@ -273,56 +273,68 @@ below has the durable record).
 - A **Transform** menu (between Palette and Window, both modes): **Resize…**
   opens a modal with a new reusable `AnchorGrid` 3×3 picker (drop-in
   replacement for the old plain anchor `<select>`); Flip/Rotate run
-  instantly when there's nothing to choose (Glyph mode, or originally a
-  single-frame Draw project — see below for how this gating changed),
-  otherwise open a scope modal. All math verified exactly against
-  hand-derived predictions via the rendered SVG's `translate()`.
+  instantly when there's nothing to choose (Glyph mode), otherwise open a
+  scope modal. All math verified exactly against hand-derived predictions
+  via the rendered SVG's `translate()`.
 
-**In progress, NOT committed — start here:**
-Mid-session feedback: the Transform menu's Flip/Rotate should let you pick
-a *target* (Canvas/Layer in Pixel tier; Canvas/Layer/Shape in Shape tier),
-not just always operate on the whole canvas — confirmed this should
-**always** show as a choice (even with one layer), and that Layer/Shape
-should gain 180°/CCW rotation too (previously 90°-CW-only), so every
-target offers the same 5 operations. Work done, uncommitted:
-- `rotateActiveShape180`/`rotateActiveShapeCCW90` and
-  `rotateActiveLayer180`/`rotateActiveLayerCCW90` added to `store.js`
-  (same repeated-90°-primitive approach), with round-trip unit tests —
-  **401/401 tests passing** as of the last run.
-- `TransformScopeModal.jsx` rewritten to add a target radio-picker above
-  the existing "apply to all frames" checkbox (which now hides when Shape
-  is picked — shape-level flip/rotate has no frame-scope concept).
-- `MenuBar.jsx` reworked so Draw-mode Flip/Rotate **always** opens the
-  scope modal now (no more single-frame shortcut — target choice is always
-  meaningful); builds per-target action maps, omitting Shape when Shape
-  tier has no active grid to target.
-
-**Not yet done:**
-1. Re-run `npm test` — the last edit (`MenuBar.jsx`) was never re-verified
-   after this rewrite; real risk of a stray bug from mid-edit.
-2. Manual browser verification (none done yet for this sub-round): Pixel
-   tier should offer Canvas/Layer only; Shape tier with an active shape
-   should offer all three; Shape tier with *no* active shape should hide
-   the Shape option; the frame-scope checkbox should disappear only when
-   Shape is picked. Verify actual rotation results per target the same way
-   Checkpoint 6 was verified (inspect the rendered SVG's `translate()`
-   against hand-derived math) — none of the new Layer/Shape 180°/CCW store
-   actions have been exercised in the live app yet, only unit-tested.
-3. Commit once verified.
-4. **Checkpoint E** (fully unstarted): move Undo/Redo from `ContextBar`
-   into the header next to the fullscreen toggle; restructure `ContextBar`
-   into the left (interface behavior: tier toggle, symmetry, grid, tile)
-   / right (active-tool settings: shape-filled, select-scope, brush
-   width/dither/pixel-perfect/fill options) split, with a new shared
-   `.context-bar-divider` class; remove the now-redundant old inline
-   resize/flip/rotate/all-frames controls the Transform menu replaced.
+**Session 23:**
+- Finished the target-picker refinement left uncommitted at session 22's
+  pause: `rotateActiveShape180`/`rotateActiveShapeCCW90` and
+  `rotateActiveLayer180`/`rotateActiveLayerCCW90` (`store.js`), a
+  `TransformScopeModal.jsx` target radio-picker (Canvas/Layer in Pixel
+  tier; Canvas/Layer/Shape in Shape tier — the "all frames" checkbox hides
+  when Shape is picked), and `MenuBar.jsx` always opening the scope modal
+  in Draw mode. Re-ran `npm test` (401/401, confirming the paused
+  `MenuBar.jsx` edit hadn't broken anything) and manually verified every
+  tier/target combination plus the actual rotation math for a Layer-CCW90°
+  and a Shape-180° case via the rendered SVG's `translate()` — exact match,
+  no bugs found. Committed as `d6b8189`.
+- **Checkpoint E**: moved Undo/Redo into the header next to the fullscreen
+  toggle (`App.jsx`); removed the now-redundant inline resize/flip/rotate/
+  all-frames/undo-redo controls from `ContextBar.jsx` (superseded by the
+  Transform menu); split the remaining controls into a left (tier toggle,
+  symmetry, grid, tile) / right (shape-filled, select-scope, brush
+  width/dither/pixel-perfect/fill options) group with a new
+  `.context-bar-divider` class. Committed as `60e6265`. A follow-up request
+  left-aligned the right-hand group (dropped its `marginLeft: auto`) rather
+  than pushing it to the far edge — committed as `7c9d41f`.
 
 **Testing-methodology note, still applies:** a fresh
 `import('/src/state/store.js')` via `preview_eval` can resolve to a store
 instance disconnected from the one the actually-rendered React app uses —
 prefer driving the UI through real DOM clicks/events and reading state
 back via the accessibility snapshot/SVG inspection, not a separately
-imported store reference.
+imported store reference. Session 23 hit a related timing gotcha in the
+Browser-pane `javascript_tool`: reading the DOM synchronously right after a
+`.click()` on a store-wired button can observe a stale pre-render state
+(React batches the re-render after the handler returns) — wrap
+click-then-read checks in an `await new Promise(r => setTimeout(r, 100))`
+(or equivalent) between the click and the read, not just between separate
+tool calls.
+
+## DONE: Fix Pixel→Shape tier switch not activating the color-matching shape
+
+Shipped session 23, commit `2b8db34`. User-reported bug: Pixel tier's paint
+routine (`autoLayerSync.js`'s `paintSimpleCell`) never touches
+`canvas.activeGridId` — it finds/creates a same-color Grid purely by
+scanning `style.fill`. So `activeGridId` stayed stale (typically `null`)
+across a Pixel→Shape tier switch, and Shape tier's `paintCell` looks up the
+grid to paint into strictly by `id === canvas.activeGridId` — a failed
+lookup unconditionally allocates a brand-new Grid, creating an unwanted
+duplicate of whatever same-color shape already existed from Pixel-tier
+painting.
+
+**Fix:** `convertTier` (`Canvas.js`) now takes the palette's current
+`activeColor` and, when switching to Shape tier, resolves `activeGridId` to
+the active layer's active-frame Grid whose `style.fill` matches it (falling
+back to the prior default — first shape, or none — when no match exists on
+that layer). `setTier` (`store.js`) passes `get().activeColor` through.
+Tests: 401/401 → 403/403 (two new cases: color-match activation, and the
+no-match fallback). Manually verified live: painted red then green in Pixel
+tier, switched to Shape tier with green still selected, painted again, and
+confirmed the stroke extended the existing green shape (same Grid) instead
+of creating a third path; also confirmed switching with a never-painted
+color selected falls back cleanly with no error.
 
 ## Explore: optional truncation of off-canvas content
 
