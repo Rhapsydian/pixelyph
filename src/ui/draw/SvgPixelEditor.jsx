@@ -44,6 +44,7 @@ export function SvgPixelEditor() {
   const activeTool = useStore((s) => s.activeTool);
   const zoom = useStore((s) => s.zoom);
   const showGrid = useStore((s) => s.showGrid);
+  const tileGridSize = useStore((s) => s.tileGridSize);
   const pan = useStore((s) => s.pan);
   const setViewportSize = useStore((s) => s.setViewportSize);
   const selection = useStore((s) => s.selection);
@@ -511,12 +512,14 @@ export function SvgPixelEditor() {
             strokeDasharray="0.3,0.2"
           />
         )}
-        {showGrid && (
+        {(showGrid || tileGridSize > 0) && (
           <GridOverlay
             width={doc.width}
             height={doc.height}
             offsetX={activeGrid?.offsetX ?? 0}
             offsetY={activeGrid?.offsetY ?? 0}
+            showGrid={showGrid}
+            tileGridSize={tileGridSize}
           />
         )}
         {cursorCell && <BrushCursor x={cursorCell.x} y={cursorCell.y} />}

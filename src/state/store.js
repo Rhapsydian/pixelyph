@@ -235,6 +235,7 @@ export const useStore = create((set, get) => {
     pan: { x: 0, y: 0 },
     viewportSize: { width: 0, height: 0 },
     showGrid: false,
+    tileGridSize: 0, // 0 = off; a positive integer = tile guide size in cells
 
     selection: null,
     floatingSelection: null,
@@ -252,6 +253,7 @@ export const useStore = create((set, get) => {
     setPan: (pan) => set({ pan }),
     setViewportSize: (viewportSize) => set({ viewportSize }),
     toggleGrid: () => set((s) => ({ showGrid: !s.showGrid })),
+    setTileGridSize: (size) => set({ tileGridSize: Math.max(0, Math.round(Number(size) || 0)) }),
     setSelectionScope: (scope) => set({ selectionScope: scope }),
 
     // Working-session conveniences: persisted with the project, excluded from undo.

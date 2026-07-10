@@ -109,6 +109,8 @@ export function ContextBar() {
   const setSymmetryMode = useStore((s) => s.setSymmetryMode);
   const showGrid = useStore((s) => s.showGrid);
   const toggleGrid = useStore((s) => s.toggleGrid);
+  const tileGridSize = useStore((s) => s.tileGridSize);
+  const setTileGridSize = useStore((s) => s.setTileGridSize);
   const canUndo = useStore((s) => s.canUndo);
   const canRedo = useStore((s) => s.canRedo);
   const undo = useStore((s) => s.undo);
@@ -194,6 +196,24 @@ export function ContextBar() {
               onClick={() => setSymmetryMode(symmetryModeFromAxes(xOn, !yOn))}
             />
             <IconButton icon={<GridIcon />} label="Toggle grid" active={showGrid} onClick={toggleGrid} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="A heavier guide line every N cells, e.g. for tileset/tile-boundary work — independent of the plain per-cell grid">
+              <input
+                type="checkbox"
+                checked={tileGridSize > 0}
+                onChange={(e) => setTileGridSize(e.target.checked ? 8 : 0)}
+              />
+              Tile
+            </label>
+            {tileGridSize > 0 && (
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={tileGridSize}
+                onChange={(e) => setTileGridSize(e.target.value)}
+                style={{ width: 40 }}
+              />
+            )}
           </div>
         );
       })()}
