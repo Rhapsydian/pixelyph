@@ -196,31 +196,83 @@ in general.
 3. Restore the `{ key: 'woff2', label: 'WOFF2' }` row to `CHECKBOX_ROWS` in
    `FontExportPanel.jsx` (and its `selected` default state).
 
-## NEXT SESSION: Tool roadmap — 7-checkpoint implementation plan
+## NEXT SESSION: Tool roadmap — resume mid-Checkpoint 6 verification
 
 **Replaces a vague Tokenote item** ("Full tool review, eg: Add additional
 pencil, eraser, line, etc width options. Look for missing pixel art and
 vector art tools that would be appropriate for Pixelyph.") — session 20
 did a full 23-item survey of Pixel-mode gaps vs. standard pixel-art tools
 and Shape-mode gaps vs. standard vector-art tools, sorted every item into
-implement/backlog/dismiss, then scoped the 11 "implement" items into
-seven real checkpoints (spec-only — nothing here was implemented this
-session). The next `/dev-session` should start at Checkpoint 1 directly
-rather than asking what to work on.
+implement/backlog/dismiss, then scoped the 11 "implement" items into seven
+checkpoints. **Full spec: [`docs/tool-roadmap.md`](./docs/tool-roadmap.md)**
+(which in turn points to [`docs/tool-options.md`](./docs/tool-options.md)
+for Checkpoint 1's deep technical detail); also has the full sort
+accounting (backlog/long-term-backlog/dismissed items).
 
-**Full spec: [`docs/tool-roadmap.md`](./docs/tool-roadmap.md)** (which in
-turn points to [`docs/tool-options.md`](./docs/tool-options.md) for
-Checkpoint 1's deep technical detail). Covers, in sequenced checkpoints:
-the pixel paint-tool cluster (brush width, dithering, bucket fill
-global+tolerance, pixel-perfect), nudge, generate-palette-from-image, a
-configurable tile guide overlay, OS-clipboard paste-in, whole-canvas/
-layer/shape flip+90°-rotation (resolves the two entries below), and an
-interactive on-canvas gradient tool. Also has the full sort accounting
-(backlog/long-term-backlog/dismissed items) so nothing from the 23-item
-pass is lost even though only 11 are scheduled.
+**Shipped so far (session 21, 2026-07-10):**
+- **Checkpoint 1** — pixel paint-tool cluster (brush width, dithering,
+  pixel-perfect, bucket fill global+tolerance). Fully verified.
+- **Checkpoint 2** — nudge (arrow keys, floating selection/active
+  shape/active layer, Shift for a 10px step). Fully verified.
+- **Checkpoint 3** — generate palette from image (Add/Replace prompt).
+  Fully verified.
+- **Checkpoint 4** — configurable tile/sub-grid guide overlay. Fully
+  verified.
+- **Checkpoint 5** — OS-clipboard image paste-in. Verified in both the
+  web build and the Electron dev build (user-confirmed).
+- **Checkpoint 6** — whole-canvas/layer/shape flip + 90° rotation.
+  **Implemented and unit-tested (385/385 passing, 14 new tests covering
+  the flip/rotate primitive and every scope's offset-remap math), but
+  manual browser verification is only partial** — see the next entry.
 
-**To resolve:** work through the seven checkpoints, one `/dev-session` (or
-more) at a time, per the doc's suggested sequencing.
+**To resolve:** work through the remaining checkpoints (6's leftover
+verification, then 7) one `/dev-session` at a time.
+
+## NEXT SESSION: finish Checkpoint 6 manual verification, then Checkpoint 7
+
+Checkpoint 6 (flip/rotate, see above) is implemented and unit-tested, but
+the manual-in-browser pass was interrupted partway through. Start here
+before moving to Checkpoint 7.
+
+**Verified already (real UI clicks, not just unit tests):**
+- Glyph mode: flip horizontal, and rotate on a non-square (12×16) glyph —
+  both the Cancel path (no-op, confirmed) and the Confirm path (re-crops/
+  pads back to pixelsPerEm, content landed exactly where hand-derived
+  math predicted, one undo reverts rotate+recrop together).
+- Draw mode, canvas-level: flip horizontal (asymmetric mark landed at the
+  exact predicted offset after resizing to a non-square 10×16 canvas).
+
+**Still needs a real-UI pass:**
+- Draw mode, canvas-level: Rotate 90° (was mid-verification when the
+  session was interrupted — set up a non-square canvas, paint an
+  asymmetric mark, rotate, confirm the offset and the canvas.width/height
+  swap match the same math already unit-tested).
+- Shape-level flip/rotate (Shape tier's `LayersToolbar` shape-action
+  buttons).
+- Layer-level flip/rotate (`LayersToolbar` layer-action buttons), in both
+  Pixel and Shape tier.
+- The "All frames" checkbox's actual effect — flip/rotate a layer or the
+  whole canvas on a multi-frame animation with it off (current frame only)
+  vs. on (every frame), confirming other frames are/aren't touched as
+  expected.
+
+**Testing-methodology note for whoever picks this up:** a fresh
+`import('/src/state/store.js')` via `preview_eval` can resolve to a store
+instance disconnected from the one the actually-rendered React app uses —
+programmatic `s.getState()` checks then silently diverge from what's on
+screen (confirm dialogs that are genuinely pending don't visually render,
+mutations don't show up, etc.), without erroring. Real DOM clicks/events
+(`preview_click`, or dispatching real events via `eval`) don't have this
+problem. Prefer driving the UI through real clicks and reading state back
+via the DOM/accessibility snapshot/SVG inspection, not a separately
+imported store reference — only reach for the store import to set up
+otherwise-tedious preconditions, and verify the result visually too, not
+just programmatically.
+
+**To resolve:** finish the manual pass above, commit if anything needed
+fixing, then move to Checkpoint 7 (interactive on-canvas gradient tool —
+the biggest, most architecturally novel item, per the roadmap's own
+sequencing note, best done last/alone).
 
 ## Explore: optional truncation of off-canvas content
 
