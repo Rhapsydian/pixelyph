@@ -132,23 +132,37 @@ export function MenuBar() {
   const dropFloatingSelection = useStore((s) => s.dropFloatingSelection);
 
   // --- Transform menu (resize/flip/rotate) ---
-  const frameCount = useStore((s) => s.canvas.frameCount);
+  const hasActiveShape = useStore((s) => s.canvas.tier === 'advanced' && s.canvas.activeGridId != null);
   const flipCanvasH = useStore((s) => s.flipCanvasH);
   const flipCanvasV = useStore((s) => s.flipCanvasV);
   const rotateCanvas90 = useStore((s) => s.rotateCanvas90);
   const rotateCanvas180 = useStore((s) => s.rotateCanvas180);
   const rotateCanvasCCW90 = useStore((s) => s.rotateCanvasCCW90);
+  const flipActiveLayerH = useStore((s) => s.flipActiveLayerH);
+  const flipActiveLayerV = useStore((s) => s.flipActiveLayerV);
+  const rotateActiveLayer90 = useStore((s) => s.rotateActiveLayer90);
+  const rotateActiveLayer180 = useStore((s) => s.rotateActiveLayer180);
+  const rotateActiveLayerCCW90 = useStore((s) => s.rotateActiveLayerCCW90);
+  const flipActiveShapeH = useStore((s) => s.flipActiveShapeH);
+  const flipActiveShapeV = useStore((s) => s.flipActiveShapeV);
+  const rotateActiveShape90 = useStore((s) => s.rotateActiveShape90);
+  const rotateActiveShape180 = useStore((s) => s.rotateActiveShape180);
+  const rotateActiveShapeCCW90 = useStore((s) => s.rotateActiveShapeCCW90);
   const flipActiveGlyphH = useStore((s) => s.flipActiveGlyphH);
   const flipActiveGlyphV = useStore((s) => s.flipActiveGlyphV);
   const rotateActiveGlyph90 = useStore((s) => s.rotateActiveGlyph90);
   const rotateActiveGlyph180 = useStore((s) => s.rotateActiveGlyph180);
   const rotateActiveGlyphCCW90 = useStore((s) => s.rotateActiveGlyphCCW90);
   const [resizeModalOpen, setResizeModalOpen] = useState(false);
-  // The pending flip/rotate action awaiting an "apply to all frames?" answer
-  // — null means no scope modal is open. Only Draw mode with 2+ frames ever
-  // sets this; everything else (Glyph mode, or a single-frame project) runs
-  // the action directly with no modal, since there's nothing to choose.
-  const [pendingScopeAction, setPendingScopeAction] = useState(/** @type {{title: string, action: () => void}|null} */ (null));
+  // The pending flip/rotate operation awaiting a target ("Canvas"/"Layer"/
+  // "Shape") and, unless Shape is picked, a frame-scope answer — null means
+  // no modal is open. Only Draw mode ever sets this: "Canvas or Layer"
+  // (Pixel tier) / "Canvas, Layer, or Shape" (Shape tier) is always a real
+  // choice there, even with just one layer. Glyph mode has no target
+  // concept (no layers/shapes), so its Flip/Rotate items run directly.
+  const [pendingTransform, setPendingTransform] = useState(
+    /** @type {{title: string, actionsByTarget: Record<string, () => void>}|null} */ (null),
+  );
 
   const [openMenu, setOpenMenu] = useState(/** @type {string|null} */ (null));
   const [isFullscreen, toggleFullscreen] = useFullscreen();
@@ -209,18 +223,30 @@ export function MenuBar() {
 
   /**
    * Flip/Rotate menu items funnel through here rather than straight to
-   * runAndClose: in Glyph mode, or a Draw-mode project with only one frame,
-   * "apply to all frames?" is a meaningless question, so the action just
-   * runs immediately, matching today's one-click behavior. Only a Draw-mode
-   * project with 2+ frames opens the scope modal.
+   * runAndClose: Glyph mode has no target concept (no layers/shapes), so
+   * `glyphAction` just runs directly. Draw mode always opens the scope
+   * modal — "Canvas or Layer" (Pixel tier) / "Canvas, Layer, or Shape"
+   * (Shape tier) is always a real choice, even with just one layer.
+   * `layerActions`/`shapeActions` are `{h, v, cw, ccw, r180}` — `shapeActions`
+   * is omitted entirely when Shape tier has no active grid to target.
    */
-  function runTransform(title, action) {
+  function runTransform(title, op, glyphAction, canvasAction, layerActions, shapeActions) {
     return () => {
       setOpenMenu(null);
-      if (mode === 'glyph' || frameCount <= 1) action();
-      else setPendingScopeAction({ title, action });
+      if (mode === 'glyph') {
+        glyphAction();
+        return;
+      }
+      const actionsByTarget = { canvas: canvasAction, layer: layerActions[op] };
+      if (shapeActions) actionsByTarget.shape = shapeActions[op];
+      setPendingTransform({ title, actionsByTarget });
     };
   }
+
+  const layerActions = { h: flipActiveLayerH, v: flipActiveLayerV, cw: rotateActiveLayer90, ccw: rotateActiveLayerCCW90, r180: rotateActiveLayer180 };
+  const shapeActions = hasActiveShape
+    ? { h: flipActiveShapeH, v: flipActiveShapeV, cw: rotateActiveShape90, ccw: rotateActiveShapeCCW90, r180: rotateActiveShape180 }
+    : null;
 
   return (
     <div ref={rootRef} style={{ display: 'flex' }}>
@@ -275,24 +301,24 @@ export function MenuBar() {
         <MenuDivider />
         <MenuItem
           label="Flip Horizontal"
-          onClick={runTransform('Flip Horizontal', mode === 'glyph' ? flipActiveGlyphH : flipCanvasH)}
+          onClick={runTransform('Flip Horizontal', 'h', flipActiveGlyphH, flipCanvasH, layerActions, shapeActions)}
         />
         <MenuItem
           label="Flip Vertical"
-          onClick={runTransform('Flip Vertical', mode === 'glyph' ? flipActiveGlyphV : flipCanvasV)}
+          onClick={runTransform('Flip Vertical', 'v', flipActiveGlyphV, flipCanvasV, layerActions, shapeActions)}
         />
         <MenuDivider />
         <MenuItem
           label="Rotate 90° CW"
-          onClick={runTransform('Rotate 90° CW', mode === 'glyph' ? rotateActiveGlyph90 : rotateCanvas90)}
+          onClick={runTransform('Rotate 90° CW', 'cw', rotateActiveGlyph90, rotateCanvas90, layerActions, shapeActions)}
         />
         <MenuItem
           label="Rotate 90° CCW"
-          onClick={runTransform('Rotate 90° CCW', mode === 'glyph' ? rotateActiveGlyphCCW90 : rotateCanvasCCW90)}
+          onClick={runTransform('Rotate 90° CCW', 'ccw', rotateActiveGlyphCCW90, rotateCanvasCCW90, layerActions, shapeActions)}
         />
         <MenuItem
           label="Rotate 180°"
-          onClick={runTransform('Rotate 180°', mode === 'glyph' ? rotateActiveGlyph180 : rotateCanvas180)}
+          onClick={runTransform('Rotate 180°', 'r180', rotateActiveGlyph180, rotateCanvas180, layerActions, shapeActions)}
         />
       </Menu>
 
@@ -306,11 +332,11 @@ export function MenuBar() {
       </Menu>
 
       {resizeModalOpen && <TransformResizeModal onClose={() => setResizeModalOpen(false)} />}
-      {pendingScopeAction && (
+      {pendingTransform && (
         <TransformScopeModal
-          title={pendingScopeAction.title}
-          onConfirm={pendingScopeAction.action}
-          onClose={() => setPendingScopeAction(null)}
+          title={pendingTransform.title}
+          actionsByTarget={pendingTransform.actionsByTarget}
+          onClose={() => setPendingTransform(null)}
         />
       )}
     </div>

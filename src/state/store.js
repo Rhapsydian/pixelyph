@@ -483,6 +483,28 @@ export const useStore = create((set, get) => {
       rotateGrid90(grid);
       commit();
     },
+    // rotateGrid90 re-centers the shape on every call (see Grid.js), so
+    // looping it composes correctly for 180/CCW — same reasoning as
+    // rotateCanvasNTimes/rotateActiveGlyphNTimes above.
+    rotateActiveShape180: () => {
+      const canvas = get().canvas;
+      const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
+      const grid = layer?.frames[currentFrameIndex(canvas)]?.grids.find((g) => g.id === canvas.activeGridId);
+      if (!grid) return;
+      rotateGrid90(grid);
+      rotateGrid90(grid);
+      commit();
+    },
+    rotateActiveShapeCCW90: () => {
+      const canvas = get().canvas;
+      const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
+      const grid = layer?.frames[currentFrameIndex(canvas)]?.grids.find((g) => g.id === canvas.activeGridId);
+      if (!grid) return;
+      rotateGrid90(grid);
+      rotateGrid90(grid);
+      rotateGrid90(grid);
+      commit();
+    },
 
     // --- Flip/rotate — layer-level (both tiers). Honors flipRotateAllFrames
     // for which frame(s) of the active layer get transformed. ---
@@ -508,6 +530,33 @@ export const useStore = create((set, get) => {
       if (!layer) return;
       const frameIndices = flipRotateAllFrames ? layer.frames.map((_, i) => i) : [currentFrameIndex(canvas)];
       for (const idx of frameIndices) rotateLayerFrame90(canvas, layer.id, idx);
+      commit();
+    },
+    // rotateLayerFrame90 repositions against canvas.width/height, which a
+    // layer-only rotate never changes (unlike the canvas-level case) — so
+    // those dimensions stay fixed across every pass and looping this is a
+    // direct, no-special-casing generalization.
+    rotateActiveLayer180: () => {
+      const { canvas, flipRotateAllFrames } = get();
+      const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
+      if (!layer) return;
+      const frameIndices = flipRotateAllFrames ? layer.frames.map((_, i) => i) : [currentFrameIndex(canvas)];
+      for (const idx of frameIndices) {
+        rotateLayerFrame90(canvas, layer.id, idx);
+        rotateLayerFrame90(canvas, layer.id, idx);
+      }
+      commit();
+    },
+    rotateActiveLayerCCW90: () => {
+      const { canvas, flipRotateAllFrames } = get();
+      const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
+      if (!layer) return;
+      const frameIndices = flipRotateAllFrames ? layer.frames.map((_, i) => i) : [currentFrameIndex(canvas)];
+      for (const idx of frameIndices) {
+        rotateLayerFrame90(canvas, layer.id, idx);
+        rotateLayerFrame90(canvas, layer.id, idx);
+        rotateLayerFrame90(canvas, layer.id, idx);
+      }
       commit();
     },
 

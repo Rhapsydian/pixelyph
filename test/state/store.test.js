@@ -447,3 +447,51 @@ test('rotateActiveGlyphCCW90 only prompts requestConfirm once for the whole mult
 
   useStore.setState({ requestConfirm: () => Promise.resolve(true) }); // restore the plain always-confirm stub for later tests
 });
+
+test('rotateActiveShape180/CCW90 round-trip and compose correctly', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  store.setTier('advanced');
+  const layerId = useStore.getState().canvas.layers[0].id;
+  store.addGrid(layerId);
+  const gridId = useStore.getState().canvas.activeGridId;
+  // paint an asymmetric L onto the shape so rotation direction is checkable
+  useStore.getState().paintCellLive(2, 2, '#000000');
+  useStore.getState().paintCellLive(3, 2, '#000000');
+  useStore.getState().paintCellLive(2, 3, '#000000');
+  useStore.getState().commitStroke();
+
+  const snapshot = () => structuredClone(useStore.getState().canvas.layers.find((l) => l.id === layerId).frames[0].grids.find((g) => g.id === gridId));
+  const original = snapshot();
+
+  store.rotateActiveShape180();
+  store.rotateActiveShape180();
+  assert.deepEqual(snapshot(), original, 'two 180s round-trip on a shape');
+
+  store.rotateActiveShape90();
+  store.rotateActiveShapeCCW90();
+  assert.deepEqual(snapshot(), original, 'CW then CCW round-trips on a shape');
+});
+
+test('rotateActiveLayer180/CCW90 round-trip and compose correctly, honoring flipRotateAllFrames', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  paintColumn(2, 3, '#000000'); // frame 0 — Pixel tier lazily creates the layer on this first paint
+  const layerId = useStore.getState().canvas.layers[0].id;
+  store.addFrame();
+  paintColumn(5, 4, '#000000'); // frame 1, distinct content
+
+  const snapshotLayer = () => structuredClone(useStore.getState().canvas.layers.find((l) => l.id === layerId));
+
+  // default flipRotateAllFrames is false — only the active (frame 1) frame should round-trip-affect
+  const original = snapshotLayer();
+  store.rotateActiveLayer180();
+  store.rotateActiveLayer180();
+  assert.deepEqual(snapshotLayer(), original, 'two 180s round-trip the active frame only');
+
+  store.setFlipRotateAllFrames(true);
+  store.rotateActiveLayer90();
+  store.rotateActiveLayerCCW90();
+  assert.deepEqual(snapshotLayer(), original, 'CW then CCW round-trips every frame when allFrames is on');
+  store.setFlipRotateAllFrames(false);
+});
