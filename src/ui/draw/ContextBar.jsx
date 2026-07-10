@@ -7,10 +7,9 @@
 // symmetry, grid, undo/redo, and canvas/glyph resize. Zoom lives in
 // ViewportPreview (side panel) instead, alongside the minimap it drives.
 
-import { useEffect, useState } from 'react';
 import { useStore } from '../../state/store.js';
 import { IconButton } from '../IconButton.jsx';
-import { GridIcon, UndoIcon, RedoIcon, HorizontalSymmetryIcon, VerticalSymmetryIcon, FlipHorizontalIcon, FlipVerticalIcon, Rotate90Icon } from '../icons.jsx';
+import { GridIcon, HorizontalSymmetryIcon, VerticalSymmetryIcon } from '../icons.jsx';
 
 // Display-only: `canvas.tier` keeps its stored 'simple'/'advanced' values
 // everywhere (no save-format bump, no migration) — these two maps are the
@@ -40,55 +39,6 @@ function symmetryModeFromAxes(x, y) {
   return 'none';
 }
 
-const ANCHORS = ['top-left', 'top', 'top-right', 'left', 'center', 'right', 'bottom-left', 'bottom', 'bottom-right'];
-
-function CanvasSizeControl() {
-  const width = useStore((s) => s.canvas.width);
-  const height = useStore((s) => s.canvas.height);
-  const resizeCanvas = useStore((s) => s.resizeCanvas);
-  const [nextWidth, setNextWidth] = useState(width);
-  const [nextHeight, setNextHeight] = useState(height);
-  const [anchor, setAnchor] = useState('top-left');
-
-  return (
-    <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-      <input type="number" min={1} max={512} value={nextWidth} onChange={(e) => setNextWidth(Number(e.target.value))} style={{ width: 56 }} />
-      x
-      <input type="number" min={1} max={512} value={nextHeight} onChange={(e) => setNextHeight(Number(e.target.value))} style={{ width: 56 }} />
-      <select value={anchor} onChange={(e) => setAnchor(e.target.value)}>
-        {ANCHORS.map((a) => (
-          <option key={a} value={a}>
-            {a}
-          </option>
-        ))}
-      </select>
-      <button className="btn" onClick={() => resizeCanvas(nextWidth, nextHeight, anchor)}>Resize</button>
-    </span>
-  );
-}
-
-function GlyphSizeControl() {
-  const activeCodepoint = useStore((s) => s.activeCodepoint);
-  const glyphSet = useStore((s) => s.glyphSet);
-  const resizeActiveGlyph = useStore((s) => s.resizeActiveGlyph);
-  const glyph = activeCodepoint != null ? glyphSet?.glyphs.get(activeCodepoint) : null;
-  const [nextWidth, setNextWidth] = useState(glyph?.width ?? 1);
-
-  useEffect(() => {
-    setNextWidth(glyph?.width ?? 1);
-  }, [activeCodepoint, glyph?.width]);
-
-  if (!glyph) return null;
-
-  return (
-    <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-      Glyph width:
-      <input type="number" min={1} max={256} value={nextWidth} onChange={(e) => setNextWidth(Number(e.target.value))} style={{ width: 56 }} />
-      <button className="btn" onClick={() => resizeActiveGlyph(nextWidth)}>Resize</button>
-    </span>
-  );
-}
-
 export function ContextBar() {
   const mode = useStore((s) => s.mode);
   const activeTool = useStore((s) => s.activeTool);
@@ -111,18 +61,6 @@ export function ContextBar() {
   const toggleGrid = useStore((s) => s.toggleGrid);
   const tileGridSize = useStore((s) => s.tileGridSize);
   const setTileGridSize = useStore((s) => s.setTileGridSize);
-  const flipRotateAllFrames = useStore((s) => s.flipRotateAllFrames);
-  const setFlipRotateAllFrames = useStore((s) => s.setFlipRotateAllFrames);
-  const flipCanvasH = useStore((s) => s.flipCanvasH);
-  const flipCanvasV = useStore((s) => s.flipCanvasV);
-  const rotateCanvas90 = useStore((s) => s.rotateCanvas90);
-  const flipActiveGlyphH = useStore((s) => s.flipActiveGlyphH);
-  const flipActiveGlyphV = useStore((s) => s.flipActiveGlyphV);
-  const rotateActiveGlyph90 = useStore((s) => s.rotateActiveGlyph90);
-  const canUndo = useStore((s) => s.canUndo);
-  const canRedo = useStore((s) => s.canRedo);
-  const undo = useStore((s) => s.undo);
-  const redo = useStore((s) => s.redo);
   const tier = useStore((s) => s.canvas.tier);
   const setTier = useStore((s) => s.setTier);
   const selectionScope = useStore((s) => s.selectionScope);
@@ -137,6 +75,8 @@ export function ContextBar() {
   const showsFillOptions = activeTool === 'bucketFill';
   const showsToolOptions = showsBrushWidth || showsDither || showsPixelPerfect || showsFillOptions;
   const symmetryMode = isGlyphMode ? (glyphCanvas?.symmetryMode ?? 'none') : canvasSymmetryMode;
+  const showsSelectScope = !isGlyphMode && tier === 'advanced';
+  const hasToolSpecificControls = showsShapeToggle || showsSelectScope || showsToolOptions;
 
   async function handleTierChange(newTier) {
     if (newTier === tier) return;
@@ -153,162 +93,133 @@ export function ContextBar() {
 
   return (
     <div className="app-context-bar">
-      {!isGlyphMode && (
-        <div style={{ display: 'flex', gap: 4 }} title="Pixel tier auto-manages shapes by color; Shape tier exposes manual shape/style authoring">
-          {['simple', 'advanced'].map((t) => (
-            <button
-              key={t}
-              className={tier === t ? 'btn active' : 'btn'}
-              onClick={() => handleTierChange(t)}
-              style={{ fontWeight: tier === t ? 500 : 400 }}
-              aria-pressed={tier === t}
-              title={TIER_TOOLTIPS[t]}
-            >
-              {TIER_LABELS[t]}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {showsShapeToggle && (
-        <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <input type="checkbox" checked={shapeFilled} onChange={(e) => setShapeFilled(e.target.checked)} /> Filled
-        </label>
-      )}
-
-      {!isGlyphMode && tier === 'advanced' && (
-        <label title="Whether Select/Copy/Cut read only the active shape, only the active layer, or whichever visible layer is topmost at each cell">
-          Select from:{' '}
-          <select value={selectionScope} onChange={(e) => setSelectionScope(e.target.value)}>
-            <option value="activeShape">Active shape</option>
-            <option value="activeLayer">Active layer</option>
-            <option value="allVisible">All visible layers</option>
-          </select>
-        </label>
-      )}
-
-      {(!isGlyphMode || glyphCanvas) && (() => {
-        const { x: xOn, y: yOn } = symmetryAxes(symmetryMode);
-        return (
-          <div style={{ display: 'flex', gap: 4 }}>
-            <IconButton
-              icon={<HorizontalSymmetryIcon />}
-              label="Horizontal symmetry"
-              active={xOn}
-              onClick={() => setSymmetryMode(symmetryModeFromAxes(!xOn, yOn))}
-            />
-            <IconButton
-              icon={<VerticalSymmetryIcon />}
-              label="Vertical symmetry"
-              active={yOn}
-              onClick={() => setSymmetryMode(symmetryModeFromAxes(xOn, !yOn))}
-            />
-            <IconButton icon={<GridIcon />} label="Toggle grid" active={showGrid} onClick={toggleGrid} />
-            <label style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="A heavier guide line every N cells, e.g. for tileset/tile-boundary work — independent of the plain per-cell grid">
-              <input
-                type="checkbox"
-                checked={tileGridSize > 0}
-                onChange={(e) => setTileGridSize(e.target.checked ? 8 : 0)}
-              />
-              Tile
-            </label>
-            {tileGridSize > 0 && (
-              <input
-                type="number"
-                min={1}
-                step={1}
-                value={tileGridSize}
-                onChange={(e) => setTileGridSize(e.target.value)}
-                style={{ width: 40 }}
-              />
-            )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {!isGlyphMode && (
+          <div style={{ display: 'flex', gap: 4 }} title="Pixel tier auto-manages shapes by color; Shape tier exposes manual shape/style authoring">
+            {['simple', 'advanced'].map((t) => (
+              <button
+                key={t}
+                className={tier === t ? 'btn active' : 'btn'}
+                onClick={() => handleTierChange(t)}
+                style={{ fontWeight: tier === t ? 500 : 400 }}
+                aria-pressed={tier === t}
+                title={TIER_TOOLTIPS[t]}
+              >
+                {TIER_LABELS[t]}
+              </button>
+            ))}
           </div>
-        );
-      })()}
+        )}
 
-      {showsToolOptions && (
-        <div
-          style={{
-            display: 'flex',
-            gap: 12,
-            alignItems: 'center',
-            borderLeft: '1px solid var(--chrome-border)',
-            paddingLeft: 12,
-          }}
-        >
-          {showsBrushWidth && (
-            <label style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="Brush width in cells">
-              Width:
-              <input
-                type="number"
-                min={1}
-                max={8}
-                value={brushWidth}
-                onChange={(e) => setBrushWidth(Math.max(1, Math.min(8, Number(e.target.value))))}
-                style={{ width: 40 }}
+        {(!isGlyphMode || glyphCanvas) && (() => {
+          const { x: xOn, y: yOn } = symmetryAxes(symmetryMode);
+          return (
+            <div style={{ display: 'flex', gap: 4 }}>
+              <IconButton
+                icon={<HorizontalSymmetryIcon />}
+                label="Horizontal symmetry"
+                active={xOn}
+                onClick={() => setSymmetryMode(symmetryModeFromAxes(!xOn, yOn))}
               />
-            </label>
-          )}
-          {showsDither && (
-            <label style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="Paint a 50%-density checkerboard texture instead of a solid stroke">
-              <input type="checkbox" checked={ditherEnabled} onChange={(e) => setDitherEnabled(e.target.checked)} /> Dither
-            </label>
-          )}
-          {showsPixelPerfect && (
-            <label style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="Remove redundant staircase-corner pixels from freehand/line strokes">
-              <input type="checkbox" checked={pixelPerfect} onChange={(e) => setPixelPerfect(e.target.checked)} /> Pixel-perfect
-            </label>
-          )}
-          {showsFillOptions && (
-            <>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="Fill matching cells everywhere on the canvas, not just the contiguous region">
-                <input type="checkbox" checked={fillGlobal} onChange={(e) => setFillGlobal(e.target.checked)} /> Global
+              <IconButton
+                icon={<VerticalSymmetryIcon />}
+                label="Vertical symmetry"
+                active={yOn}
+                onClick={() => setSymmetryMode(symmetryModeFromAxes(xOn, !yOn))}
+              />
+              <IconButton icon={<GridIcon />} label="Toggle grid" active={showGrid} onClick={toggleGrid} />
+              <label style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="A heavier guide line every N cells, e.g. for tileset/tile-boundary work — independent of the plain per-cell grid">
+                <input
+                  type="checkbox"
+                  checked={tileGridSize > 0}
+                  onChange={(e) => setTileGridSize(e.target.checked ? 8 : 0)}
+                />
+                Tile
               </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="How close a color must be to match (0 = exact match only)">
-                Tolerance:
+              {tileGridSize > 0 && (
                 <input
                   type="number"
-                  min={0}
-                  max={255}
-                  value={fillTolerance}
-                  onChange={(e) => setFillTolerance(Math.max(0, Math.min(255, Number(e.target.value))))}
-                  style={{ width: 48 }}
+                  min={1}
+                  step={1}
+                  value={tileGridSize}
+                  onChange={(e) => setTileGridSize(e.target.value)}
+                  style={{ width: 40 }}
                 />
-              </label>
-            </>
-          )}
-        </div>
-      )}
-
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginLeft: 'auto' }}>
-        {isGlyphMode ? <GlyphSizeControl /> : <CanvasSizeControl />}
-        {!isGlyphMode && (
-          <label style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="Whole-layer/whole-canvas flip and rotate apply to every frame, not just the active one">
-            <input type="checkbox" checked={flipRotateAllFrames} onChange={(e) => setFlipRotateAllFrames(e.target.checked)} /> All frames
-          </label>
-        )}
-        <div style={{ display: 'flex', gap: 4 }}>
-          <IconButton
-            icon={<FlipHorizontalIcon />}
-            label={isGlyphMode ? 'Flip glyph horizontal' : 'Flip canvas horizontal'}
-            onClick={isGlyphMode ? flipActiveGlyphH : flipCanvasH}
-          />
-          <IconButton
-            icon={<FlipVerticalIcon />}
-            label={isGlyphMode ? 'Flip glyph vertical' : 'Flip canvas vertical'}
-            onClick={isGlyphMode ? flipActiveGlyphV : flipCanvasV}
-          />
-          <IconButton
-            icon={<Rotate90Icon />}
-            label={isGlyphMode ? 'Rotate glyph 90°' : 'Rotate canvas 90°'}
-            onClick={isGlyphMode ? rotateActiveGlyph90 : rotateCanvas90}
-          />
-        </div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          <IconButton icon={<UndoIcon />} label="Undo" disabled={!canUndo} onClick={undo} />
-          <IconButton icon={<RedoIcon />} label="Redo" disabled={!canRedo} onClick={redo} />
-        </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
+
+      {hasToolSpecificControls && (
+        <>
+          <div className="context-bar-divider" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
+            {showsShapeToggle && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <input type="checkbox" checked={shapeFilled} onChange={(e) => setShapeFilled(e.target.checked)} /> Filled
+              </label>
+            )}
+
+            {showsSelectScope && (
+              <label title="Whether Select/Copy/Cut read only the active shape, only the active layer, or whichever visible layer is topmost at each cell">
+                Select from:{' '}
+                <select value={selectionScope} onChange={(e) => setSelectionScope(e.target.value)}>
+                  <option value="activeShape">Active shape</option>
+                  <option value="activeLayer">Active layer</option>
+                  <option value="allVisible">All visible layers</option>
+                </select>
+              </label>
+            )}
+
+            {showsToolOptions && (
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                {showsBrushWidth && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="Brush width in cells">
+                    Width:
+                    <input
+                      type="number"
+                      min={1}
+                      max={8}
+                      value={brushWidth}
+                      onChange={(e) => setBrushWidth(Math.max(1, Math.min(8, Number(e.target.value))))}
+                      style={{ width: 40 }}
+                    />
+                  </label>
+                )}
+                {showsDither && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="Paint a 50%-density checkerboard texture instead of a solid stroke">
+                    <input type="checkbox" checked={ditherEnabled} onChange={(e) => setDitherEnabled(e.target.checked)} /> Dither
+                  </label>
+                )}
+                {showsPixelPerfect && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="Remove redundant staircase-corner pixels from freehand/line strokes">
+                    <input type="checkbox" checked={pixelPerfect} onChange={(e) => setPixelPerfect(e.target.checked)} /> Pixel-perfect
+                  </label>
+                )}
+                {showsFillOptions && (
+                  <>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="Fill matching cells everywhere on the canvas, not just the contiguous region">
+                      <input type="checkbox" checked={fillGlobal} onChange={(e) => setFillGlobal(e.target.checked)} /> Global
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="How close a color must be to match (0 = exact match only)">
+                      Tolerance:
+                      <input
+                        type="number"
+                        min={0}
+                        max={255}
+                        value={fillTolerance}
+                        onChange={(e) => setFillTolerance(Math.max(0, Math.min(255, Number(e.target.value))))}
+                        style={{ width: 48 }}
+                      />
+                    </label>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

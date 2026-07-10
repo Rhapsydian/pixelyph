@@ -16,7 +16,7 @@ import { AboutModal } from './ui/AboutModal.jsx';
 import { ConfirmModal } from './ui/ConfirmModal.jsx';
 import { PaletteImportModeModal } from './ui/PaletteImportModeModal.jsx';
 import { IconButton } from './ui/IconButton.jsx';
-import { FullscreenIcon, FullscreenExitIcon } from './ui/icons.jsx';
+import { FullscreenIcon, FullscreenExitIcon, UndoIcon, RedoIcon } from './ui/icons.jsx';
 import { useFullscreen } from './ui/useFullscreen.js';
 import { CHARSET_PRESETS, CHARSET_PRESET_IDS } from './model/charsetPresets.js';
 
@@ -204,6 +204,10 @@ function StartupScreen() {
 export default function App() {
   const projectOpen = useStore((s) => s.projectOpen);
   const mode = useStore((s) => s.mode);
+  const canUndo = useStore((s) => s.canUndo);
+  const canRedo = useStore((s) => s.canRedo);
+  const undo = useStore((s) => s.undo);
+  const redo = useStore((s) => s.redo);
   const [isFullscreen, toggleFullscreen] = useFullscreen();
 
   // The editor shell renders even when no project is "open" (the store
@@ -216,13 +220,16 @@ export default function App() {
         <header className="app-header">
           <h1 className="app-logo">Pixelyph</h1>
           <MenuBar />
-          <IconButton
-            icon={isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
-            label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-            active={isFullscreen}
-            onClick={toggleFullscreen}
-            style={{ marginLeft: 'auto' }}
-          />
+          <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+            <IconButton icon={<UndoIcon />} label="Undo" disabled={!canUndo} onClick={undo} />
+            <IconButton icon={<RedoIcon />} label="Redo" disabled={!canRedo} onClick={redo} />
+            <IconButton
+              icon={isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
+              label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+              active={isFullscreen}
+              onClick={toggleFullscreen}
+            />
+          </div>
         </header>
         <ContextBar />
         <div className="app-workspace">

@@ -391,6 +391,13 @@ input[type="range"] {
   color: var(--chrome-text-muted);
 }
 
+.context-bar-divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--chrome-border);
+  margin: 0 var(--space-2);
+}
+
 .app-workspace {
   display: flex;
   flex: 1;
