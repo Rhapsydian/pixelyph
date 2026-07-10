@@ -222,6 +222,37 @@ pass is lost even though only 11 are scheduled.
 **To resolve:** work through the seven checkpoints, one `/dev-session` (or
 more) at a time, per the doc's suggested sequencing.
 
+## Explore: optional truncation of off-canvas content
+
+**Not scoped — a discussion topic, not a planned feature.** Surfaced during
+Checkpoint 2 (nudge)'s manual testing: nudging a shape/layer entirely off
+the canvas doesn't delete anything — the content is preserved at its new
+(possibly negative or overflowing) offset and comes right back if nudged
+back into view. This matches `resizeCanvas`'s existing behavior (shrinking
+the canvas never deletes content outside the new bounds either) and is the
+same non-destructive convention Photoshop/Illustrator/Aseprite use for
+off-canvas layer content — so today's behavior is working as designed, not
+a bug.
+
+**Open question:** should users be able to opt into truncation —
+permanently deleting pixels that fall outside canvas bounds — as an
+alternative to the current always-preserve behavior?
+
+**Why this needs discussion, not just a toggle:**
+- Non-destructive is the safer default (matches undo expectations, matches
+  industry precedent) but keeps invisible bloat in the save file (a shape
+  entirely off-canvas still serializes its pixel data).
+- Destructive truncation needs a clear trigger point (an opt-in setting? a
+  one-time "trim off-canvas content" action? automatic on save?) and
+  interacts with undo (should truncating itself be undoable? should it
+  warn first, like the lossy tier-collapse confirm already does?).
+- Touches the same offset/bounds code paths as `resizeCanvas`,
+  `nudgeLayerFrame`, and the flip/rotate checkpoint
+  (`docs/tool-roadmap.md`'s Checkpoint 6) — worth scoping together with any
+  future canvas-bounds-aware work rather than as a one-off.
+
+**To resolve:** discuss desired trigger/scope before implementing anything.
+
 ## Explore: masks — clipping masks and color-adjustment layers
 
 **Not scoped — a discussion topic, not a planned feature.** Surfaced
