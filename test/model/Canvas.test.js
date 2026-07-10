@@ -768,6 +768,27 @@ test('convertTier simple -> advanced just flips the tier flag on the existing si
   assert.equal(canvas.activeLayerId, layerId);
 });
 
+test('convertTier simple -> advanced activates the active layer\'s shape matching activeColor', () => {
+  const canvas = createCanvas({ width: 2, height: 1 });
+  paintCell(canvas, 0, 0, '#ff0000');
+  paintCell(canvas, 1, 0, '#00ff00');
+  const greenGrid = canvas.layers[0].frames[0].grids.find((g) => g.style.fill === '#00ff00');
+
+  convertTier(canvas, 'advanced', '#00ff00');
+
+  assert.equal(canvas.activeGridId, greenGrid.id);
+});
+
+test('convertTier simple -> advanced falls back to the default active grid when activeColor has no matching shape on this layer', () => {
+  const canvas = createCanvas({ width: 2, height: 1 });
+  paintCell(canvas, 0, 0, '#ff0000');
+  const redGrid = canvas.layers[0].frames[0].grids[0];
+
+  convertTier(canvas, 'advanced', '#0000ff'); // never painted on this layer
+
+  assert.equal(canvas.activeGridId, redGrid.id); // falls back to the layer's only shape
+});
+
 test('convertTier advanced -> simple collapses each layer\'s own shapes independently, preserving layer count/order/names', () => {
   const canvas = createCanvas({ width: 2, height: 1 });
   canvas.tier = 'advanced';

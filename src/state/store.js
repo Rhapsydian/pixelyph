@@ -626,7 +626,7 @@ export const useStore = create((set, get) => {
       grid.style = { ...grid.style, ...patch };
     },
     setTier: (newTier) => {
-      convertTierModel(get().canvas, newTier);
+      convertTierModel(get().canvas, newTier, get().activeColor);
       commit();
     },
 

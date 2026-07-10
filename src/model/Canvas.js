@@ -601,9 +601,15 @@ function collapseLayerToAutoGrids(canvas, layer) {
  * flips the tier flag and hands the existing layers over as free-floating
  * ones — or, for a blank canvas with no layers yet, creates one so advanced
  * tier never opens onto an unpaintable empty layer stack (matching the
- * "+ Add Layer" button's own default). Advanced -> simple is potentially
- * lossy per layer (the caller should confirm first): each layer is
- * collapsed independently via `collapseLayerToAutoGrids` — layer count,
+ * "+ Add Layer" button's own default). `activeGridId` is then resolved to
+ * the active layer's active-frame Grid whose `style.fill` matches
+ * `activeColor` (Simple tier never sets `activeGridId` itself — see
+ * autoLayerSync.js's paintSimpleCell — so without this the first Shape-tier
+ * stroke would otherwise find no active grid and allocate a duplicate
+ * same-color shape), falling back to `resolveActiveGrid`'s default (first
+ * shape, or none) when no match exists on this layer. Advanced -> simple is
+ * potentially lossy per layer (the caller should confirm first): each layer
+ * is collapsed independently via `collapseLayerToAutoGrids` — layer count,
  * order, names, lock, and opacity all survive; only each layer's *shapes*
  * are rebuilt into Simple tier's one-Grid-per-color form, dropping
  * gradients/stroke/effects and merging overlapping same-color shapes within
@@ -611,13 +617,20 @@ function collapseLayerToAutoGrids(canvas, layer) {
  *
  * @param {object} canvas
  * @param {'simple'|'advanced'} newTier
+ * @param {string|null} [activeColor] the palette's currently-selected color,
+ *   used to re-activate its matching shape when switching to advanced tier.
  */
-export function convertTier(canvas, newTier) {
+export function convertTier(canvas, newTier, activeColor = null) {
   if (canvas.tier === newTier) return;
   if (newTier === 'advanced') {
     canvas.tier = 'advanced';
     if (canvas.layers.length === 0) addLayer(canvas);
     clampActiveLayer(canvas);
+    const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
+    const frameIndex = currentFrameIndex(canvas);
+    const grids = layer?.frames[frameIndex]?.grids ?? [];
+    const colorMatch = grids.find((g) => g.style.fill === activeColor);
+    canvas.activeGridId = colorMatch ? colorMatch.id : resolveActiveGrid(layer, frameIndex, null);
     return;
   }
   canvas.tier = 'simple';
