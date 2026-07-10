@@ -154,7 +154,7 @@ export function ContextBar() {
       {hasToolSpecificControls && (
         <>
           <div className="context-bar-divider" />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {showsShapeToggle && (
               <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <input type="checkbox" checked={shapeFilled} onChange={(e) => setShapeFilled(e.target.checked)} /> Filled
