@@ -18,6 +18,7 @@ import { useStore } from '../../state/store.js';
 import { tools } from './tools/index.js';
 import { GridOverlay } from './GridOverlay.jsx';
 import { BrushCursor } from './BrushCursor.jsx';
+import { GradientAngleHandle } from './GradientAngleHandle.jsx';
 import { ReferenceImageLayer } from './ReferenceImageLayer.jsx';
 import { TransparencyBackground } from './TransparencyBackground.jsx';
 import { composeLayersBody, composeFrameBody } from '../../export/svg/composeLayersSvg.js';
@@ -320,11 +321,21 @@ export function SvgPixelEditor() {
     [],
   );
 
-  function clientToCell(evt) {
+  // Shared client-px -> canvas-cell-space float conversion — clientToCell
+  // floors/clamps this to a cell, but the gradient-angle handle needs the
+  // raw sub-cell position for its drag math.
+  function clientToCanvasFloat(evt) {
     const live = getActiveDocument();
     const rect = svgRef.current.getBoundingClientRect();
-    const px = ((evt.clientX - rect.left) / rect.width) * live.width;
-    const py = ((evt.clientY - rect.top) / rect.height) * live.height;
+    return {
+      px: ((evt.clientX - rect.left) / rect.width) * live.width,
+      py: ((evt.clientY - rect.top) / rect.height) * live.height,
+    };
+  }
+
+  function clientToCell(evt) {
+    const live = getActiveDocument();
+    const { px, py } = clientToCanvasFloat(evt);
     const activeL = live.tier === 'advanced' ? live.layers?.find((l) => l.id === live.activeLayerId) : null;
     const activeGrid = activeL?.frames[currentFrameIndex(live)]?.grids.find((g) => g.id === live.activeGridId);
     const ox = activeGrid?.offsetX ?? 0;
@@ -453,6 +464,7 @@ export function SvgPixelEditor() {
 
   const activeLayer = doc && doc.tier === 'advanced' ? doc.layers.find((l) => l.id === doc.activeLayerId) : null;
   const activeGrid = activeLayer?.frames[currentFrameIndex(doc)]?.grids.find((g) => g.id === doc.activeGridId);
+  const isLinearGradient = activeGrid?.style?.fill?.type === 'linear-gradient';
 
   const normalizedSelection = selection && {
     x0: Math.min(selection.x0, selection.x1),
@@ -552,6 +564,19 @@ export function SvgPixelEditor() {
           />
         )}
         {cursorCell && <BrushCursor x={cursorCell.x} y={cursorCell.y} />}
+        {isLinearGradient && (
+          <GradientAngleHandle
+            grid={activeGrid}
+            getCanvasPoint={clientToCanvasFloat}
+            onDragAngle={(angle) => {
+              useStore.getState().updateGridStyleLive(activeLayer.id, activeGrid.id, { fill: { ...activeGrid.style.fill, angle } });
+              tick((n) => n + 1);
+            }}
+            onCommitAngle={(angle) => {
+              useStore.getState().updateGridStyle(activeLayer.id, activeGrid.id, { fill: { ...activeGrid.style.fill, angle } });
+            }}
+          />
+        )}
       </svg>
     </div>
   );

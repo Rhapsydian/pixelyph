@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { serializeFill, serializeStroke, escapeAttr } from '../../../src/export/svg/layerStyle.js';
+import { serializeFill, serializeStroke, escapeAttr, angleFromVector } from '../../../src/export/svg/layerStyle.js';
 
 test('serializeFill: null fill serializes to fill="none" with no def', () => {
   const { attr, def } = serializeFill(null, 'grad-1');
@@ -50,4 +50,21 @@ test('serializeStroke: dashArray is omitted when absent', () => {
 
 test('escapeAttr escapes ampersands and quotes', () => {
   assert.equal(escapeAttr('" fill="red'), '&quot; fill=&quot;red');
+});
+
+test('angleFromVector: right/down/left vectors map to 0/90/180 degrees', () => {
+  assert.equal(angleFromVector(0.5, 0), 0);
+  assert.equal(angleFromVector(0, 0.5), 90);
+  assert.equal(angleFromVector(-0.5, 0), 180);
+});
+
+test('angleFromVector: round-trips through serializeFill\'s forward math', () => {
+  for (const angle of [0, 37, 90, 179, -45, 123.4]) {
+    const rad = (angle * Math.PI) / 180;
+    const dx = Math.cos(rad) * 0.5;
+    const dy = Math.sin(rad) * 0.5;
+    const recovered = angleFromVector(dx, dy);
+    const diff = ((recovered - angle + 540) % 360) - 180; // shortest signed angular difference
+    assert.ok(Math.abs(diff) < 1e-9, `expected ${recovered} to match ${angle} mod 360`);
+  }
 });

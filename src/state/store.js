@@ -498,6 +498,22 @@ export const useStore = create((set, get) => {
       grid.style = { ...grid.style, ...patch };
       commit();
     },
+    /**
+     * Live (uncommitted) grid-style patch — the paintCellLive/commitStroke
+     * shape applied to style edits: mutates `grid.style` in place with no
+     * `set()`/`commit()`, so it's safe to call once per pointermove during a
+     * drag (e.g. the on-canvas gradient-angle handle) without spamming undo
+     * history or autosave. Caller must force its own re-render (same `tick()`
+     * trick SvgPixelEditor uses for paintCellLive). Call `updateGridStyle`
+     * once on pointer-up to commit the final value as one undo entry.
+     */
+    updateGridStyleLive: (layerId, gridId, patch) => {
+      const canvas = get().canvas;
+      const layer = canvas.layers.find((l) => l.id === layerId);
+      const grid = layer?.frames[currentFrameIndex(canvas)]?.grids.find((g) => g.id === gridId);
+      if (!grid) return;
+      grid.style = { ...grid.style, ...patch };
+    },
     setTier: (newTier) => {
       convertTierModel(get().canvas, newTier);
       commit();

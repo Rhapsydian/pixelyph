@@ -1,0 +1,66 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { createGrid, set } from '../../../src/model/Grid.js';
+import {
+  gradientBoundsCanvasSpace,
+  gradientHandlePosition,
+  gradientBoundsCenter,
+  angleFromHandleDrag,
+} from '../../../src/ui/draw/gradientHandleGeometry.js';
+
+function mockGrid({ width, height, offsetX, offsetY, painted }) {
+  const grid = createGrid(width, height);
+  grid.offsetX = offsetX;
+  grid.offsetY = offsetY;
+  for (const [x, y] of painted) set(grid, x, y, 1);
+  return grid;
+}
+
+test('gradientBoundsCanvasSpace: a single painted pixel yields a 1x1 box in canvas space', () => {
+  const grid = mockGrid({ width: 5, height: 5, offsetX: 10, offsetY: 20, painted: [[2, 3]] });
+  assert.deepEqual(gradientBoundsCanvasSpace(grid), { minX: 12, minY: 23, maxX: 13, maxY: 24 });
+});
+
+test('gradientBoundsCanvasSpace: a fully empty grid returns null', () => {
+  const grid = mockGrid({ width: 4, height: 4, offsetX: 0, offsetY: 0, painted: [] });
+  assert.equal(gradientBoundsCanvasSpace(grid), null);
+});
+
+test('gradientHandlePosition: angle 0 lands at the right-middle edge of the bbox', () => {
+  const bounds = { minX: 0, minY: 0, maxX: 10, maxY: 10 };
+  assert.deepEqual(gradientHandlePosition(bounds, 0), { x: 10, y: 5 });
+});
+
+test('gradientHandlePosition: angle 90 lands at the bottom-middle edge (SVG y-down)', () => {
+  const bounds = { minX: 0, minY: 0, maxX: 10, maxY: 10 };
+  assert.deepEqual(gradientHandlePosition(bounds, 90), { x: 5, y: 10 });
+});
+
+test('gradientBoundsCenter: returns the bbox midpoint', () => {
+  const bounds = { minX: 2, minY: 4, maxX: 12, maxY: 8 };
+  assert.deepEqual(gradientBoundsCenter(bounds), { x: 7, y: 6 });
+});
+
+test('angleFromHandleDrag: inverts gradientHandlePosition at cardinal angles', () => {
+  const bounds = { minX: 0, minY: 0, maxX: 10, maxY: 10 };
+  const right = gradientHandlePosition(bounds, 0);
+  assert.ok(Math.abs(angleFromHandleDrag(bounds, right.x, right.y) - 0) < 1e-9);
+  const bottom = gradientHandlePosition(bounds, 90);
+  assert.ok(Math.abs(angleFromHandleDrag(bounds, bottom.x, bottom.y) - 90) < 1e-9);
+});
+
+test('round-trip: angleFromHandleDrag(gradientHandlePosition(angle)) recovers angle, including on non-square bounds', () => {
+  const boundsList = [
+    { minX: 0, minY: 0, maxX: 10, maxY: 10 },
+    { minX: 3, minY: 5, maxX: 20, maxY: 9 },
+    { minX: -4, minY: -4, maxX: 4, maxY: 30 },
+  ];
+  for (const bounds of boundsList) {
+    for (const angle of [0, 37, 90, 179, -45, 123.4]) {
+      const { x, y } = gradientHandlePosition(bounds, angle);
+      const recovered = angleFromHandleDrag(bounds, x, y);
+      const diff = ((recovered - angle + 540) % 360) - 180;
+      assert.ok(Math.abs(diff) < 1e-9, `expected ${recovered} to match ${angle} mod 360 for bounds ${JSON.stringify(bounds)}`);
+    }
+  }
+});

@@ -344,3 +344,31 @@ test('closeProject stops any running playback', async () => {
   useStore.getState().closeProject();
   assert.equal(useStore.getState().isPlaying, false);
 });
+
+test('updateGridStyleLive mutates fill without committing; the one trailing updateGridStyle collapses a whole drag into a single undo step', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  store.setTier('advanced');
+  const layerId = useStore.getState().canvas.layers[0].id;
+  store.addGrid(layerId);
+  const gridId = useStore.getState().canvas.activeGridId;
+  const gradient = (angle) => ({ type: 'linear-gradient', angle, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] });
+  store.updateGridStyle(layerId, gridId, { fill: gradient(0) });
+
+  const styleFill = () => {
+    const canvas = useStore.getState().canvas;
+    const layer = canvas.layers.find((l) => l.id === layerId);
+    const grid = layer.frames[0].grids.find((g) => g.id === gridId);
+    return grid.style.fill;
+  };
+
+  store.updateGridStyleLive(layerId, gridId, { fill: gradient(45) });
+  store.updateGridStyleLive(layerId, gridId, { fill: gradient(90) });
+  assert.equal(styleFill().angle, 90, 'live updates apply immediately');
+
+  store.updateGridStyle(layerId, gridId, { fill: gradient(90) }); // pointer-up commit
+  assert.equal(styleFill().angle, 90);
+
+  store.undo();
+  assert.equal(styleFill().angle, 0, 'the two live calls must not have created separate undo steps');
+});

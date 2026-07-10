@@ -35,6 +35,20 @@ export function serializeFill(fill, gradientId) {
 }
 
 /**
+ * Inverse of serializeFill's linear-gradient direction math — given a
+ * vector in the same 0.5-centered objectBoundingBox-fraction space (dx, dy
+ * relative to the box center), returns the angle in degrees that would
+ * reproduce it. Not normalized to 0-360 — atan2's native -180..180 range is
+ * fine since angle only ever feeds back into cos/sin.
+ * @param {number} dx
+ * @param {number} dy
+ * @returns {number} angle in degrees
+ */
+export function angleFromVector(dx, dy) {
+  return (Math.atan2(dy, dx) * 180) / Math.PI;
+}
+
+/**
  * @param {object} [stroke] Stroke — { color, width, linecap, linejoin, dashArray? }
  * @returns {string} a leading-space-prefixed attribute fragment, or '' if there's no stroke
  */
