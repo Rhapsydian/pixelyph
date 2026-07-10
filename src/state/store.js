@@ -150,6 +150,27 @@ function clearSelectionRect(canvas, selectionScope, rect) {
 
 const autosaveScheduler = createAutosaveScheduler();
 
+/**
+ * Whole-canvas rotate, generalized to `times` 90°-clockwise passes (1 =
+ * today's rotateCanvas90, 2 = 180°, 3 = counter-clockwise 90°) — reuses
+ * rotateCanvasFrame90's already-tested per-frame/per-layer math rather than
+ * writing new pixel transforms. Width/height must swap once *per pass*, not
+ * once total: each pass's offset math needs the canvas dimensions as they
+ * stand after the previous pass, same as a single real 90° rotation would.
+ * @param {object} canvas
+ * @param {number} times
+ * @param {boolean} allFrames
+ */
+function rotateCanvasNTimes(canvas, times, allFrames) {
+  const frameIndices = allFrames ? (canvas.layers[0]?.frames.map((_, i) => i) ?? [currentFrameIndex(canvas)]) : [currentFrameIndex(canvas)];
+  for (let t = 0; t < times; t++) {
+    for (const idx of frameIndices) rotateCanvasFrame90(canvas, idx);
+    const oldWidth = canvas.width;
+    canvas.width = canvas.height;
+    canvas.height = oldWidth;
+  }
+}
+
 export const useStore = create((set, get) => {
   const initialCanvas = buildDrawDocument();
 
@@ -211,6 +232,39 @@ export const useStore = create((set, get) => {
       set({ canvas: { ...canvas }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history) });
       autosaveScheduler(serializeProject(canvas));
     }
+  }
+
+  /**
+   * Rotates the active glyph 90°-clockwise `times` times, generalizing the
+   * single-rotate case (rotateGlyph90Model already self-normalizes the
+   * glyph's height back to pixelsPerEm on every call, so looping it is
+   * safe). Only the *first* rotation in a multi-step sequence can ever be
+   * lossy — once normalized, rotating an already-pixelsPerEm-tall glyph
+   * again never needs a re-crop — so the confirm check only runs once, up
+   * front, exactly like the original single-rotate action did.
+   * @param {number} times
+   */
+  function rotateActiveGlyphNTimes(times) {
+    return async () => {
+      const { glyphSet, history, activeCodepoint } = get();
+      if (activeCodepoint == null) return;
+      const glyph = glyphSet.glyphs.get(activeCodepoint);
+      if (!glyph) return;
+      const needsRecrop = glyph.width !== glyphSet.meta.pixelsPerEm;
+      if (
+        needsRecrop &&
+        !(await get().requestConfirm(
+          `Rotating this glyph changes its height to ${glyph.width}px — it'll be re-cropped/padded back to ${glyphSet.meta.pixelsPerEm}px, which can cut off content. Continue?`,
+        ))
+      ) {
+        return;
+      }
+      for (let t = 0; t < times; t++) rotateGlyph90Model(glyphSet, glyph);
+      glyph.advanceWidth = glyph.width;
+      pushSnapshot(history, glyphContentSnapshot(glyphSet));
+      set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), glyphCanvas: glyphToCanvas(glyph) });
+      autosaveScheduler(serializeGlyphSetProject(glyphSet));
+    };
   }
 
   return {
@@ -475,12 +529,15 @@ export const useStore = create((set, get) => {
       commit();
     },
     rotateCanvas90: () => {
-      const { canvas, flipRotateAllFrames } = get();
-      const frameIndices = flipRotateAllFrames ? (canvas.layers[0]?.frames.map((_, i) => i) ?? [currentFrameIndex(canvas)]) : [currentFrameIndex(canvas)];
-      for (const idx of frameIndices) rotateCanvasFrame90(canvas, idx);
-      const oldWidth = canvas.width;
-      canvas.width = canvas.height;
-      canvas.height = oldWidth;
+      rotateCanvasNTimes(get().canvas, 1, get().flipRotateAllFrames);
+      commit();
+    },
+    rotateCanvas180: () => {
+      rotateCanvasNTimes(get().canvas, 2, get().flipRotateAllFrames);
+      commit();
+    },
+    rotateCanvasCCW90: () => {
+      rotateCanvasNTimes(get().canvas, 3, get().flipRotateAllFrames);
       commit();
     },
 
@@ -932,26 +989,9 @@ export const useStore = create((set, get) => {
       set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), glyphCanvas: glyphToCanvas(glyph) });
       autosaveScheduler(serializeGlyphSetProject(glyphSet));
     },
-    rotateActiveGlyph90: async () => {
-      const { glyphSet, history, activeCodepoint } = get();
-      if (activeCodepoint == null) return;
-      const glyph = glyphSet.glyphs.get(activeCodepoint);
-      if (!glyph) return;
-      const needsRecrop = glyph.width !== glyphSet.meta.pixelsPerEm;
-      if (
-        needsRecrop &&
-        !(await get().requestConfirm(
-          `Rotating this glyph changes its height to ${glyph.width}px — it'll be re-cropped/padded back to ${glyphSet.meta.pixelsPerEm}px, which can cut off content. Continue?`,
-        ))
-      ) {
-        return;
-      }
-      rotateGlyph90Model(glyphSet, glyph);
-      glyph.advanceWidth = glyph.width;
-      pushSnapshot(history, glyphContentSnapshot(glyphSet));
-      set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), glyphCanvas: glyphToCanvas(glyph) });
-      autosaveScheduler(serializeGlyphSetProject(glyphSet));
-    },
+    rotateActiveGlyph90: rotateActiveGlyphNTimes(1),
+    rotateActiveGlyph180: rotateActiveGlyphNTimes(2),
+    rotateActiveGlyphCCW90: rotateActiveGlyphNTimes(3),
 
     exportGlyphSvg: async () => {
       const { glyphSet, activeCodepoint } = get();

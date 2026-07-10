@@ -372,3 +372,78 @@ test('updateGridStyleLive mutates fill without committing; the one trailing upda
   store.undo();
   assert.equal(styleFill().angle, 0, 'the two live calls must not have created separate undo steps');
 });
+
+test('rotateCanvas180 leaves canvas dimensions unchanged and is its own inverse', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  store.resizeCanvas(10, 16, 'top-left');
+  paintColumn(2, 3, '#000000'); // asymmetric mark, not centered, not full-height
+
+  const original = structuredClone(useStore.getState().canvas.layers);
+  const { width: originalWidth, height: originalHeight } = useStore.getState().canvas;
+
+  store.rotateCanvas180();
+  assert.equal(useStore.getState().canvas.width, originalWidth, '180 degrees never swaps width/height');
+  assert.equal(useStore.getState().canvas.height, originalHeight);
+  assert.notDeepEqual(useStore.getState().canvas.layers, original, 'content actually moved');
+
+  store.rotateCanvas180(); // a second 180 should return to the exact original layout
+  assert.deepEqual(useStore.getState().canvas.layers, original);
+  assert.equal(useStore.getState().canvas.width, originalWidth);
+  assert.equal(useStore.getState().canvas.height, originalHeight);
+});
+
+test('rotateCanvasCCW90 is the exact inverse of rotateCanvas90', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  store.resizeCanvas(10, 16, 'top-left');
+  paintColumn(2, 3, '#000000');
+
+  const original = structuredClone(useStore.getState().canvas.layers);
+  const { width: originalWidth, height: originalHeight } = useStore.getState().canvas;
+
+  store.rotateCanvas90();
+  assert.equal(useStore.getState().canvas.width, originalHeight);
+  assert.equal(useStore.getState().canvas.height, originalWidth);
+
+  store.rotateCanvasCCW90();
+  assert.deepEqual(useStore.getState().canvas.layers, original, 'CW then CCW returns to the exact original content');
+  assert.equal(useStore.getState().canvas.width, originalWidth);
+  assert.equal(useStore.getState().canvas.height, originalHeight);
+});
+
+test('rotateActiveGlyph180/CCW90 round-trip exactly on a square (non-lossy) glyph', async () => {
+  const store = useStore.getState();
+  await store.newProject('glyph', { kind: 'characters', familyName: 'Rotate N Times Test' });
+  store.assignCodepoint(65, {});
+  const pixelsPerEm = useStore.getState().glyphSet.meta.pixelsPerEm;
+  store.resizeActiveGlyph(pixelsPerEm); // force width === pixelsPerEm === height — a new glyph's default advance width isn't necessarily square
+  paintColumn(1, pixelsPerEm, '#000000'); // no recrop ever triggers on a genuinely square glyph
+
+  const original = structuredClone(Array.from(useStore.getState().glyphSet.glyphs.entries()));
+
+  await store.rotateActiveGlyph180();
+  await store.rotateActiveGlyph180();
+  assert.deepEqual(Array.from(useStore.getState().glyphSet.glyphs.entries()), original, 'two 180s round-trip on a square glyph');
+
+  await store.rotateActiveGlyph90();
+  await store.rotateActiveGlyphCCW90();
+  assert.deepEqual(Array.from(useStore.getState().glyphSet.glyphs.entries()), original, 'CW then CCW round-trips on a square glyph');
+});
+
+test('rotateActiveGlyphCCW90 only prompts requestConfirm once for the whole multi-step rotation, not once per internal 90-degree pass', async () => {
+  const store = useStore.getState();
+  await store.newProject('glyph', { kind: 'characters', familyName: 'Confirm Count Test' });
+  store.assignCodepoint(65, {});
+  const pixelsPerEm = useStore.getState().glyphSet.meta.pixelsPerEm;
+  store.resizeActiveGlyph(pixelsPerEm + 4); // non-square — the first internal rotation needs a lossy recrop, so this should confirm
+  paintColumn(1, pixelsPerEm, '#000000');
+
+  let confirmCalls = 0;
+  useStore.setState({ requestConfirm: () => { confirmCalls++; return Promise.resolve(true); } });
+
+  await store.rotateActiveGlyphCCW90();
+  assert.equal(confirmCalls, 1, 'one confirm for the whole CCW90 call, not one per internal 90-degree pass');
+
+  useStore.setState({ requestConfirm: () => Promise.resolve(true) }); // restore the plain always-confirm stub for later tests
+});
