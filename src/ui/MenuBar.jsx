@@ -24,6 +24,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../state/store.js';
 import { useFullscreen } from './useFullscreen.js';
 import { openExternalUrl } from '../io/platform.js';
+import { TransformResizeModal } from './TransformResizeModal.jsx';
+import { TransformScopeModal } from './TransformScopeModal.jsx';
 
 const REPO_URL = 'https://github.com/Rhapsydian/pixelyph';
 
@@ -129,6 +131,25 @@ export function MenuBar() {
   const cancelFloatingSelection = useStore((s) => s.cancelFloatingSelection);
   const dropFloatingSelection = useStore((s) => s.dropFloatingSelection);
 
+  // --- Transform menu (resize/flip/rotate) ---
+  const frameCount = useStore((s) => s.canvas.frameCount);
+  const flipCanvasH = useStore((s) => s.flipCanvasH);
+  const flipCanvasV = useStore((s) => s.flipCanvasV);
+  const rotateCanvas90 = useStore((s) => s.rotateCanvas90);
+  const rotateCanvas180 = useStore((s) => s.rotateCanvas180);
+  const rotateCanvasCCW90 = useStore((s) => s.rotateCanvasCCW90);
+  const flipActiveGlyphH = useStore((s) => s.flipActiveGlyphH);
+  const flipActiveGlyphV = useStore((s) => s.flipActiveGlyphV);
+  const rotateActiveGlyph90 = useStore((s) => s.rotateActiveGlyph90);
+  const rotateActiveGlyph180 = useStore((s) => s.rotateActiveGlyph180);
+  const rotateActiveGlyphCCW90 = useStore((s) => s.rotateActiveGlyphCCW90);
+  const [resizeModalOpen, setResizeModalOpen] = useState(false);
+  // The pending flip/rotate action awaiting an "apply to all frames?" answer
+  // — null means no scope modal is open. Only Draw mode with 2+ frames ever
+  // sets this; everything else (Glyph mode, or a single-frame project) runs
+  // the action directly with no modal, since there's nothing to choose.
+  const [pendingScopeAction, setPendingScopeAction] = useState(/** @type {{title: string, action: () => void}|null} */ (null));
+
   const [openMenu, setOpenMenu] = useState(/** @type {string|null} */ (null));
   const [isFullscreen, toggleFullscreen] = useFullscreen();
   const rootRef = useRef(null);
@@ -186,6 +207,21 @@ export function MenuBar() {
 
   const hasSelection = Boolean(selection || floatingSelection);
 
+  /**
+   * Flip/Rotate menu items funnel through here rather than straight to
+   * runAndClose: in Glyph mode, or a Draw-mode project with only one frame,
+   * "apply to all frames?" is a meaningless question, so the action just
+   * runs immediately, matching today's one-click behavior. Only a Draw-mode
+   * project with 2+ frames opens the scope modal.
+   */
+  function runTransform(title, action) {
+    return () => {
+      setOpenMenu(null);
+      if (mode === 'glyph' || frameCount <= 1) action();
+      else setPendingScopeAction({ title, action });
+    };
+  }
+
   return (
     <div ref={rootRef} style={{ display: 'flex' }}>
       <Menu id="file" label="File" openMenu={openMenu} setOpenMenu={setOpenMenu}>
@@ -234,6 +270,32 @@ export function MenuBar() {
       <input ref={paletteFileInputRef} type="file" accept=".hex,.txt,.json" onChange={handleImportPaletteFile} style={{ display: 'none' }} />
       <input ref={paletteImageInputRef} type="file" accept="image/*" onChange={handleImportPaletteImageFile} style={{ display: 'none' }} />
 
+      <Menu id="transform" label="Transform" openMenu={openMenu} setOpenMenu={setOpenMenu}>
+        <MenuItem label="Resize…" onClick={runAndClose(() => setResizeModalOpen(true))} />
+        <MenuDivider />
+        <MenuItem
+          label="Flip Horizontal"
+          onClick={runTransform('Flip Horizontal', mode === 'glyph' ? flipActiveGlyphH : flipCanvasH)}
+        />
+        <MenuItem
+          label="Flip Vertical"
+          onClick={runTransform('Flip Vertical', mode === 'glyph' ? flipActiveGlyphV : flipCanvasV)}
+        />
+        <MenuDivider />
+        <MenuItem
+          label="Rotate 90° CW"
+          onClick={runTransform('Rotate 90° CW', mode === 'glyph' ? rotateActiveGlyph90 : rotateCanvas90)}
+        />
+        <MenuItem
+          label="Rotate 90° CCW"
+          onClick={runTransform('Rotate 90° CCW', mode === 'glyph' ? rotateActiveGlyphCCW90 : rotateCanvasCCW90)}
+        />
+        <MenuItem
+          label="Rotate 180°"
+          onClick={runTransform('Rotate 180°', mode === 'glyph' ? rotateActiveGlyph180 : rotateCanvas180)}
+        />
+      </Menu>
+
       <Menu id="window" label="Window" openMenu={openMenu} setOpenMenu={setOpenMenu}>
         <MenuItem label={isFullscreen ? 'Exit Fullscreen' : 'Toggle Fullscreen'} onClick={runAndClose(toggleFullscreen)} />
       </Menu>
@@ -242,6 +304,15 @@ export function MenuBar() {
         <MenuItem label="About Pixelyph" onClick={runAndClose(() => setAboutModalOpen(true))} />
         <MenuItem label="Visit on GitHub" onClick={runAndClose(() => openExternalUrl(REPO_URL))} />
       </Menu>
+
+      {resizeModalOpen && <TransformResizeModal onClose={() => setResizeModalOpen(false)} />}
+      {pendingScopeAction && (
+        <TransformScopeModal
+          title={pendingScopeAction.title}
+          onConfirm={pendingScopeAction.action}
+          onClose={() => setPendingScopeAction(null)}
+        />
+      )}
     </div>
   );
 }
