@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createGrid, get, set, resize, clone, createShapeGrid, growGridToInclude, minimalBounds, shrinkGridToFit, mergeGridDown, stylesEqual } from '../../src/model/Grid.js';
+import { createGrid, get, set, resize, clone, createShapeGrid, growGridToInclude, minimalBounds, shrinkGridToFit, mergeGridDown, stylesEqual, flipPixelsH, flipPixelsV, rotatePixels90, flipGridH, flipGridV, rotateGrid90 } from '../../src/model/Grid.js';
 
 function fill(grid, values) {
   grid.pixels.set(values);
@@ -253,4 +253,53 @@ test('stylesEqual compares fill/stroke/effects, matching solid colors, gradients
 
   assert.ok(!stylesEqual({ fill: '#fff', stroke: { color: '#000', width: 1 }, effects: [] }, { fill: '#fff', effects: [] }));
   assert.ok(!stylesEqual({ fill: '#fff', effects: [{ kind: 'glow' }] }, { fill: '#fff', effects: [] }));
+});
+
+// --- Flip/rotate (Checkpoint 6) ---
+
+test('flipPixelsH mirrors each row horizontally', () => {
+  const pixels = new Uint8Array([1, 0, 0, 0, 1, 1]); // 3x2
+  assert.deepEqual(Array.from(flipPixelsH(3, 2, pixels)), [0, 0, 1, 1, 1, 0]);
+});
+
+test('flipPixelsV mirrors rows top-to-bottom', () => {
+  const pixels = new Uint8Array([1, 0, 0, 0, 1, 1]); // 3x2
+  assert.deepEqual(Array.from(flipPixelsV(3, 2, pixels)), [0, 1, 1, 1, 0, 0]);
+});
+
+test('rotatePixels90 rotates clockwise and swaps width/height', () => {
+  // 2x3: row0=[1,0] row1=[0,1] row2=[1,1]
+  const pixels = new Uint8Array([1, 0, 0, 1, 1, 1]);
+  const rotated = rotatePixels90(2, 3, pixels);
+  assert.equal(rotated.width, 3);
+  assert.equal(rotated.height, 2);
+  assert.deepEqual(Array.from(rotated.pixels), [1, 0, 1, 1, 1, 0]);
+});
+
+test('flipGridH mirrors a Grid\'s own buffer in place, bounding box unchanged (mirrors around its own center)', () => {
+  const grid = { offsetX: 5, offsetY: 3, width: 3, height: 2, pixels: new Uint8Array([1, 0, 0, 0, 1, 1]) };
+  flipGridH(grid);
+  assert.equal(grid.offsetX, 5);
+  assert.equal(grid.offsetY, 3);
+  assert.equal(grid.width, 3);
+  assert.equal(grid.height, 2);
+  assert.deepEqual(Array.from(grid.pixels), [0, 0, 1, 1, 1, 0]);
+});
+
+test('flipGridV mirrors a Grid\'s own buffer in place, bounding box unchanged', () => {
+  const grid = { offsetX: 5, offsetY: 3, width: 3, height: 2, pixels: new Uint8Array([1, 0, 0, 0, 1, 1]) };
+  flipGridV(grid);
+  assert.equal(grid.offsetX, 5);
+  assert.equal(grid.offsetY, 3);
+  assert.deepEqual(Array.from(grid.pixels), [0, 1, 1, 1, 0, 0]);
+});
+
+test('rotateGrid90 swaps width/height and keeps the shape\'s own center fixed', () => {
+  const grid = { offsetX: 10, offsetY: 10, width: 4, height: 2, pixels: new Uint8Array(8).fill(1) };
+  rotateGrid90(grid);
+  assert.equal(grid.width, 2);
+  assert.equal(grid.height, 4);
+  // old center = (10+2, 10+1) = (12, 11); new offset = center - newSize/2
+  assert.equal(grid.offsetX, 11); // 12 - 1
+  assert.equal(grid.offsetY, 9); // 11 - 2
 });

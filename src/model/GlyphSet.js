@@ -14,7 +14,7 @@
 // a stroke commits; see state/store.js's glyph-mode commit path.
 
 import { createCanvas, paintCell as paintCanvasCell } from './Canvas.js';
-import { resize as resizeGrid } from './Grid.js';
+import { resize as resizeGrid, flipPixelsH, flipPixelsV, rotatePixels90 } from './Grid.js';
 
 const GLYPH_FILL = '#000000';
 
@@ -124,6 +124,39 @@ export function resizeGlyphSet(glyphSet, newPixelsPerEm, anchor = 'top-left') {
     glyph.height = newPixelsPerEm;
   }
   glyphSet.meta.pixelsPerEm = newPixelsPerEm;
+}
+
+/** Mirrors one glyph's own pixel buffer horizontally, in place — width/height unchanged, no re-crop needed. */
+export function flipGlyphH(glyph) {
+  glyph.pixels = flipPixelsH(glyph.width, glyph.height, glyph.pixels);
+}
+
+/** @see flipGlyphH */
+export function flipGlyphV(glyph) {
+  glyph.pixels = flipPixelsV(glyph.width, glyph.height, glyph.pixels);
+}
+
+/**
+ * Rotates one glyph's own pixel buffer 90° clockwise (width/height swap),
+ * then re-crops/pads it back to the font's shared pixelsPerEm height via
+ * the same Grid.resize primitive resizeGlyphSet uses — lossy only when the
+ * rotated height doesn't already match pixelsPerEm (i.e. the glyph wasn't
+ * itself pixelsPerEm-wide before rotating). Callers should confirm first
+ * when that's the case, same as resizeGlyphSet/the tier-collapse convert.
+ *
+ * @param {object} glyphSet
+ * @param {object} glyph
+ */
+export function rotateGlyph90(glyphSet, glyph) {
+  const rotated = rotatePixels90(glyph.width, glyph.height, glyph.pixels);
+  glyph.width = rotated.width;
+  glyph.height = rotated.height;
+  glyph.pixels = rotated.pixels;
+  const pixelsPerEm = glyphSet.meta.pixelsPerEm;
+  if (glyph.height !== pixelsPerEm) {
+    glyph.pixels = resizeGrid(glyph, glyph.width, pixelsPerEm).pixels;
+    glyph.height = pixelsPerEm;
+  }
 }
 
 /**

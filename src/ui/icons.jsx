@@ -342,6 +342,39 @@ export function VerticalSymmetryIcon(props) {
   );
 }
 
+// Flip-H/Flip-V (Checkpoint 6): the same opposing-triangles-across-an-axis
+// motif as the symmetry toggles above, but with a *solid* divider line
+// instead of dashed — solid reads as "this actually flips the content now,"
+// dashed as "this is a live mirror guide while painting."
+export function FlipHorizontalIcon(props) {
+  return (
+    <Svg {...props}>
+      <path d="M10 2v16" />
+      <path d="M4 6v8l4-4Z" />
+      <path d="M16 6v8l-4-4Z" />
+    </Svg>
+  );
+}
+
+export function FlipVerticalIcon(props) {
+  return (
+    <Svg {...props}>
+      <path d="M2 10h16" />
+      <path d="M6 4h8l-4 4Z" />
+      <path d="M6 16h8l-4-4Z" />
+    </Svg>
+  );
+}
+
+export function Rotate90Icon(props) {
+  return (
+    <Svg {...props}>
+      <path d="M15.5 7A6 6 0 1 1 10 4" />
+      <path d="M15.5 3v4h-4" />
+    </Svg>
+  );
+}
+
 export function FullscreenExitIcon(props) {
   return (
     <Svg {...props}>

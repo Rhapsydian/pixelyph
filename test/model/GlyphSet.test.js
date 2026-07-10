@@ -12,6 +12,9 @@ import {
   resizeGlyphSet,
   glyphToCanvas,
   canvasToGlyphPixels,
+  flipGlyphH,
+  flipGlyphV,
+  rotateGlyph90,
 } from '../../src/model/GlyphSet.js';
 
 test('createGlyphSet defaults to character kind with default FontMeta', () => {
@@ -78,6 +81,43 @@ test('resizeGlyphSet pads/crops every glyph height uniformly, leaving width unto
   const shrunk = getGlyph(glyphSet, 65);
   assert.equal(shrunk.height, 1);
   assert.deepEqual(Array.from(shrunk.pixels), [1, 1]);
+});
+
+// --- Flip/rotate (Checkpoint 6) ---
+
+test('flipGlyphH/flipGlyphV mirror a glyph\'s own buffer, width/height unchanged', () => {
+  const glyph = createGlyph({ width: 3, height: 2 });
+  glyph.pixels.set([1, 0, 0, 0, 1, 1]);
+
+  flipGlyphH(glyph);
+  assert.equal(glyph.width, 3);
+  assert.equal(glyph.height, 2);
+  assert.deepEqual(Array.from(glyph.pixels), [0, 0, 1, 1, 1, 0]);
+
+  flipGlyphV(glyph);
+  assert.deepEqual(Array.from(glyph.pixels), [1, 1, 0, 0, 0, 1]);
+});
+
+test('rotateGlyph90 needs no re-crop when the rotated height already matches pixelsPerEm', () => {
+  const glyphSet = createGlyphSet({}); // pixelsPerEm defaults to 16
+  const glyph = createGlyph({ width: 16, height: 16 }); // square: rotated height = old width = 16
+  glyph.pixels[0] = 1;
+  rotateGlyph90(glyphSet, glyph);
+  assert.equal(glyph.width, 16);
+  assert.equal(glyph.height, 16);
+});
+
+test('rotateGlyph90 re-crops/pads back to pixelsPerEm when rotation changes the height', () => {
+  const glyphSet = createGlyphSet({}); // pixelsPerEm = 16
+  const glyph = createGlyph({ width: 4, height: 16 }); // narrow glyph
+  glyph.pixels.fill(1);
+
+  rotateGlyph90(glyphSet, glyph);
+
+  // post-rotate (before recrop): width=16 (old height), height=4 (old width) -> padded back to 16
+  assert.equal(glyph.width, 16);
+  assert.equal(glyph.height, 16);
+  assert.equal(glyph.pixels.length, 16 * 16);
 });
 
 test('glyphToCanvas/canvasToGlyphPixels round-trips a glyph exactly', () => {

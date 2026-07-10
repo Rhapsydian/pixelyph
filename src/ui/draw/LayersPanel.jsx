@@ -44,7 +44,7 @@ import { useEffect, useState } from 'react';
 import { useStore } from '../../state/store.js';
 import { composeFrameBody } from '../../export/svg/composeLayersSvg.js';
 import { IconButton } from '../IconButton.jsx';
-import { EyeIcon, EyeOffIcon, LockIcon, UnlockIcon, MoveUpIcon, MoveDownIcon, TrashIcon, DuplicateIcon, MergeDownIcon, AddLayerIcon, AddShapeIcon, AlphaIcon, ChevronDownIcon } from '../icons.jsx';
+import { EyeIcon, EyeOffIcon, LockIcon, UnlockIcon, MoveUpIcon, MoveDownIcon, TrashIcon, DuplicateIcon, MergeDownIcon, AddLayerIcon, AddShapeIcon, AlphaIcon, ChevronDownIcon, FlipHorizontalIcon, FlipVerticalIcon, Rotate90Icon } from '../icons.jsx';
 
 // Matches the two-row name/controls block's actual rendered height (a text
 // input plus a 4px gap plus a row of 32px icon buttons) — an SVG has no
@@ -285,6 +285,12 @@ function LayersToolbar({ canvas, selectionKind, onAddShape, showShapes }) {
   const duplicateGrid = useStore((s) => s.duplicateGrid);
   const mergeGridDown = useStore((s) => s.mergeGridDown);
   const removeGrid = useStore((s) => s.removeGrid);
+  const flipActiveShapeH = useStore((s) => s.flipActiveShapeH);
+  const flipActiveShapeV = useStore((s) => s.flipActiveShapeV);
+  const rotateActiveShape90 = useStore((s) => s.rotateActiveShape90);
+  const flipActiveLayerH = useStore((s) => s.flipActiveLayerH);
+  const flipActiveLayerV = useStore((s) => s.flipActiveLayerV);
+  const rotateActiveLayer90 = useStore((s) => s.rotateActiveLayer90);
 
   const activeLayer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
   const activeGrid = activeLayer?.frames[canvas.activeFrame]?.grids.find((g) => g.id === canvas.activeGridId);
@@ -303,6 +309,9 @@ function LayersToolbar({ canvas, selectionKind, onAddShape, showShapes }) {
         <IconButton icon={<DuplicateIcon />} label="Duplicate shape" onClick={() => duplicateGrid(activeLayer.id, activeGrid.id)} />
         <IconButton icon={<MergeDownIcon />} label="Merge down (keeps the shape below's style)" disabled={isBottom} onClick={() => mergeGridDown(activeLayer.id, activeGrid.id)} />
         <IconButton icon={<TrashIcon />} label="Delete shape" onClick={() => removeGrid(activeLayer.id, activeGrid.id)} />
+        <IconButton icon={<FlipHorizontalIcon />} label="Flip shape horizontal" onClick={flipActiveShapeH} />
+        <IconButton icon={<FlipVerticalIcon />} label="Flip shape vertical" onClick={flipActiveShapeV} />
+        <IconButton icon={<Rotate90Icon />} label="Rotate shape 90°" onClick={rotateActiveShape90} />
       </>
     );
   } else {
@@ -317,6 +326,9 @@ function LayersToolbar({ canvas, selectionKind, onAddShape, showShapes }) {
         <IconButton icon={<DuplicateIcon />} label="Duplicate layer" disabled={!hasActive} onClick={() => duplicateLayer(canvas.activeLayerId)} />
         <IconButton icon={<MergeDownIcon />} label="Merge down (preserves each shape's own style)" disabled={!hasActive || isBottom} onClick={() => mergeLayerDown(canvas.activeLayerId)} />
         <IconButton icon={<TrashIcon />} label="Delete layer" disabled={!hasActive} onClick={() => removeLayer(canvas.activeLayerId)} />
+        <IconButton icon={<FlipHorizontalIcon />} label="Flip layer horizontal" disabled={!hasActive} onClick={flipActiveLayerH} />
+        <IconButton icon={<FlipVerticalIcon />} label="Flip layer vertical" disabled={!hasActive} onClick={flipActiveLayerV} />
+        <IconButton icon={<Rotate90Icon />} label="Rotate layer 90°" disabled={!hasActive} onClick={rotateActiveLayer90} />
       </>
     );
   }

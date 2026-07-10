@@ -30,6 +30,12 @@ import {
   duplicateGrid as duplicateGridModel,
   mergeGridDown as mergeGridDownModel,
   nudgeLayerFrame as nudgeLayerFrameModel,
+  flipLayerFrameH,
+  flipLayerFrameV,
+  rotateLayerFrame90,
+  flipCanvasFrameH,
+  flipCanvasFrameV,
+  rotateCanvasFrame90,
   currentFrameIndex,
   refreshActiveGrid as refreshActiveGridModel,
   clampActiveLayer,
@@ -71,8 +77,8 @@ import { copySvgToClipboard } from '../export/clipboard.js';
 import { serializeProject, deserializeProject, saveProjectToString, loadProjectFromString, serializeGlyphSetProject, deserializeGlyphSetProject, saveGlyphProjectToString, loadGlyphProjectFromString } from '../io/projectFile.js';
 import { saveFile, openFile } from '../io/platform.js';
 import { readAutosave, clearAutosave, createAutosaveScheduler } from '../io/autosave.js';
-import { createGlyphSet, createGlyph, setGlyph as setGlyphModel, removeGlyph as removeGlyphModel, nextIconCodepoint, resizeGlyphSet as resizeGlyphSetModel, glyphToCanvas, canvasToGlyphPixels } from '../model/GlyphSet.js';
-import { resize as resizeGrid } from '../model/Grid.js';
+import { createGlyphSet, createGlyph, setGlyph as setGlyphModel, removeGlyph as removeGlyphModel, nextIconCodepoint, resizeGlyphSet as resizeGlyphSetModel, glyphToCanvas, canvasToGlyphPixels, flipGlyphH, flipGlyphV, rotateGlyph90 as rotateGlyph90Model } from '../model/GlyphSet.js';
+import { resize as resizeGrid, flipGridH, flipGridV, rotateGrid90 } from '../model/Grid.js';
 import { glyphToSvg } from '../export/svg/glyphSvg.js';
 import { buildDrawDocument, buildGlyphDocument, DEFAULT_INITIAL_CHARSET_PRESET } from '../model/projectFactory.js';
 import { compileFont, fontToArrayBuffer } from '../export/font/compileFont.js';
@@ -236,6 +242,7 @@ export const useStore = create((set, get) => {
     viewportSize: { width: 0, height: 0 },
     showGrid: false,
     tileGridSize: 0, // 0 = off; a positive integer = tile guide size in cells
+    flipRotateAllFrames: false, // frame-scope choice for layer/canvas-level flip/rotate — this frame only (false) or every frame (true)
 
     selection: null,
     floatingSelection: null,
@@ -254,6 +261,7 @@ export const useStore = create((set, get) => {
     setViewportSize: (viewportSize) => set({ viewportSize }),
     toggleGrid: () => set((s) => ({ showGrid: !s.showGrid })),
     setTileGridSize: (size) => set({ tileGridSize: Math.max(0, Math.round(Number(size) || 0)) }),
+    setFlipRotateAllFrames: (allFrames) => set({ flipRotateAllFrames: allFrames }),
     setSelectionScope: (scope) => set({ selectionScope: scope }),
 
     // Working-session conveniences: persisted with the project, excluded from undo.
@@ -388,6 +396,89 @@ export const useStore = create((set, get) => {
       nudgeLayerFrameModel(doc, layerId, frameIndex, dx, dy);
       commit();
     },
+
+    // --- Flip/rotate (Checkpoint 6) — Shape tier only (LayersPanel's Shape
+    // rows never render in Pixel tier or Glyph mode, so these are never
+    // reachable there; no mode/tier guard needed beyond the null-check). ---
+    flipActiveShapeH: () => {
+      const canvas = get().canvas;
+      const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
+      const grid = layer?.frames[currentFrameIndex(canvas)]?.grids.find((g) => g.id === canvas.activeGridId);
+      if (!grid) return;
+      flipGridH(grid);
+      commit();
+    },
+    flipActiveShapeV: () => {
+      const canvas = get().canvas;
+      const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
+      const grid = layer?.frames[currentFrameIndex(canvas)]?.grids.find((g) => g.id === canvas.activeGridId);
+      if (!grid) return;
+      flipGridV(grid);
+      commit();
+    },
+    rotateActiveShape90: () => {
+      const canvas = get().canvas;
+      const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
+      const grid = layer?.frames[currentFrameIndex(canvas)]?.grids.find((g) => g.id === canvas.activeGridId);
+      if (!grid) return;
+      rotateGrid90(grid);
+      commit();
+    },
+
+    // --- Flip/rotate — layer-level (both tiers). Honors flipRotateAllFrames
+    // for which frame(s) of the active layer get transformed. ---
+    flipActiveLayerH: () => {
+      const { canvas, flipRotateAllFrames } = get();
+      const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
+      if (!layer) return;
+      const frameIndices = flipRotateAllFrames ? layer.frames.map((_, i) => i) : [currentFrameIndex(canvas)];
+      for (const idx of frameIndices) flipLayerFrameH(canvas, layer.id, idx);
+      commit();
+    },
+    flipActiveLayerV: () => {
+      const { canvas, flipRotateAllFrames } = get();
+      const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
+      if (!layer) return;
+      const frameIndices = flipRotateAllFrames ? layer.frames.map((_, i) => i) : [currentFrameIndex(canvas)];
+      for (const idx of frameIndices) flipLayerFrameV(canvas, layer.id, idx);
+      commit();
+    },
+    rotateActiveLayer90: () => {
+      const { canvas, flipRotateAllFrames } = get();
+      const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
+      if (!layer) return;
+      const frameIndices = flipRotateAllFrames ? layer.frames.map((_, i) => i) : [currentFrameIndex(canvas)];
+      for (const idx of frameIndices) rotateLayerFrame90(canvas, layer.id, idx);
+      commit();
+    },
+
+    // --- Flip/rotate — whole-canvas (Draw mode only; Glyph mode's
+    // whole-glyph equivalent is flipActiveGlyphH/V/rotateActiveGlyph90
+    // below, which also needs the pixelsPerEm re-crop/confirm step canvas
+    // rotation doesn't). Honors flipRotateAllFrames like the layer-level
+    // actions above. ---
+    flipCanvasH: () => {
+      const { canvas, flipRotateAllFrames } = get();
+      const frameIndices = flipRotateAllFrames ? (canvas.layers[0]?.frames.map((_, i) => i) ?? [currentFrameIndex(canvas)]) : [currentFrameIndex(canvas)];
+      for (const idx of frameIndices) flipCanvasFrameH(canvas, idx);
+      commit();
+    },
+    flipCanvasV: () => {
+      const { canvas, flipRotateAllFrames } = get();
+      const frameIndices = flipRotateAllFrames ? (canvas.layers[0]?.frames.map((_, i) => i) ?? [currentFrameIndex(canvas)]) : [currentFrameIndex(canvas)];
+      for (const idx of frameIndices) flipCanvasFrameV(canvas, idx);
+      commit();
+    },
+    rotateCanvas90: () => {
+      const { canvas, flipRotateAllFrames } = get();
+      const frameIndices = flipRotateAllFrames ? (canvas.layers[0]?.frames.map((_, i) => i) ?? [currentFrameIndex(canvas)]) : [currentFrameIndex(canvas)];
+      for (const idx of frameIndices) rotateCanvasFrame90(canvas, idx);
+      const oldWidth = canvas.width;
+      canvas.width = canvas.height;
+      canvas.height = oldWidth;
+      commit();
+    },
+
     setLayerProps: (layerId, patch) => {
       const layer = get().canvas.layers.find((l) => l.id === layerId);
       if (!layer) return;
@@ -786,6 +877,56 @@ export const useStore = create((set, get) => {
       glyph.pixels = resizeGrid(glyph, newWidth, glyph.height, anchor).pixels;
       glyph.width = newWidth;
       glyph.advanceWidth = newWidth;
+      pushSnapshot(history, glyphContentSnapshot(glyphSet));
+      set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), glyphCanvas: glyphToCanvas(glyph) });
+      autosaveScheduler(serializeGlyphSetProject(glyphSet));
+    },
+
+    // --- Flip/rotate (Checkpoint 6) — Glyph mode operates directly on the
+    // active Glyph's own flat pixel buffer (mirroring resizeActiveGlyph's
+    // pattern above), not the layer/offset machinery Draw mode's canvas-
+    // level actions use — a glyph has no layers/offsets of its own, just
+    // one buffer. Flip needs no special handling (dimensions unchanged);
+    // rotate can change the glyph's height, which every other glyph in the
+    // font expects to stay at a uniform pixelsPerEm, so it re-crops/pads
+    // back afterward (rotateGlyph90Model), confirmed first when that's
+    // actually lossy.
+    flipActiveGlyphH: () => {
+      const { glyphSet, history, activeCodepoint } = get();
+      if (activeCodepoint == null) return;
+      const glyph = glyphSet.glyphs.get(activeCodepoint);
+      if (!glyph) return;
+      flipGlyphH(glyph);
+      pushSnapshot(history, glyphContentSnapshot(glyphSet));
+      set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), glyphCanvas: glyphToCanvas(glyph) });
+      autosaveScheduler(serializeGlyphSetProject(glyphSet));
+    },
+    flipActiveGlyphV: () => {
+      const { glyphSet, history, activeCodepoint } = get();
+      if (activeCodepoint == null) return;
+      const glyph = glyphSet.glyphs.get(activeCodepoint);
+      if (!glyph) return;
+      flipGlyphV(glyph);
+      pushSnapshot(history, glyphContentSnapshot(glyphSet));
+      set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), glyphCanvas: glyphToCanvas(glyph) });
+      autosaveScheduler(serializeGlyphSetProject(glyphSet));
+    },
+    rotateActiveGlyph90: async () => {
+      const { glyphSet, history, activeCodepoint } = get();
+      if (activeCodepoint == null) return;
+      const glyph = glyphSet.glyphs.get(activeCodepoint);
+      if (!glyph) return;
+      const needsRecrop = glyph.width !== glyphSet.meta.pixelsPerEm;
+      if (
+        needsRecrop &&
+        !(await get().requestConfirm(
+          `Rotating this glyph changes its height to ${glyph.width}px — it'll be re-cropped/padded back to ${glyphSet.meta.pixelsPerEm}px, which can cut off content. Continue?`,
+        ))
+      ) {
+        return;
+      }
+      rotateGlyph90Model(glyphSet, glyph);
+      glyph.advanceWidth = glyph.width;
       pushSnapshot(history, glyphContentSnapshot(glyphSet));
       set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), glyphCanvas: glyphToCanvas(glyph) });
       autosaveScheduler(serializeGlyphSetProject(glyphSet));

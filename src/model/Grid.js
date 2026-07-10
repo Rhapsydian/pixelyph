@@ -103,6 +103,72 @@ export function clone(grid) {
   return { width: grid.width, height: grid.height, pixels: grid.pixels.slice() };
 }
 
+// --- Flip/rotate (Checkpoint 6): pure buffer transforms, shared by every
+// scope (shape/layer/canvas/glyph) — each scope just decides how to
+// reposition the transformed buffer's offset afterward (see Canvas.js for
+// the layer/canvas-level axis-remap math, GlyphSet.js for the glyph case).
+
+/** @returns {Uint8Array} a new horizontally-mirrored copy of `pixels` (same width/height). */
+export function flipPixelsH(width, height, pixels) {
+  const result = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      result[y * width + x] = pixels[y * width + (width - 1 - x)];
+    }
+  }
+  return result;
+}
+
+/** @returns {Uint8Array} a new vertically-mirrored copy of `pixels` (same width/height). */
+export function flipPixelsV(width, height, pixels) {
+  const result = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      result[y * width + x] = pixels[(height - 1 - y) * width + x];
+    }
+  }
+  return result;
+}
+
+/**
+ * Rotates a pixel buffer 90° clockwise — width/height swap. Standard raster
+ * rotate index remap: new(nx, ny) = old(ny, height-1-nx).
+ * @returns {{width: number, height: number, pixels: Uint8Array}}
+ */
+export function rotatePixels90(width, height, pixels) {
+  const newWidth = height;
+  const newHeight = width;
+  const result = new Uint8Array(newWidth * newHeight);
+  for (let ny = 0; ny < newHeight; ny++) {
+    for (let nx = 0; nx < newWidth; nx++) {
+      result[ny * newWidth + nx] = pixels[(height - 1 - nx) * width + ny];
+    }
+  }
+  return { width: newWidth, height: newHeight, pixels: result };
+}
+
+/** Shape-level flip: mirrors a Grid's own buffer in place — bounding box (offset/width/height) unchanged, since it mirrors around its own center. */
+export function flipGridH(grid) {
+  grid.pixels = flipPixelsH(grid.width, grid.height, grid.pixels);
+}
+
+/** @see flipGridH */
+export function flipGridV(grid) {
+  grid.pixels = flipPixelsV(grid.width, grid.height, grid.pixels);
+}
+
+/** Shape-level rotate: rotates a Grid's own buffer 90° clockwise in place, keeping its center fixed (width/height swap repositions offsetX/offsetY so the shape doesn't drift). */
+export function rotateGrid90(grid) {
+  const { width, height, pixels } = rotatePixels90(grid.width, grid.height, grid.pixels);
+  const newOffsetX = Math.round(grid.offsetX + grid.width / 2 - width / 2);
+  const newOffsetY = Math.round(grid.offsetY + grid.height / 2 - height / 2);
+  grid.width = width;
+  grid.height = height;
+  grid.pixels = pixels;
+  grid.offsetX = newOffsetX;
+  grid.offsetY = newOffsetY;
+}
+
 // --- Shape (Grid) — a styled, auto-cropped object within a Layer's frame ---
 
 /**

@@ -26,6 +26,12 @@ import {
   resolveActiveGrid,
   refreshActiveGrid,
   nudgeLayerFrame,
+  flipLayerFrameH,
+  flipLayerFrameV,
+  rotateLayerFrame90,
+  flipCanvasFrameH,
+  flipCanvasFrameV,
+  rotateCanvasFrame90,
 } from '../../src/model/Canvas.js';
 
 test('colorAt reads the topmost (last) visible layer that owns a cell', () => {
@@ -108,6 +114,92 @@ test('nudgeLayerFrame is a no-op for an unknown layerId', () => {
   paintCell(canvas, 0, 0, '#ff0000');
   nudgeLayerFrame(canvas, 'does-not-exist', 0, 1, 1);
   assert.equal(colorAt(canvas, 0, 0), '#ff0000');
+});
+
+// --- Flip/rotate (Checkpoint 6): layer/canvas-level offset-remap math ---
+// (Grids are constructed directly rather than via paintCell, since advanced
+// tier's paintCell reuses one active Grid across separate paint calls
+// rather than creating a second one — see the Checkpoint 2 nudge tests'
+// own note on this. Direct construction gives full control over each
+// grid's exact offset/width/height for these offset-math assertions.)
+
+function makeTestGrid(id, offsetX, offsetY, width, height, fill) {
+  return { id, name: id, offsetX, offsetY, width, height, pixels: new Uint8Array(width * height).fill(1), style: { fill, effects: [] }, visible: true, locked: false, opacity: 1 };
+}
+
+test('flipLayerFrameH mirrors every grid in one layer/frame against canvas.width, offsetY untouched', () => {
+  const canvas = createCanvas({ width: 10, height: 6 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas);
+  const grid = makeTestGrid('g1', 2, 1, 3, 2, '#ff0000');
+  layer.frames[0].grids.push(grid);
+
+  flipLayerFrameH(canvas, layer.id, 0);
+
+  assert.equal(grid.offsetX, 10 - 2 - 3); // 5
+  assert.equal(grid.offsetY, 1); // unchanged
+  assert.equal(grid.width, 3);
+  assert.equal(grid.height, 2);
+});
+
+test('flipLayerFrameV mirrors every grid in one layer/frame against canvas.height, offsetX untouched', () => {
+  const canvas = createCanvas({ width: 10, height: 6 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas);
+  const grid = makeTestGrid('g1', 2, 1, 3, 2, '#ff0000');
+  layer.frames[0].grids.push(grid);
+
+  flipLayerFrameV(canvas, layer.id, 0);
+
+  assert.equal(grid.offsetX, 2); // unchanged
+  assert.equal(grid.offsetY, 6 - 1 - 2); // 3
+});
+
+test('rotateLayerFrame90 repositions each grid against canvas dimensions (not its own), swapping its own width/height', () => {
+  const canvas = createCanvas({ width: 10, height: 6 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas);
+  const grid = makeTestGrid('g1', 2, 1, 4, 2, '#ff0000');
+  layer.frames[0].grids.push(grid);
+
+  rotateLayerFrame90(canvas, layer.id, 0);
+
+  assert.equal(grid.width, 2); // old height
+  assert.equal(grid.height, 4); // old width
+  assert.equal(grid.offsetX, 6 - 1 - 2); // canvas.height - old offsetY - old height = 3
+  assert.equal(grid.offsetY, 2); // old offsetX
+  // canvas itself is untouched here — swapping width/height is the caller's job (state/store.js)
+  assert.equal(canvas.width, 10);
+  assert.equal(canvas.height, 6);
+});
+
+test('flipCanvasFrameH applies to every layer for one frame', () => {
+  const canvas = createCanvas({ width: 10, height: 10 });
+  canvas.tier = 'advanced';
+  const a = addLayer(canvas, { name: 'A' });
+  a.frames[0].grids.push(makeTestGrid('ga', 1, 1, 1, 1, '#ff0000'));
+  const b = addLayer(canvas, { name: 'B' });
+  b.frames[0].grids.push(makeTestGrid('gb', 5, 2, 1, 1, '#00ff00'));
+
+  flipCanvasFrameH(canvas, 0);
+
+  assert.equal(a.frames[0].grids[0].offsetX, 10 - 1 - 1); // 8
+  assert.equal(b.frames[0].grids[0].offsetX, 10 - 5 - 1); // 4
+});
+
+test('rotateCanvasFrame90 repositions every layer\'s grids for one frame, leaving canvas.width/height for the caller to swap', () => {
+  const canvas = createCanvas({ width: 10, height: 6 });
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas);
+  layer.frames[0].grids.push(makeTestGrid('g1', 2, 1, 1, 1, '#ff0000'));
+
+  rotateCanvasFrame90(canvas, 0);
+
+  assert.equal(canvas.width, 10);
+  assert.equal(canvas.height, 6);
+  const grid = layer.frames[0].grids[0];
+  assert.equal(grid.offsetX, 6 - 1 - 1); // 4
+  assert.equal(grid.offsetY, 2);
 });
 
 // --- Advanced tier ---

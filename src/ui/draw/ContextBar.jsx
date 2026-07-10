@@ -10,7 +10,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../../state/store.js';
 import { IconButton } from '../IconButton.jsx';
-import { GridIcon, UndoIcon, RedoIcon, HorizontalSymmetryIcon, VerticalSymmetryIcon } from '../icons.jsx';
+import { GridIcon, UndoIcon, RedoIcon, HorizontalSymmetryIcon, VerticalSymmetryIcon, FlipHorizontalIcon, FlipVerticalIcon, Rotate90Icon } from '../icons.jsx';
 
 // Display-only: `canvas.tier` keeps its stored 'simple'/'advanced' values
 // everywhere (no save-format bump, no migration) — these two maps are the
@@ -111,6 +111,14 @@ export function ContextBar() {
   const toggleGrid = useStore((s) => s.toggleGrid);
   const tileGridSize = useStore((s) => s.tileGridSize);
   const setTileGridSize = useStore((s) => s.setTileGridSize);
+  const flipRotateAllFrames = useStore((s) => s.flipRotateAllFrames);
+  const setFlipRotateAllFrames = useStore((s) => s.setFlipRotateAllFrames);
+  const flipCanvasH = useStore((s) => s.flipCanvasH);
+  const flipCanvasV = useStore((s) => s.flipCanvasV);
+  const rotateCanvas90 = useStore((s) => s.rotateCanvas90);
+  const flipActiveGlyphH = useStore((s) => s.flipActiveGlyphH);
+  const flipActiveGlyphV = useStore((s) => s.flipActiveGlyphV);
+  const rotateActiveGlyph90 = useStore((s) => s.rotateActiveGlyph90);
   const canUndo = useStore((s) => s.canUndo);
   const canRedo = useStore((s) => s.canRedo);
   const undo = useStore((s) => s.undo);
@@ -274,6 +282,28 @@ export function ContextBar() {
 
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginLeft: 'auto' }}>
         {isGlyphMode ? <GlyphSizeControl /> : <CanvasSizeControl />}
+        {!isGlyphMode && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="Whole-layer/whole-canvas flip and rotate apply to every frame, not just the active one">
+            <input type="checkbox" checked={flipRotateAllFrames} onChange={(e) => setFlipRotateAllFrames(e.target.checked)} /> All frames
+          </label>
+        )}
+        <div style={{ display: 'flex', gap: 4 }}>
+          <IconButton
+            icon={<FlipHorizontalIcon />}
+            label={isGlyphMode ? 'Flip glyph horizontal' : 'Flip canvas horizontal'}
+            onClick={isGlyphMode ? flipActiveGlyphH : flipCanvasH}
+          />
+          <IconButton
+            icon={<FlipVerticalIcon />}
+            label={isGlyphMode ? 'Flip glyph vertical' : 'Flip canvas vertical'}
+            onClick={isGlyphMode ? flipActiveGlyphV : flipCanvasV}
+          />
+          <IconButton
+            icon={<Rotate90Icon />}
+            label={isGlyphMode ? 'Rotate glyph 90°' : 'Rotate canvas 90°'}
+            onClick={isGlyphMode ? rotateActiveGlyph90 : rotateCanvas90}
+          />
+        </div>
         <div style={{ display: 'flex', gap: 4 }}>
           <IconButton icon={<UndoIcon />} label="Undo" disabled={!canUndo} onClick={undo} />
           <IconButton icon={<RedoIcon />} label="Redo" disabled={!canRedo} onClick={redo} />

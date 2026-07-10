@@ -11,7 +11,7 @@
 // UI) is the actual styled, auto-cropped pixel content, one or more per
 // layer per frame.
 
-import { resizeAt, anchorOffset, ANCHOR_X_FRACS, ANCHOR_Y_FRACS, get, set, createShapeGrid, growGridToInclude, shrinkGridToFit, mergeGridDown as mergeGridInFrame, unionGridInto, stylesEqual, makeGridId } from './Grid.js';
+import { resizeAt, anchorOffset, ANCHOR_X_FRACS, ANCHOR_Y_FRACS, get, set, createShapeGrid, growGridToInclude, shrinkGridToFit, mergeGridDown as mergeGridInFrame, unionGridInto, stylesEqual, makeGridId, flipPixelsH, flipPixelsV, rotatePixels90 } from './Grid.js';
 import { paintSimpleCell } from './autoLayerSync.js';
 import { createLayer } from './Layer.js';
 import { normalizePalette } from './Palette.js';
@@ -673,6 +673,82 @@ export function nudgeLayerFrame(canvas, layerId, frameIndex, dx, dy) {
     grid.offsetX += dx;
     grid.offsetY += dy;
   }
+}
+
+// --- Flip/rotate (Checkpoint 6) ---
+//
+// Layer-level transforms the whole layer as one unit around the canvas's
+// shared axis (not each shape around its own center) — matches Photoshop/
+// Aseprite's "flip layer." Each grid's own buffer mirrors/rotates via the
+// shared Grid.js primitive; its offset repositions against the CANVAS's
+// width/height (not its own), so relative shape positions move together.
+// This is a genuine axis-remap, not a translation (unlike resizeCanvas's
+// anchor-shift): flip mirrors offset across the canvas's far edge; rotate
+// derives from mapping the grid's corner through the same point-rotation
+// the pixel-index remap above uses, applied to canvas-space coordinates.
+// Canvas-level applies the same per-layer transform to every layer for one
+// frame (resizeCanvas's own every-layer sweep, scoped to one frame here);
+// the caller swaps canvas.width/height once, after every frame is done —
+// see state/store.js, which also owns the "this frame vs all frames" loop.
+
+/** @param {object} canvas @param {string} layerId @param {number} frameIndex */
+export function flipLayerFrameH(canvas, layerId, frameIndex) {
+  const layer = canvas.layers.find((l) => l.id === layerId);
+  const frame = layer?.frames[frameIndex];
+  if (!frame) return;
+  for (const grid of frame.grids) {
+    grid.pixels = flipPixelsH(grid.width, grid.height, grid.pixels);
+    grid.offsetX = canvas.width - grid.offsetX - grid.width;
+  }
+}
+
+/** @see flipLayerFrameH */
+export function flipLayerFrameV(canvas, layerId, frameIndex) {
+  const layer = canvas.layers.find((l) => l.id === layerId);
+  const frame = layer?.frames[frameIndex];
+  if (!frame) return;
+  for (const grid of frame.grids) {
+    grid.pixels = flipPixelsV(grid.width, grid.height, grid.pixels);
+    grid.offsetY = canvas.height - grid.offsetY - grid.height;
+  }
+}
+
+/**
+ * Rotates every Grid in one layer's one frame 90° clockwise, repositioning
+ * each against canvas.height/canvas.width (not the layer's/grid's own) so
+ * the whole layer rotates as one unit. Does not touch canvas.width/height
+ * itself — the caller does that once, after every targeted frame/layer has
+ * been rotated (see rotateCanvasFrame90 and state/store.js).
+ */
+export function rotateLayerFrame90(canvas, layerId, frameIndex) {
+  const layer = canvas.layers.find((l) => l.id === layerId);
+  const frame = layer?.frames[frameIndex];
+  if (!frame) return;
+  for (const grid of frame.grids) {
+    const { width, height, pixels } = rotatePixels90(grid.width, grid.height, grid.pixels);
+    const newOffsetX = canvas.height - grid.offsetY - grid.height;
+    const newOffsetY = grid.offsetX;
+    grid.width = width;
+    grid.height = height;
+    grid.pixels = pixels;
+    grid.offsetX = newOffsetX;
+    grid.offsetY = newOffsetY;
+  }
+}
+
+/** Canvas-level: applies flipLayerFrameH to every layer for one frame. */
+export function flipCanvasFrameH(canvas, frameIndex) {
+  for (const layer of canvas.layers) flipLayerFrameH(canvas, layer.id, frameIndex);
+}
+
+/** @see flipCanvasFrameH */
+export function flipCanvasFrameV(canvas, frameIndex) {
+  for (const layer of canvas.layers) flipLayerFrameV(canvas, layer.id, frameIndex);
+}
+
+/** Canvas-level: applies rotateLayerFrame90 to every layer for one frame. Does not swap canvas.width/height — see rotateLayerFrame90. */
+export function rotateCanvasFrame90(canvas, frameIndex) {
+  for (const layer of canvas.layers) rotateLayerFrame90(canvas, layer.id, frameIndex);
 }
 
 /**
