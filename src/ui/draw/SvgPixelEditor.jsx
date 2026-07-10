@@ -167,6 +167,35 @@ export function SvgPixelEditor() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  // OS-clipboard image paste-in (Checkpoint 5) — a real image copied from
+  // another app (e.g. a screenshot) lands as a floating selection, same as
+  // Ctrl+V's internal-clipboard path above. Only acts when the clipboard
+  // actually carries an image; otherwise falls through untouched so the
+  // keydown handler's own Ctrl+V (internal clipboard) still works. Standard
+  // DOM paste-event API — no Electron IPC involved, so this is expected to
+  // behave identically in the Electron renderer, though that hasn't been
+  // separately confirmed (only the web/Vite build has).
+  useEffect(() => {
+    function onPaste(evt) {
+      const target = /** @type {HTMLElement|null} */ (document.activeElement);
+      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+      const items = evt.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const blob = item.getAsFile();
+          if (blob) {
+            evt.preventDefault();
+            useStore.getState().pasteImageBlob(blob);
+          }
+          return;
+        }
+      }
+    }
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, []);
+
   // Closes a gap left by setPointerCapture (handlePointerDown): pointer
   // capture redirects pointermove/pointerup back to the svg no matter where
   // the cursor physically is, but has no effect on `contextmenu`, which

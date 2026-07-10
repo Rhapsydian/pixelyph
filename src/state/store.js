@@ -991,6 +991,40 @@ export const useStore = create((set, get) => {
       }
       commit();
     },
+    /**
+     * OS-clipboard image paste-in (Checkpoint 5): decodes an external raster
+     * image (a Blob from a paste event, e.g. a screenshot copied from another
+     * app) through the same decode+quantize pipeline importRasterImage uses,
+     * but lands it as a floating selection — matching internal paste's
+     * drop-in point — instead of importRasterImage's own immediate
+     * full-canvas paint+commit. Mode-aware like pasteClipboard/colorAt.
+     */
+    pasteImageBlob: async (blob) => {
+      const { mode, canvas, glyphCanvas } = get();
+      const doc = mode === 'glyph' ? glyphCanvas : canvas;
+      if (!doc) return;
+      const image = await decodeImageFile(blob);
+      const result = importRasterToGrid(image, doc.width, doc.height);
+      const cells = [];
+      for (let y = 0; y < result.height; y++) {
+        for (let x = 0; x < result.width; x++) {
+          const color = result.colors[y * result.width + x];
+          if (color) cells.push({ dx: x, dy: y, color });
+        }
+      }
+      if (cells.length === 0) return;
+      const merged = [...doc.palette.colors];
+      for (const color of result.palette) if (!merged.includes(color)) merged.push(color);
+      doc.palette.colors = merged;
+      const x = Math.max(0, Math.min(doc.width - result.width, Math.floor((doc.width - result.width) / 2)));
+      const y = Math.max(0, Math.min(doc.height - result.height, Math.floor((doc.height - result.height) / 2)));
+      set({
+        ...(mode === 'glyph' ? { glyphCanvas: { ...doc } } : { canvas: { ...doc } }),
+        activeTool: 'marqueeSelect',
+        selection: null,
+        floatingSelection: { x, y, width: result.width, height: result.height, cells },
+      });
+    },
 
     // --- Export / project persistence ---
     copySvg: async () => {
