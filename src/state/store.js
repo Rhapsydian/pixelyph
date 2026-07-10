@@ -59,7 +59,7 @@ import {
   serializePaletteFile,
   parsePaletteFile,
 } from '../model/Palette.js';
-import { importRasterToGrid } from '../model/importRaster.js';
+import { importRasterToGrid, generatePalette } from '../model/importRaster.js';
 import { decodeImageFile } from '../io/imageDecode.js';
 import { composeLayersSvg } from '../export/svg/composeLayersSvg.js';
 import { composeAnimatedSvg } from '../export/svg/animatedSvg.js';
@@ -572,6 +572,26 @@ export const useStore = create((set, get) => {
       get().canvas.palette.colors = colors;
       commit();
     },
+    /**
+     * Generates a fresh palette from an image (median-cut quantization, see
+     * generatePalette), then either appends the new colors to the existing
+     * palette (deduped) or replaces it wholesale — `mode` is decided by the
+     * caller (the UI's Add/Replace prompt), not asked here.
+     */
+    importPaletteFromImage: async (file, { maxColors = 16, mode } = {}) => {
+      const { canvas } = get();
+      const image = await decodeImageFile(file);
+      const colors = generatePalette(image, maxColors);
+      if (colors.length === 0) return;
+      if (mode === 'add') {
+        const merged = [...canvas.palette.colors];
+        for (const color of colors) if (!merged.includes(color)) merged.push(color);
+        canvas.palette.colors = merged;
+      } else {
+        canvas.palette.colors = colors;
+      }
+      commit();
+    },
     /** Imports a previously-exported Pixelyph palette (colors + fills + styles), replacing the whole palette. */
     importPixelyphPalette: (text) => {
       const parsed = parsePaletteFile(text);
@@ -611,6 +631,17 @@ export const useStore = create((set, get) => {
     resolveConfirm: (result) => {
       get().confirmDialog?.resolve(result);
       set({ confirmDialog: null });
+    },
+
+    // Same promise-based pattern as requestConfirm/resolveConfirm, but for
+    // the 3-way "Cancel / Add / Replace" choice generating a palette from an
+    // image needs (a plain boolean confirm doesn't fit) — resolves to
+    // 'add' | 'replace' | null (null = cancel).
+    paletteImportModeDialog: null,
+    requestPaletteImportMode: () => new Promise((resolve) => set({ paletteImportModeDialog: { resolve } })),
+    resolvePaletteImportMode: (result) => {
+      get().paletteImportModeDialog?.resolve(result);
+      set({ paletteImportModeDialog: null });
     },
 
     // --- Project lifecycle (Phase 4) ---

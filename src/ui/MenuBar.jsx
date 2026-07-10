@@ -104,6 +104,8 @@ export function MenuBar() {
   const copySvg = useStore((s) => s.copySvg);
   const importLospecPalette = useStore((s) => s.importLospecPalette);
   const importPixelyphPalette = useStore((s) => s.importPixelyphPalette);
+  const importPaletteFromImage = useStore((s) => s.importPaletteFromImage);
+  const requestPaletteImportMode = useStore((s) => s.requestPaletteImportMode);
   const exportPalette = useStore((s) => s.exportPalette);
   const setManageSwatchesOpen = useStore((s) => s.setManageSwatchesOpen);
   const setExportModalOpen = useStore((s) => s.setExportModalOpen);
@@ -131,12 +133,21 @@ export function MenuBar() {
   const [isFullscreen, toggleFullscreen] = useFullscreen();
   const rootRef = useRef(null);
   const paletteFileInputRef = useRef(null);
+  const paletteImageInputRef = useRef(null);
 
   async function handleImportPaletteFile(evt) {
     const file = evt.target.files?.[0];
     if (!file) return;
     const text = await file.text();
     if (!importPixelyphPalette(text)) importLospecPalette(text);
+    evt.target.value = '';
+  }
+
+  async function handleImportPaletteImageFile(evt) {
+    const file = evt.target.files?.[0];
+    if (!file) return;
+    const mode = await requestPaletteImportMode();
+    if (mode) await importPaletteFromImage(file, { mode });
     evt.target.value = '';
   }
 
@@ -216,10 +227,12 @@ export function MenuBar() {
           <MenuItem label="Manage Swatches…" onClick={runAndClose(() => setManageSwatchesOpen(true))} />
           <MenuDivider />
           <MenuItem label="Import Palette…" onClick={runAndClose(() => paletteFileInputRef.current?.click())} />
+          <MenuItem label="Import Palette from Image…" onClick={runAndClose(() => paletteImageInputRef.current?.click())} />
           <MenuItem label="Export Palette" onClick={runAndClose(exportPalette)} />
         </Menu>
       )}
       <input ref={paletteFileInputRef} type="file" accept=".hex,.txt,.json" onChange={handleImportPaletteFile} style={{ display: 'none' }} />
+      <input ref={paletteImageInputRef} type="file" accept="image/*" onChange={handleImportPaletteImageFile} style={{ display: 'none' }} />
 
       <Menu id="window" label="Window" openMenu={openMenu} setOpenMenu={setOpenMenu}>
         <MenuItem label={isFullscreen ? 'Exit Fullscreen' : 'Toggle Fullscreen'} onClick={runAndClose(toggleFullscreen)} />
