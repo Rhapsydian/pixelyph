@@ -37,6 +37,8 @@ function fillSelectKind(fill) {
 function FillEditor({ layer, updateLayerStyle }) {
   const addPaletteColor = useStore((s) => s.addPaletteColor);
   const addPaletteFill = useStore((s) => s.addPaletteFill);
+  const gradientHandleEnabledGridId = useStore((s) => s.gradientHandleEnabledGridId);
+  const setGradientHandleEnabled = useStore((s) => s.setGradientHandleEnabled);
   const fill = layer.style.fill;
   const kind = fillSelectKind(fill);
   const [editingFill, setEditingFill] = useState(false);
@@ -90,6 +92,20 @@ function FillEditor({ layer, updateLayerStyle }) {
 
         {kind !== 'none' && <IconButton icon={<SaveToPaletteIcon size={20} />} label="Save to palette" onClick={saveToPalette} />}
       </div>
+
+      {fill?.type === 'linear-gradient' && (
+        <label
+          style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}
+          title="Show a draggable handle on the canvas for rotating this gradient's angle directly, instead of only through the gradient editor"
+        >
+          <input
+            type="checkbox"
+            checked={gradientHandleEnabledGridId === layer.id}
+            onChange={(e) => setGradientHandleEnabled(layer.id, e.target.checked)}
+          />
+          Show angle handle on canvas
+        </label>
+      )}
 
       {editingFill && kind === 'gradient' && (
         <GradientEditorModal

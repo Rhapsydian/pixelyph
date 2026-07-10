@@ -243,6 +243,8 @@ export const useStore = create((set, get) => {
     showGrid: false,
     tileGridSize: 0, // 0 = off; a positive integer = tile guide size in cells
     flipRotateAllFrames: false, // frame-scope choice for layer/canvas-level flip/rotate — this frame only (false) or every frame (true)
+    sidePanelTab: 'palette', // which SidePanel.jsx tab is showing — lifted to the store (not local component state) so SvgPixelEditor can gate the gradient-angle handle on "Style tab is visible"
+    gradientHandleEnabledGridId: null, // the one Grid id (if any) whose on-canvas gradient-angle handle is toggled on — always starts null on a fresh shape selection, never remembered across shapes
 
     selection: null,
     floatingSelection: null,
@@ -262,6 +264,9 @@ export const useStore = create((set, get) => {
     toggleGrid: () => set((s) => ({ showGrid: !s.showGrid })),
     setTileGridSize: (size) => set({ tileGridSize: Math.max(0, Math.round(Number(size) || 0)) }),
     setFlipRotateAllFrames: (allFrames) => set({ flipRotateAllFrames: allFrames }),
+    setSidePanelTab: (tab) => set({ sidePanelTab: tab }),
+    /** `enabled: false` always clears the field outright (not just for `gridId`), since only one shape's handle can be toggled on at a time. */
+    setGradientHandleEnabled: (gridId, enabled) => set({ gradientHandleEnabledGridId: enabled ? gridId : null }),
     setSelectionScope: (scope) => set({ selectionScope: scope }),
 
     // Working-session conveniences: persisted with the project, excluded from undo.

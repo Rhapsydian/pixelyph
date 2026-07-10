@@ -51,6 +51,8 @@ export function SvgPixelEditor() {
   const selection = useStore((s) => s.selection);
   const floatingSelection = useStore((s) => s.floatingSelection);
   const onionSkinEnabled = useStore((s) => s.onionSkinEnabled);
+  const sidePanelTab = useStore((s) => s.sidePanelTab);
+  const gradientHandleEnabledGridId = useStore((s) => s.gradientHandleEnabledGridId);
   const doc = mode === 'glyph' ? glyphCanvas : canvas;
 
   const svgRef = useRef(null);
@@ -464,7 +466,14 @@ export function SvgPixelEditor() {
 
   const activeLayer = doc && doc.tier === 'advanced' ? doc.layers.find((l) => l.id === doc.activeLayerId) : null;
   const activeGrid = activeLayer?.frames[currentFrameIndex(doc)]?.grids.find((g) => g.id === doc.activeGridId);
-  const isLinearGradient = activeGrid?.style?.fill?.type === 'linear-gradient';
+  // Gated on all three: a linear-gradient fill (the only case the handle's
+  // math supports so far), the Style tab actually visible (that's where the
+  // toggle enabling this lives), and the per-shape toggle itself — see
+  // LayerStylePanel.jsx's FillEditor "Show angle handle on canvas" checkbox.
+  const showGradientHandle =
+    activeGrid?.style?.fill?.type === 'linear-gradient' &&
+    sidePanelTab === 'style' &&
+    gradientHandleEnabledGridId === activeGrid?.id;
 
   const normalizedSelection = selection && {
     x0: Math.min(selection.x0, selection.x1),
@@ -564,7 +573,7 @@ export function SvgPixelEditor() {
           />
         )}
         {cursorCell && <BrushCursor x={cursorCell.x} y={cursorCell.y} />}
-        {isLinearGradient && (
+        {showGradientHandle && (
           <GradientAngleHandle
             grid={activeGrid}
             getCanvasPoint={clientToCanvasFloat}

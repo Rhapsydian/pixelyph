@@ -5,7 +5,7 @@
 // Glyph mode). Each tab renders the existing panel component unmodified in
 // structure/behavior — this only changes how they're grouped and chromed.
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useStore } from '../state/store.js';
 import { useResizeDrag } from './useResizeDrag.js';
 import { ViewportPreview } from './ViewportPreview.jsx';
@@ -44,7 +44,10 @@ export function SidePanel() {
   const glyphKind = useStore((s) => s.glyphSet?.kind);
 
   const tabs = mode === 'draw' ? drawTabs(tier) : glyphTabs(glyphKind);
-  const [activeTab, setActiveTab] = useState(tabs[0]?.id);
+  // Lifted to the store (not local state) so SvgPixelEditor can gate the
+  // on-canvas gradient-angle handle on "the Style tab is actually visible".
+  const activeTab = useStore((s) => s.sidePanelTab);
+  const setActiveTab = useStore((s) => s.setSidePanelTab);
   // min/initial raised from 240/280: below ~340px the Layers tab's row
   // (thumbnail + eye/lock + name + opacity) doesn't fit on one line and the
   // opacity %-box wraps to a second row — 340 leaves a little headroom past
