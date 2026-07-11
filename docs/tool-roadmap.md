@@ -235,6 +235,15 @@ behavior on a non-square glyph).
 
 ## Checkpoint 7 — Interactive on-canvas gradient tool
 
+**Status:** sub-step 1 (linear-angle drag handle) shipped session 22. Full
+spec for sub-step 2 — now expanded beyond the original cx/cy/r-only scope
+to also add a linear-endpoints mode, a radial focal point, and a fix to
+sub-step 1's handle-length bug — lives in
+[`docs/gradient-handle-plan.md`](./gradient-handle-plan.md), broken into
+five checkpoints of its own. The design notes below are kept for their
+original context (data grounding, store-action pattern) but the doc above
+is now the authoritative spec for anything not yet built.
+
 The most novel piece of UI in this whole plan — no existing precedent for
 an interactive control with its own pointer-drag handling rendered inside
 the live artwork `<svg>` (the closest analog, `GradientEditorModal.jsx`'s

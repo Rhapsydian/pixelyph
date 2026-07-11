@@ -1,5 +1,17 @@
 # Backlog
 
+## NEXT SESSION: Checkpoint 7 sub-step 2 (gradient handles)
+
+Full spec: [`docs/gradient-handle-plan.md`](./docs/gradient-handle-plan.md),
+broken into five independently-shippable checkpoints. **Start at
+Checkpoint 1** — fixing the shipped linear-angle handle's spoke length
+(currently scales with shape bbox size, should be a fixed length pivoting
+at the shape's center). Checkpoints 2-3 add a linear-endpoints drag mode
+alongside the existing angle mode; checkpoints 4-5 add radial center/
+radius/focal-point handles. Each checkpoint is its own implement → test →
+verify → commit cycle — pause for confirmation between them rather than
+doing all five in one sitting.
+
 Two kinds of deferred items live here: features that were built, then
 deliberately hidden or disabled behind a known issue, rather than shipped
 half-broken or removed outright (the underlying model/logic is left intact
