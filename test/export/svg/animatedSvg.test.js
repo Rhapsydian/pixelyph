@@ -16,7 +16,7 @@ test('buildAnimationCss emits one @keyframes + class rule per frame, sized/offse
   const css = buildAnimationCss([500, 500, 500, 500]); // 4 equal frames -> 2s total, 25% per step, 0.5s per frame
   assert.equal((css.match(/@keyframes pixelyph-frame-/g) || []).length, 4);
   for (let i = 0; i < 4; i++) {
-    const expectedDelay = -i * 0.5;
+    const expectedDelay = -(2 - i * 0.5);
     assert.match(css, new RegExp(`@keyframes pixelyph-frame-${i}\\{0%\\{opacity:1\\}25\\.0000%\\{opacity:0\\}100%\\{opacity:0\\}\\}`));
     const re = new RegExp(`\\.pixelyph-frame-${i}\\{animation:pixelyph-frame-${i} 2s steps\\(1,end\\) infinite;animation-delay:${expectedDelay}s\\}`);
     assert.match(css, re);
@@ -29,9 +29,44 @@ test('buildAnimationCss gives each frame its own on-window and cumulative delay 
   assert.match(css, /@keyframes pixelyph-frame-0\{0%\{opacity:1\}20\.0000%\{opacity:0\}100%\{opacity:0\}\}/); // 100/500 = 20%
   assert.match(css, /@keyframes pixelyph-frame-1\{0%\{opacity:1\}60\.0000%\{opacity:0\}100%\{opacity:0\}\}/); // 300/500 = 60%
   assert.match(css, /@keyframes pixelyph-frame-2\{0%\{opacity:1\}20\.0000%\{opacity:0\}100%\{opacity:0\}\}/); // 100/500 = 20%
-  assert.match(css, /\.pixelyph-frame-0\{animation:pixelyph-frame-0 0\.5s steps\(1,end\) infinite;animation-delay:-?0s\}/); // JS stringifies -0 as "0"
-  assert.match(css, /\.pixelyph-frame-1\{animation:pixelyph-frame-1 0\.5s steps\(1,end\) infinite;animation-delay:-0\.1s\}/); // cumulative 100ms before frame 1
-  assert.match(css, /\.pixelyph-frame-2\{animation:pixelyph-frame-2 0\.5s steps\(1,end\) infinite;animation-delay:-0\.4s\}/); // cumulative 400ms before frame 2
+  assert.match(css, /\.pixelyph-frame-0\{animation:pixelyph-frame-0 0\.5s steps\(1,end\) infinite;animation-delay:-0\.5s\}/); // 500ms remaining after frame 0's slot starts
+  assert.match(css, /\.pixelyph-frame-1\{animation:pixelyph-frame-1 0\.5s steps\(1,end\) infinite;animation-delay:-0\.4s\}/); // 400ms remaining (500 - 100 cumulative before frame 1)
+  assert.match(css, /\.pixelyph-frame-2\{animation:pixelyph-frame-2 0\.5s steps\(1,end\) infinite;animation-delay:-0\.1s\}/); // 100ms remaining (500 - 400 cumulative before frame 2)
+});
+
+test('buildAnimationCss schedules frames with no gap or overlap when one frame has a different duration (regression: 600ms frame among 300ms frames)', () => {
+  // Reported bug: frames at [300, 300, 600, 300]ms - the frame after the
+  // 600ms frame appeared too early, leaving a gap before the 600ms frame.
+  const durationsMs = [300, 300, 600, 300];
+  const css = buildAnimationCss(durationsMs);
+
+  // Simulate the actual rendered timeline from the generated delay/keyframe
+  // values (not just the raw numbers) so this test fails if the on-window
+  // math regresses even if someone changes the string format.
+  const totalMs = durationsMs.reduce((a, b) => a + b, 0);
+  const totalSeconds = totalMs / 1000;
+  const delays = durationsMs.map((_, i) => {
+    const m = css.match(new RegExp(`\\.pixelyph-frame-${i}\\{animation:[^;]+;animation-delay:(-?[\\d.]+)s\\}`));
+    return Number(m[1]);
+  });
+
+  const onFrameAtMs = (tMs) => {
+    const t = tMs / 1000;
+    for (let i = 0; i < durationsMs.length; i++) {
+      const elapsed = (((t - delays[i]) % totalSeconds) + totalSeconds) % totalSeconds;
+      const onSeconds = (durationsMs[i] / totalMs) * totalSeconds;
+      if (elapsed < onSeconds - 1e-9) return i;
+    }
+    return -1;
+  };
+
+  // Expected slot for each frame, sampled at its midpoint.
+  let cumulativeMs = 0;
+  for (let i = 0; i < durationsMs.length; i++) {
+    const midpointMs = cumulativeMs + durationsMs[i] / 2;
+    assert.equal(onFrameAtMs(midpointMs), i, `expected frame ${i} to be visible at ${midpointMs}ms`);
+    cumulativeMs += durationsMs[i];
+  }
 });
 
 test('composeAnimatedSvg emits one <g class="pixelyph-frame-N"> per frame, each with that frame\'s own content', () => {

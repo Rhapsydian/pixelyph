@@ -43,7 +43,7 @@ export function buildAnimationCss(durationsMs) {
   for (let i = 0; i < frameCount; i++) {
     const keyframesName = `${ANIMATION_NAME}-${i}`;
     const onPercent = ((100 * durationsMs[i]) / totalMs).toFixed(4);
-    const delaySeconds = -(cumulativeMs / 1000);
+    const delaySeconds = -((totalMs - cumulativeMs) / 1000);
     // 0%->onPercent%: holds opacity 1 (this frame's own on-window); onPercent%->100%: holds 0.
     // steps(1,end) makes both segments instant holds with a hard cut at the boundary, not a fade.
     rules.push(`@keyframes ${keyframesName}{0%{opacity:1}${onPercent}%{opacity:0}100%{opacity:0}}`);
