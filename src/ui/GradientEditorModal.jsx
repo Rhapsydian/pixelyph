@@ -32,6 +32,7 @@ import { Modal, ModalActions } from './Modal.jsx';
 import { ColorAlphaInput } from './ColorAlphaInput.jsx';
 import { FillSwatch } from './FillSwatch.jsx';
 import { endpointsFromAngle, angleFromEndpoints } from '../export/svg/layerStyle.js';
+import { translateFocalPoint, rescaleFocalPoint } from './draw/gradientHandleGeometry.js';
 
 const MODAL_WIDTH = 340;
 const STOP_LIST_MAX_HEIGHT = 160;
@@ -190,13 +191,43 @@ export function GradientEditorModal({ gradient, onChange, onCancel, onConfirm })
           {gradient.type === 'radial-gradient' && (
             <span style={{ display: 'inline-flex', gap: 8, flexWrap: 'wrap' }}>
               <label>
-                cx: <input type="number" step={0.05} value={gradient.cx} onChange={(e) => onChange({ ...gradient, cx: Number(e.target.value) })} style={{ width: 50 }} />
+                cx:{' '}
+                <input
+                  type="number"
+                  step={0.05}
+                  value={gradient.cx}
+                  onChange={(e) => {
+                    const cx = Number(e.target.value);
+                    onChange({ ...gradient, cx, ...translateFocalPoint(gradient, cx, gradient.cy) });
+                  }}
+                  style={{ width: 50 }}
+                />
               </label>
               <label>
-                cy: <input type="number" step={0.05} value={gradient.cy} onChange={(e) => onChange({ ...gradient, cy: Number(e.target.value) })} style={{ width: 50 }} />
+                cy:{' '}
+                <input
+                  type="number"
+                  step={0.05}
+                  value={gradient.cy}
+                  onChange={(e) => {
+                    const cy = Number(e.target.value);
+                    onChange({ ...gradient, cy, ...translateFocalPoint(gradient, gradient.cx, cy) });
+                  }}
+                  style={{ width: 50 }}
+                />
               </label>
               <label>
-                r: <input type="number" step={0.05} value={gradient.r} onChange={(e) => onChange({ ...gradient, r: Number(e.target.value) })} style={{ width: 50 }} />
+                r:{' '}
+                <input
+                  type="number"
+                  step={0.05}
+                  value={gradient.r}
+                  onChange={(e) => {
+                    const r = Number(e.target.value);
+                    onChange({ ...gradient, r, ...rescaleFocalPoint(gradient, r) });
+                  }}
+                  style={{ width: 50 }}
+                />
               </label>
               <label title="Off-center highlight point, defaults to the center">
                 fx: <input type="number" step={0.05} value={gradient.fx ?? gradient.cx} onChange={(e) => onChange({ ...gradient, fx: Number(e.target.value) })} style={{ width: 50 }} />

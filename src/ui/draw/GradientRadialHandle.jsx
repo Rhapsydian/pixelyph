@@ -5,7 +5,14 @@
 // mirrors GradientAngleHandle.jsx/GradientLinearEndpointsHandle.jsx's
 // grid/getCanvasPoint/live-commit-split prop shape.
 
-import { gradientBoundsCanvasSpace, fractionToCanvasPoint, radialEdgeCanvasPosition, clampPointToRadius } from './gradientHandleGeometry.js';
+import {
+  gradientBoundsCanvasSpace,
+  fractionToCanvasPoint,
+  radialEdgeCanvasPosition,
+  clampPointToRadius,
+  translateFocalPoint,
+  rescaleFocalPoint,
+} from './gradientHandleGeometry.js';
 import { GradientPointHandle } from './GradientPointHandle.jsx';
 import { GradientRadiusHandle } from './GradientRadiusHandle.jsx';
 
@@ -28,16 +35,22 @@ export function GradientRadialHandle({ grid, getCanvasPoint, onDragCenter, onCom
         cx={fill.cx}
         cy={fill.cy}
         r={fill.r}
-        onDrag={(r) => onDragRadius(r)}
-        onCommit={() => onCommitRadius(grid.style.fill.r)}
+        onDrag={(r) => onDragRadius({ r, ...rescaleFocalPoint(fill, r) })}
+        onCommit={() => {
+          const f = grid.style.fill;
+          onCommitRadius({ r: f.r, fx: f.fx, fy: f.fy });
+        }}
       />
       <GradientPointHandle
         bounds={bounds}
         getCanvasPoint={getCanvasPoint}
         fx={fill.cx}
         fy={fill.cy}
-        onDrag={({ fx, fy }) => onDragCenter({ cx: fx, cy: fy })}
-        onCommit={() => onCommitCenter({ cx: grid.style.fill.cx, cy: grid.style.fill.cy })}
+        onDrag={({ fx, fy }) => onDragCenter({ cx: fx, cy: fy, ...translateFocalPoint(fill, fx, fy) })}
+        onCommit={() => {
+          const f = grid.style.fill;
+          onCommitCenter({ cx: f.cx, cy: f.cy, fx: f.fx, fy: f.fy });
+        }}
       />
       {/* Rendered last (on top) so it stays independently grabbable even when it starts
           coincident with the (larger) center handle — the diamond's corners sit strictly

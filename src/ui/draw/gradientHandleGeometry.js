@@ -161,3 +161,42 @@ export function clampPointToRadius(cx, cy, r, fx, fy) {
   const scale = maxDist / dist;
   return { fx: cx + dx * scale, fy: cy + dy * scale };
 }
+
+/**
+ * Keeps a radial gradient's explicitly-set focal point moving with its
+ * center — when (cx,cy) is dragged, shifts (fx,fy) by the same delta so the
+ * focal point's offset from center stays constant, instead of drifting to a
+ * different relative position (or outside the radius entirely) every time
+ * the center moves. A no-op (returns {}) when fx/fy hasn't been explicitly
+ * set — an unset focal point already tracks center via its `fx ?? cx`
+ * fallback, so there's nothing to translate.
+ * @param {{cx:number,cy:number,fx?:number,fy?:number}} fill current fill, before the center change
+ * @param {number} newCx
+ * @param {number} newCy
+ * @returns {{fx:number,fy:number}|{}}
+ */
+export function translateFocalPoint(fill, newCx, newCy) {
+  if (fill.fx == null || fill.fy == null) return {};
+  return { fx: fill.fx + (newCx - fill.cx), fy: fill.fy + (newCy - fill.cy) };
+}
+
+/**
+ * Keeps a radial gradient's explicitly-set focal point at the same relative
+ * distance from center when the radius changes — scales (fx,fy)'s offset
+ * from (cx,cy) by newR/r, so e.g. a focal point sitting at 60% of the
+ * radius stays at 60% of the radius after a resize, rather than staying at
+ * a fixed absolute distance that could end up outside a shrunk radius. A
+ * no-op (returns {}) when fx/fy hasn't been explicitly set. Proportional
+ * scaling preserves clampPointToRadius's margin automatically (if the old
+ * offset was within `r * FOCAL_MAX_RADIUS_FACTOR`, the rescaled offset is
+ * within `newR * FOCAL_MAX_RADIUS_FACTOR` too), so no reclamping is needed.
+ * @param {{cx:number,cy:number,r:number,fx?:number,fy?:number}} fill current fill, before the radius change
+ * @param {number} newR
+ * @returns {{fx:number,fy:number}|{}}
+ */
+export function rescaleFocalPoint(fill, newR) {
+  if (fill.fx == null || fill.fy == null) return {};
+  if (!fill.r) return {}; // r is always >= MIN_RADIAL_R in practice; guard division defensively anyway
+  const scale = newR / fill.r;
+  return { fx: fill.cx + (fill.fx - fill.cx) * scale, fy: fill.cy + (fill.fy - fill.cy) * scale };
+}

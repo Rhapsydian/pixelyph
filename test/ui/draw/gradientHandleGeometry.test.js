@@ -13,6 +13,8 @@ import {
   radialRadiusFromDrag,
   MIN_RADIAL_R,
   clampPointToRadius,
+  translateFocalPoint,
+  rescaleFocalPoint,
 } from '../../../src/ui/draw/gradientHandleGeometry.js';
 
 function mockGrid({ width, height, offsetX, offsetY, painted }) {
@@ -125,6 +127,38 @@ test('clampPointToRadius: a point outside the radius scales back to the inset bo
 
 test('clampPointToRadius: a point exactly at the center is left unchanged (no direction to scale along)', () => {
   assert.deepEqual(clampPointToRadius(0.5, 0.5, 0.3, 0.5, 0.5), { fx: 0.5, fy: 0.5 });
+});
+
+test('translateFocalPoint: shifts an explicitly-set focal point by the same delta as the center move', () => {
+  const fill = { cx: 0.5, cy: 0.5, fx: 0.6, fy: 0.4 };
+  const result = translateFocalPoint(fill, 0.7, 0.55); // center moved +0.2, +0.05
+  assert.ok(Math.abs(result.fx - 0.8) < 1e-9);
+  assert.ok(Math.abs(result.fy - 0.45) < 1e-9);
+});
+
+test('translateFocalPoint: no-op when the focal point has never been explicitly set', () => {
+  assert.deepEqual(translateFocalPoint({ cx: 0.5, cy: 0.5 }, 0.9, 0.1), {});
+});
+
+test('rescaleFocalPoint: scales an explicitly-set focal point\'s offset proportionally to the new radius', () => {
+  const fill = { cx: 0.5, cy: 0.5, r: 0.4, fx: 0.7, fy: 0.5 }; // offset 0.2 due east, 50% of r
+  const result = rescaleFocalPoint(fill, 0.2); // radius halved
+  assert.ok(Math.abs(result.fx - 0.6) < 1e-9); // offset halved to 0.1 -> still 50% of new r
+  assert.ok(Math.abs(result.fy - 0.5) < 1e-9);
+});
+
+test('rescaleFocalPoint: no-op when the focal point has never been explicitly set', () => {
+  assert.deepEqual(rescaleFocalPoint({ cx: 0.5, cy: 0.5, r: 0.4 }, 0.2), {});
+});
+
+test('rescaleFocalPoint: preserves clampPointToRadius\'s margin — a point at the inset boundary stays within the new inset boundary', () => {
+  const oldR = 0.4;
+  const clamped = clampPointToRadius(0.5, 0.5, oldR, 10, 0.5); // drag far outside -> clamps to 0.97*oldR
+  const fill = { cx: 0.5, cy: 0.5, r: oldR, fx: clamped.fx, fy: clamped.fy };
+  const newR = 0.15;
+  const result = rescaleFocalPoint(fill, newR);
+  const dist = Math.hypot(result.fx - 0.5, result.fy - 0.5);
+  assert.ok(dist <= newR * 0.97 + 1e-9, `expected rescaled distance ${dist} to stay within the new radius's margin`);
 });
 
 test('round-trip: angleFromHandleDrag(gradientHandlePosition(angle)) recovers angle, including on non-square bounds', () => {

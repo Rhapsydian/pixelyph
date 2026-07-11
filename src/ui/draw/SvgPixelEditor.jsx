@@ -625,12 +625,12 @@ export function SvgPixelEditor() {
             onCommitCenter={(patch) => {
               useStore.getState().updateGridStyle(activeLayer.id, activeGrid.id, { fill: { ...activeGrid.style.fill, ...patch } });
             }}
-            onDragRadius={(r) => {
-              useStore.getState().updateGridStyleLive(activeLayer.id, activeGrid.id, { fill: { ...activeGrid.style.fill, r } });
+            onDragRadius={(patch) => {
+              useStore.getState().updateGridStyleLive(activeLayer.id, activeGrid.id, { fill: { ...activeGrid.style.fill, ...patch } });
               tick((n) => n + 1);
             }}
-            onCommitRadius={(r) => {
-              useStore.getState().updateGridStyle(activeLayer.id, activeGrid.id, { fill: { ...activeGrid.style.fill, r } });
+            onCommitRadius={(patch) => {
+              useStore.getState().updateGridStyle(activeLayer.id, activeGrid.id, { fill: { ...activeGrid.style.fill, ...patch } });
             }}
             onDragFocal={(patch) => {
               useStore.getState().updateGridStyleLive(activeLayer.id, activeGrid.id, { fill: { ...activeGrid.style.fill, ...patch } });
