@@ -61,6 +61,7 @@ function FrameCard({ canvas, frameIndex, isActive }) {
           border: isActive ? '2px solid var(--chrome-accent)' : '1px solid var(--chrome-border-strong)',
           cursor: 'pointer',
           lineHeight: 0,
+          overflow: 'hidden',
         }}
       >
         <FrameThumbnail canvas={canvas} frameIndex={frameIndex} />
