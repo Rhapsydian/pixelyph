@@ -132,11 +132,19 @@ export function radialRadiusFromDrag(bounds, px, cx) {
   return Math.max(MIN_RADIAL_R, fx - cx);
 }
 
+// SVG renders a radial gradient oddly when its focal point sits exactly on
+// (or numerically indistinguishable from) the radius boundary — the cone
+// between fx/fy and the circle edge degenerates and produces a visible hard
+// seam in some browsers. Clamping to a hair inside the true radius avoids
+// that without being a visually noticeable inset.
+const FOCAL_MAX_RADIUS_FACTOR = 0.97;
+
 /**
  * Keeps a radial gradient's focal point within its radius — if (fx,fy) is
- * further than `r` from (cx,cy) (Euclidean, in the same fraction space
- * cx/cy/r already live in), scales it back to sit exactly on the boundary
- * instead of escaping the circle.
+ * further than `r * FOCAL_MAX_RADIUS_FACTOR` from (cx,cy) (Euclidean, in the
+ * same fraction space cx/cy/r already live in), scales it back to that
+ * slightly-inset boundary instead of escaping the circle (or sitting
+ * exactly on its edge, which renders oddly — see FOCAL_MAX_RADIUS_FACTOR).
  * @param {number} cx
  * @param {number} cy
  * @param {number} r
@@ -145,10 +153,11 @@ export function radialRadiusFromDrag(bounds, px, cx) {
  * @returns {{fx:number,fy:number}}
  */
 export function clampPointToRadius(cx, cy, r, fx, fy) {
+  const maxDist = r * FOCAL_MAX_RADIUS_FACTOR;
   const dx = fx - cx;
   const dy = fy - cy;
   const dist = Math.hypot(dx, dy);
-  if (dist <= r || dist === 0) return { fx, fy };
-  const scale = r / dist;
+  if (dist <= maxDist || dist === 0) return { fx, fy };
+  const scale = maxDist / dist;
   return { fx: cx + dx * scale, fy: cy + dy * scale };
 }

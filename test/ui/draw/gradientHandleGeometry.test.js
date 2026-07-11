@@ -109,18 +109,18 @@ test('clampPointToRadius: a point inside the radius passes through unchanged', (
   assert.deepEqual(clampPointToRadius(0.5, 0.5, 0.3, 0.55, 0.5), { fx: 0.55, fy: 0.5 });
 });
 
-test('clampPointToRadius: a point exactly on the boundary passes through unchanged', () => {
-  const result = clampPointToRadius(0.5, 0.5, 0.3, 0.8, 0.5);
-  assert.ok(Math.abs(result.fx - 0.8) < 1e-9);
-  assert.ok(Math.abs(result.fy - 0.5) < 1e-9);
+test('clampPointToRadius: a point exactly on the true radius gets pulled in to the slightly-inset boundary (SVG renders oddly with fx/fy exactly on the edge)', () => {
+  const result = clampPointToRadius(0.5, 0.5, 0.3, 0.8, 0.5); // dist = r = 0.3
+  const dist = Math.hypot(result.fx - 0.5, result.fy - 0.5);
+  assert.ok(dist < 0.3, `expected clamped distance ${dist} to be strictly less than r`);
+  assert.ok(Math.abs(result.fy - 0.5) < 1e-9); // direction (due east) preserved
 });
 
-test('clampPointToRadius: a point outside the radius scales back to the boundary, preserving direction', () => {
+test('clampPointToRadius: a point outside the radius scales back to the inset boundary, preserving direction', () => {
   const result = clampPointToRadius(0.5, 0.5, 0.3, 1.5, 0.5); // 1.0 away, due east
-  assert.ok(Math.abs(result.fx - 0.8) < 1e-9); // 0.5 + 0.3
-  assert.ok(Math.abs(result.fy - 0.5) < 1e-9);
   const dist = Math.hypot(result.fx - 0.5, result.fy - 0.5);
-  assert.ok(Math.abs(dist - 0.3) < 1e-9);
+  assert.ok(dist < 0.3, `expected clamped distance ${dist} to be strictly less than r`);
+  assert.ok(Math.abs(result.fy - 0.5) < 1e-9);
 });
 
 test('clampPointToRadius: a point exactly at the center is left unchanged (no direction to scale along)', () => {
