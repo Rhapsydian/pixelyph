@@ -18,7 +18,7 @@ const THUMBNAIL_SIZE = 48;
 // (thumbnail + index + duration input, no more per-card action buttons)
 // without triggering the cards row's own scrollbar at the default
 // single-frame state.
-const MIN_HEIGHT = 140;
+const MIN_HEIGHT = 192;
 
 function FrameThumbnail({ canvas, frameIndex }) {
   const { body, defs } = composeFrameBody(canvas, frameIndex);
