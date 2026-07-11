@@ -23,11 +23,17 @@ test('serializeFill: linear-gradient at angle 0 spans left-to-right and referenc
   assert.match(def, /<stop offset="1" stop-color="#000"\/>/);
 });
 
-test('serializeFill: radial-gradient carries cx/cy/r through verbatim', () => {
+test('serializeFill: radial-gradient carries cx/cy/r through verbatim, defaulting fx/fy to cx/cy when absent', () => {
   const fill = { type: 'radial-gradient', cx: 0.5, cy: 0.4, r: 0.6, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] };
   const { attr, def } = serializeFill(fill, 'grad-2');
   assert.equal(attr, 'url(#grad-2)');
-  assert.match(def, /<radialGradient id="grad-2" cx="0\.5" cy="0\.4" r="0\.6">/);
+  assert.match(def, /<radialGradient id="grad-2" cx="0\.5" cy="0\.4" r="0\.6" fx="0\.5" fy="0\.4">/);
+});
+
+test('serializeFill: radial-gradient carries an explicit fx/fy through verbatim (not defaulted)', () => {
+  const fill = { type: 'radial-gradient', cx: 0.5, cy: 0.5, r: 0.5, fx: 0.3, fy: 0.7, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] };
+  const { def } = serializeFill(fill, 'grad-3');
+  assert.match(def, /<radialGradient id="grad-3" cx="0\.5" cy="0\.5" r="0\.5" fx="0\.3" fy="0\.7">/);
 });
 
 test('serializeFill: linear-gradient with mode "endpoints" passes x1/y1/x2/y2 through verbatim', () => {

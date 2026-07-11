@@ -131,3 +131,24 @@ export function radialRadiusFromDrag(bounds, px, cx) {
   const fx = (px - bounds.minX) / (bounds.maxX - bounds.minX);
   return Math.max(MIN_RADIAL_R, fx - cx);
 }
+
+/**
+ * Keeps a radial gradient's focal point within its radius — if (fx,fy) is
+ * further than `r` from (cx,cy) (Euclidean, in the same fraction space
+ * cx/cy/r already live in), scales it back to sit exactly on the boundary
+ * instead of escaping the circle.
+ * @param {number} cx
+ * @param {number} cy
+ * @param {number} r
+ * @param {number} fx
+ * @param {number} fy
+ * @returns {{fx:number,fy:number}}
+ */
+export function clampPointToRadius(cx, cy, r, fx, fy) {
+  const dx = fx - cx;
+  const dy = fy - cy;
+  const dist = Math.hypot(dx, dy);
+  if (dist <= r || dist === 0) return { fx, fy };
+  const scale = r / dist;
+  return { fx: cx + dx * scale, fy: cy + dy * scale };
+}

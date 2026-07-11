@@ -12,6 +12,7 @@ import {
   radialEdgeCanvasPosition,
   radialRadiusFromDrag,
   MIN_RADIAL_R,
+  clampPointToRadius,
 } from '../../../src/ui/draw/gradientHandleGeometry.js';
 
 function mockGrid({ width, height, offsetX, offsetY, painted }) {
@@ -102,6 +103,28 @@ test('radialRadiusFromDrag: recovers r from a canvas-space drag point, ignoring 
   // dragging past center still floors at MIN_RADIAL_R, never zero/negative
   assert.equal(radialRadiusFromDrag(bounds, bounds.minX, 0.5), MIN_RADIAL_R);
   assert.equal(radialRadiusFromDrag(bounds, bounds.minX - 100, 0.5), MIN_RADIAL_R);
+});
+
+test('clampPointToRadius: a point inside the radius passes through unchanged', () => {
+  assert.deepEqual(clampPointToRadius(0.5, 0.5, 0.3, 0.55, 0.5), { fx: 0.55, fy: 0.5 });
+});
+
+test('clampPointToRadius: a point exactly on the boundary passes through unchanged', () => {
+  const result = clampPointToRadius(0.5, 0.5, 0.3, 0.8, 0.5);
+  assert.ok(Math.abs(result.fx - 0.8) < 1e-9);
+  assert.ok(Math.abs(result.fy - 0.5) < 1e-9);
+});
+
+test('clampPointToRadius: a point outside the radius scales back to the boundary, preserving direction', () => {
+  const result = clampPointToRadius(0.5, 0.5, 0.3, 1.5, 0.5); // 1.0 away, due east
+  assert.ok(Math.abs(result.fx - 0.8) < 1e-9); // 0.5 + 0.3
+  assert.ok(Math.abs(result.fy - 0.5) < 1e-9);
+  const dist = Math.hypot(result.fx - 0.5, result.fy - 0.5);
+  assert.ok(Math.abs(dist - 0.3) < 1e-9);
+});
+
+test('clampPointToRadius: a point exactly at the center is left unchanged (no direction to scale along)', () => {
+  assert.deepEqual(clampPointToRadius(0.5, 0.5, 0.3, 0.5, 0.5), { fx: 0.5, fy: 0.5 });
 });
 
 test('round-trip: angleFromHandleDrag(gradientHandlePosition(angle)) recovers angle, including on non-square bounds', () => {

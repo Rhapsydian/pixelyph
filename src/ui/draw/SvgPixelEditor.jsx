@@ -632,6 +632,13 @@ export function SvgPixelEditor() {
             onCommitRadius={(r) => {
               useStore.getState().updateGridStyle(activeLayer.id, activeGrid.id, { fill: { ...activeGrid.style.fill, r } });
             }}
+            onDragFocal={(patch) => {
+              useStore.getState().updateGridStyleLive(activeLayer.id, activeGrid.id, { fill: { ...activeGrid.style.fill, ...patch } });
+              tick((n) => n + 1);
+            }}
+            onCommitFocal={(patch) => {
+              useStore.getState().updateGridStyle(activeLayer.id, activeGrid.id, { fill: { ...activeGrid.style.fill, ...patch } });
+            }}
           />
         )}
       </svg>

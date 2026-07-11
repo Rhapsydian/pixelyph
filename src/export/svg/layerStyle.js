@@ -30,7 +30,11 @@ export function serializeFill(fill, gradientId) {
     return { attr: `url(#${gradientId})`, def };
   }
   if (fill.type === 'radial-gradient') {
-    const def = `<radialGradient id="${gradientId}" cx="${fill.cx}" cy="${fill.cy}" r="${fill.r}">${stops}</radialGradient>`;
+    // fx/fy default to cx/cy when unset, matching SVG's own default-focal-equals-center
+    // behavior, so old saves with no fx/fy render identically.
+    const fx = fill.fx ?? fill.cx;
+    const fy = fill.fy ?? fill.cy;
+    const def = `<radialGradient id="${gradientId}" cx="${fill.cx}" cy="${fill.cy}" r="${fill.r}" fx="${fx}" fy="${fy}">${stops}</radialGradient>`;
     return { attr: `url(#${gradientId})`, def };
   }
   return { attr: '#000000', def: '' };

@@ -127,7 +127,7 @@ export function GradientEditorModal({ gradient, onChange, onCancel, onConfirm })
 
   function resetGeometry() {
     if (gradient.type === 'linear-gradient') onChange({ ...gradient, mode: 'angle', angle: 0 });
-    else onChange({ ...gradient, cx: 0.5, cy: 0.5, r: 0.5 });
+    else onChange({ ...gradient, cx: 0.5, cy: 0.5, r: 0.5, fx: undefined, fy: undefined });
   }
 
   function updateStop(index, patch) {
@@ -188,7 +188,7 @@ export function GradientEditorModal({ gradient, onChange, onCancel, onConfirm })
             </span>
           )}
           {gradient.type === 'radial-gradient' && (
-            <span style={{ display: 'inline-flex', gap: 8 }}>
+            <span style={{ display: 'inline-flex', gap: 8, flexWrap: 'wrap' }}>
               <label>
                 cx: <input type="number" step={0.05} value={gradient.cx} onChange={(e) => onChange({ ...gradient, cx: Number(e.target.value) })} style={{ width: 50 }} />
               </label>
@@ -197,6 +197,12 @@ export function GradientEditorModal({ gradient, onChange, onCancel, onConfirm })
               </label>
               <label>
                 r: <input type="number" step={0.05} value={gradient.r} onChange={(e) => onChange({ ...gradient, r: Number(e.target.value) })} style={{ width: 50 }} />
+              </label>
+              <label title="Off-center highlight point, defaults to the center">
+                fx: <input type="number" step={0.05} value={gradient.fx ?? gradient.cx} onChange={(e) => onChange({ ...gradient, fx: Number(e.target.value) })} style={{ width: 50 }} />
+              </label>
+              <label title="Off-center highlight point, defaults to the center">
+                fy: <input type="number" step={0.05} value={gradient.fy ?? gradient.cy} onChange={(e) => onChange({ ...gradient, fy: Number(e.target.value) })} style={{ width: 50 }} />
               </label>
             </span>
           )}
