@@ -6,6 +6,7 @@ import {
   gradientHandlePosition,
   gradientBoundsCenter,
   angleFromHandleDrag,
+  ANGLE_HANDLE_LENGTH,
 } from '../../../src/ui/draw/gradientHandleGeometry.js';
 
 function mockGrid({ width, height, offsetX, offsetY, painted }) {
@@ -26,14 +27,31 @@ test('gradientBoundsCanvasSpace: a fully empty grid returns null', () => {
   assert.equal(gradientBoundsCanvasSpace(grid), null);
 });
 
-test('gradientHandlePosition: angle 0 lands at the right-middle edge of the bbox', () => {
+test('gradientHandlePosition: angle 0 lands ANGLE_HANDLE_LENGTH to the right of the bbox center', () => {
   const bounds = { minX: 0, minY: 0, maxX: 10, maxY: 10 };
-  assert.deepEqual(gradientHandlePosition(bounds, 0), { x: 10, y: 5 });
+  const { x, y } = gradientHandlePosition(bounds, 0);
+  assert.ok(Math.abs(x - (5 + ANGLE_HANDLE_LENGTH)) < 1e-9);
+  assert.ok(Math.abs(y - 5) < 1e-9);
 });
 
-test('gradientHandlePosition: angle 90 lands at the bottom-middle edge (SVG y-down)', () => {
+test('gradientHandlePosition: angle 90 lands ANGLE_HANDLE_LENGTH below the bbox center (SVG y-down)', () => {
   const bounds = { minX: 0, minY: 0, maxX: 10, maxY: 10 };
-  assert.deepEqual(gradientHandlePosition(bounds, 90), { x: 5, y: 10 });
+  const { x, y } = gradientHandlePosition(bounds, 90);
+  assert.ok(Math.abs(x - 5) < 1e-9);
+  assert.ok(Math.abs(y - (5 + ANGLE_HANDLE_LENGTH)) < 1e-9);
+});
+
+test('gradientHandlePosition: spoke length is independent of bbox size', () => {
+  const small = { minX: 0, minY: 0, maxX: 2, maxY: 2 };
+  const large = { minX: 0, minY: 0, maxX: 200, maxY: 200 };
+  const smallHandle = gradientHandlePosition(small, 0);
+  const largeHandle = gradientHandlePosition(large, 0);
+  const smallCenter = gradientBoundsCenter(small);
+  const largeCenter = gradientBoundsCenter(large);
+  const smallDist = Math.hypot(smallHandle.x - smallCenter.x, smallHandle.y - smallCenter.y);
+  const largeDist = Math.hypot(largeHandle.x - largeCenter.x, largeHandle.y - largeCenter.y);
+  assert.ok(Math.abs(smallDist - ANGLE_HANDLE_LENGTH) < 1e-9);
+  assert.ok(Math.abs(largeDist - ANGLE_HANDLE_LENGTH) < 1e-9);
 });
 
 test('gradientBoundsCenter: returns the bbox midpoint', () => {
