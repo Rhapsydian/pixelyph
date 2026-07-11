@@ -18,6 +18,7 @@ import {
   addFrame,
   duplicateFrame,
   removeFrame,
+  reorderFrame,
   setActiveFrame,
   setFrameDuration,
   setLayerFrameVisibility,
@@ -465,6 +466,34 @@ test('removeFrame refuses to remove the last remaining frame', () => {
   removeFrame(canvas, 0);
   assert.equal(canvas.frameCount, 1);
   assert.equal(layer.frames.length, 1);
+});
+
+test('reorderFrame swaps a frame with its neighbor, across every layer and frameDurations, and no-ops past either end', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const layerA = addLayer(canvas, { name: 'A' });
+  paintCell(canvas, 0, 0, '#ff0000'); // frame 0, layer A
+  addFrame(canvas); // frame 1, active
+  paintCell(canvas, 1, 1, '#00ff00'); // frame 1, layer A
+  setFrameDuration(canvas, 0, 100);
+  setFrameDuration(canvas, 1, 200);
+  const layerB = addLayer(canvas, { name: 'B' });
+  setActiveFrame(canvas, 0);
+  paintCell(canvas, 0, 0, '#0000ff'); // frame 0, layer B
+
+  reorderFrame(canvas, 0, 1);
+
+  assert.equal(layerA.frames[0].grids[0].style.fill, '#00ff00', 'layer A\'s frames swapped');
+  assert.equal(layerA.frames[1].grids[0].style.fill, '#ff0000');
+  assert.deepEqual(layerB.frames[0].grids, [], 'layer B\'s frames swapped too (blank frame 1 moved to index 0)');
+  assert.equal(layerB.frames[1].grids[0].style.fill, '#0000ff');
+  assert.deepEqual(canvas.frameDurations, [200, 100], 'frameDurations swapped alongside');
+  assert.equal(canvas.activeFrame, 1, 'activeFrame follows the moved frame (was 0, now at index 1)');
+
+  reorderFrame(canvas, 1, 1); // past the last index; no-op
+  assert.deepEqual(canvas.frameDurations, [200, 100]);
+  reorderFrame(canvas, 0, -1); // past the first index; no-op
+  assert.deepEqual(canvas.frameDurations, [200, 100]);
 });
 
 test('setActiveFrame clamps to the valid range', () => {

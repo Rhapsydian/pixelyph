@@ -859,6 +859,32 @@ export function removeFrame(canvas, index) {
 }
 
 /**
+ * Swaps frame `index` with its neighbor in `direction` (1|-1), across every
+ * layer's `frames` array plus `canvas.frameDurations` — unlike a layer
+ * (identified by a stable id), a frame is purely positional, so every
+ * layer's frames stay index-keyed in lockstep with `canvas.frameCount`, and
+ * the swap must touch all three in one pass. Mirrors `reorderLayer`'s
+ * single-step-swap convention. No-ops past either end. Remaps
+ * `canvas.activeFrame` so whichever frame was selected stays selected
+ * through the move, regardless of which of the two swapped positions
+ * triggered it.
+ *
+ * @param {object} canvas
+ * @param {number} index
+ * @param {1|-1} direction
+ */
+export function reorderFrame(canvas, index, direction) {
+  const j = index + direction;
+  if (j < 0 || j >= canvas.frameCount) return;
+  for (const layer of canvas.layers) {
+    [layer.frames[index], layer.frames[j]] = [layer.frames[j], layer.frames[index]];
+  }
+  [canvas.frameDurations[index], canvas.frameDurations[j]] = [canvas.frameDurations[j], canvas.frameDurations[index]];
+  if (canvas.activeFrame === index) canvas.activeFrame = j;
+  else if (canvas.activeFrame === j) canvas.activeFrame = index;
+}
+
+/**
  * Makes `index` the active frame — a working-session pointer move (like
  * setActiveLayerId), not a committed action. Clamped to the valid range.
  * Re-resolves `activeGridId` (see resolveActiveGrid) using the shape that

@@ -257,6 +257,24 @@ export function MoveDownIcon(props) {
   );
 }
 
+export function MoveLeftIcon(props) {
+  return (
+    <Svg {...props}>
+      <path d="M16 10H4" />
+      <path d="M8.5 5.5 4 10l4.5 4.5" />
+    </Svg>
+  );
+}
+
+export function MoveRightIcon(props) {
+  return (
+    <Svg {...props}>
+      <path d="M4 10h12" />
+      <path d="M11.5 5.5 16 10l-4.5 4.5" />
+    </Svg>
+  );
+}
+
 export function MergeDownIcon(props) {
   return (
     <Svg {...props}>

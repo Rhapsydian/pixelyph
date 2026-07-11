@@ -11,13 +11,14 @@ import { useStore } from '../../state/store.js';
 import { composeFrameBody } from '../../export/svg/composeLayersSvg.js';
 import { IconButton } from '../IconButton.jsx';
 import { useResizeDrag } from '../useResizeDrag.js';
-import { PlayIcon, PauseIcon, PlusIcon, DuplicateIcon, TrashIcon } from '../icons.jsx';
+import { PlayIcon, PauseIcon, PlusIcon, DuplicateIcon, TrashIcon, MoveLeftIcon, MoveRightIcon } from '../icons.jsx';
 
 const THUMBNAIL_SIZE = 48;
-// Tall enough for the controls row + one full row of frame cards (thumbnail
-// + index + duration input + action buttons) without triggering the panel's
-// own internal scrollbar at the default single-frame state.
-const MIN_HEIGHT = 230;
+// Tall enough for the controls row + one always-single row of frame cards
+// (thumbnail + index + duration input, no more per-card action buttons)
+// without triggering the cards row's own scrollbar at the default
+// single-frame state.
+const MIN_HEIGHT = 140;
 
 function FrameThumbnail({ canvas, frameIndex }) {
   const { body, defs } = composeFrameBody(canvas, frameIndex);
@@ -35,10 +36,8 @@ function FrameThumbnail({ canvas, frameIndex }) {
   );
 }
 
-function FrameCard({ canvas, frameIndex, isActive, isOnlyFrame }) {
+function FrameCard({ canvas, frameIndex, isActive }) {
   const setActiveFrame = useStore((s) => s.setActiveFrame);
-  const duplicateFrame = useStore((s) => s.duplicateFrame);
-  const removeFrame = useStore((s) => s.removeFrame);
   const setFrameDuration = useStore((s) => s.setFrameDuration);
 
   const committedDuration = canvas.frameDurations[frameIndex];
@@ -54,7 +53,7 @@ function FrameCard({ canvas, frameIndex, isActive, isOnlyFrame }) {
   }, [committedDuration]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0 }}>
       <div
         onClick={() => setActiveFrame(frameIndex)}
         className="cell"
@@ -78,10 +77,6 @@ function FrameCard({ canvas, frameIndex, isActive, isOnlyFrame }) {
         />
         ms
       </label>
-      <span style={{ display: 'flex', gap: 2 }}>
-        <IconButton icon={<DuplicateIcon />} label="Duplicate frame" onClick={() => duplicateFrame(frameIndex)} />
-        <IconButton icon={<TrashIcon />} label="Delete frame" disabled={isOnlyFrame} onClick={() => removeFrame(frameIndex)} />
-      </span>
     </div>
   );
 }
@@ -89,6 +84,9 @@ function FrameCard({ canvas, frameIndex, isActive, isOnlyFrame }) {
 export function FrameStrip() {
   const canvas = useStore((s) => s.canvas);
   const addFrame = useStore((s) => s.addFrame);
+  const reorderFrame = useStore((s) => s.reorderFrame);
+  const duplicateFrame = useStore((s) => s.duplicateFrame);
+  const removeFrame = useStore((s) => s.removeFrame);
   const setFrameRate = useStore((s) => s.setFrameRate);
   const onionSkinEnabled = useStore((s) => s.onionSkinEnabled);
   const toggleOnionSkin = useStore((s) => s.toggleOnionSkin);
@@ -104,7 +102,9 @@ export function FrameStrip() {
         style={{
           height,
           minHeight: MIN_HEIGHT,
-          overflow: 'auto',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
           minWidth: 0,
           background: 'var(--chrome-bg-panel)',
           borderTop: '1px solid var(--chrome-border)',
@@ -122,6 +122,10 @@ export function FrameStrip() {
           onClick={togglePlayback}
         />
         <IconButton icon={<PlusIcon />} label="Add frame" onClick={() => addFrame()} />
+        <IconButton icon={<MoveLeftIcon />} label="Move frame left" disabled={canvas.activeFrame === 0} onClick={() => reorderFrame(canvas.activeFrame, -1)} />
+        <IconButton icon={<MoveRightIcon />} label="Move frame right" disabled={canvas.activeFrame === canvas.frameCount - 1} onClick={() => reorderFrame(canvas.activeFrame, 1)} />
+        <IconButton icon={<DuplicateIcon />} label="Duplicate frame" onClick={() => duplicateFrame(canvas.activeFrame)} />
+        <IconButton icon={<TrashIcon />} label="Delete frame" disabled={canvas.frameCount <= 1} onClick={() => removeFrame(canvas.activeFrame)} />
         <label title="The duration a newly-added frame gets — doesn't change existing frames' own durations" style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
           Default FPS:{' '}
           <input
@@ -137,14 +141,13 @@ export function FrameStrip() {
           <input type="checkbox" checked={onionSkinEnabled} onChange={toggleOnionSkin} /> Onion skin
         </label>
       </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'nowrap', overflowX: 'auto', overflowY: 'hidden', flex: 1, minHeight: 0 }}>
         {Array.from({ length: canvas.frameCount }, (_, frameIndex) => (
           <FrameCard
             key={frameIndex}
             canvas={canvas}
             frameIndex={frameIndex}
             isActive={frameIndex === canvas.activeFrame}
-            isOnlyFrame={canvas.frameCount <= 1}
           />
         ))}
       </div>

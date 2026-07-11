@@ -270,6 +270,38 @@ test('addFrame/duplicateFrame/removeFrame are undo-tracked; setActiveFrame is a 
   assert.equal(useStore.getState().canvas.frameCount, 1);
 });
 
+test('reorderFrame is undo-tracked (content only — activeFrame is excluded from snapshots, same as activeLayerId) and keeps whichever frame was active following the move', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  store.addFrame(); // frame 1
+  store.addFrame(); // frame 2, active
+  store.setFrameDuration(0, 100);
+  store.setFrameDuration(1, 200);
+  store.setFrameDuration(2, 300);
+  assert.equal(useStore.getState().canvas.frameCount, 3);
+  assert.equal(useStore.getState().canvas.activeFrame, 2);
+
+  // Branch 1: moving the active frame itself — activeFrame follows it.
+  useStore.getState().reorderFrame(2, -1);
+  assert.equal(useStore.getState().canvas.activeFrame, 1, 'activeFrame follows the frame it was pointing at');
+  assert.deepEqual(useStore.getState().canvas.frameDurations, [100, 300, 200]);
+
+  useStore.getState().undo();
+  // activeFrame is a working-session pointer excluded from undo snapshots
+  // (see contentSnapshot's comment) — only the swapped content reverts.
+  assert.deepEqual(useStore.getState().canvas.frameDurations, [100, 200, 300], 'undo reverts the frame/frameDurations swap');
+
+  // Branch 2: moving a frame adjacent to a different active frame — the
+  // active frame stays selected at its new index, not the one that moved.
+  useStore.getState().setActiveFrame(0);
+  useStore.getState().reorderFrame(1, -1); // swaps frames 0 and 1; frame 0 (active) moves to index 1
+  assert.equal(useStore.getState().canvas.activeFrame, 1, 'active frame (not the one that moved by explicit index) stays selected at its new position');
+  assert.deepEqual(useStore.getState().canvas.frameDurations, [200, 100, 300]);
+
+  useStore.getState().undo();
+  assert.deepEqual(useStore.getState().canvas.frameDurations, [100, 200, 300], 'undo reverts this swap too');
+});
+
 test('setFrameDuration is undo-tracked, like any other structural edit', async () => {
   const store = useStore.getState();
   await store.newProject('draw');

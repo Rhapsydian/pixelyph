@@ -44,6 +44,7 @@ import {
   addFrame as addFrameModel,
   duplicateFrame as duplicateFrameModel,
   removeFrame as removeFrameModel,
+  reorderFrame as reorderFrameModel,
   setActiveFrame as setActiveFrameModel,
   setFrameDuration as setFrameDurationModel,
   setLayerFrameVisibility as setLayerFrameVisibilityModel,
@@ -651,6 +652,10 @@ export const useStore = create((set, get) => {
     },
     removeFrame: (index) => {
       removeFrameModel(get().canvas, index);
+      commit();
+    },
+    reorderFrame: (index, direction) => {
+      reorderFrameModel(get().canvas, index, direction);
       commit();
     },
     /** Manual frame navigation — also stops playback, the same "scrubbing takes back control" convention most animation/video UIs use. */
