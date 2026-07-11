@@ -288,9 +288,6 @@ function LayersToolbar({ canvas, selectionKind, onAddShape, showShapes }) {
   const flipActiveShapeH = useStore((s) => s.flipActiveShapeH);
   const flipActiveShapeV = useStore((s) => s.flipActiveShapeV);
   const rotateActiveShape90 = useStore((s) => s.rotateActiveShape90);
-  const flipActiveLayerH = useStore((s) => s.flipActiveLayerH);
-  const flipActiveLayerV = useStore((s) => s.flipActiveLayerV);
-  const rotateActiveLayer90 = useStore((s) => s.rotateActiveLayer90);
 
   const activeLayer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
   const activeGrid = activeLayer?.frames[canvas.activeFrame]?.grids.find((g) => g.id === canvas.activeGridId);
@@ -326,9 +323,6 @@ function LayersToolbar({ canvas, selectionKind, onAddShape, showShapes }) {
         <IconButton icon={<DuplicateIcon />} label="Duplicate layer" disabled={!hasActive} onClick={() => duplicateLayer(canvas.activeLayerId)} />
         <IconButton icon={<MergeDownIcon />} label="Merge down (preserves each shape's own style)" disabled={!hasActive || isBottom} onClick={() => mergeLayerDown(canvas.activeLayerId)} />
         <IconButton icon={<TrashIcon />} label="Delete layer" disabled={!hasActive} onClick={() => removeLayer(canvas.activeLayerId)} />
-        <IconButton icon={<FlipHorizontalIcon />} label="Flip layer horizontal" disabled={!hasActive} onClick={flipActiveLayerH} />
-        <IconButton icon={<FlipVerticalIcon />} label="Flip layer vertical" disabled={!hasActive} onClick={flipActiveLayerV} />
-        <IconButton icon={<Rotate90Icon />} label="Rotate layer 90°" disabled={!hasActive} onClick={rotateActiveLayer90} />
       </>
     );
   }
