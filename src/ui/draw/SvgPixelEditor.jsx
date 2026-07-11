@@ -509,7 +509,7 @@ export function SvgPixelEditor() {
         width={pixelWidth}
         height={pixelHeight}
         viewBox={`0 0 ${doc.width} ${doc.height}`}
-        style={{ position: 'absolute', left: offsetX, top: offsetY, display: 'block', touchAction: 'none', cursor: 'crosshair' }}
+        style={{ position: 'absolute', left: offsetX, top: offsetY, display: 'block', touchAction: 'none', cursor: 'crosshair', overflow: 'visible' }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -517,6 +517,11 @@ export function SvgPixelEditor() {
         onPointerLeave={handlePointerLeave}
         onContextMenu={(evt) => evt.preventDefault()}
       >
+        {/* Nested, still-clipped viewport for the artwork itself and its non-interactive overlays —
+            off-canvas content stays hidden here, same as before. Gradient handles render as direct
+            children of the outer (now overflow:visible) svg below, so they stay visible/grabbable
+            even when dragged outside the canvas bounds. */}
+        <svg width={doc.width} height={doc.height} viewBox={`0 0 ${doc.width} ${doc.height}`} overflow="hidden">
         <TransparencyBackground width={doc.width} height={doc.height} />
         {defsHtml && <g dangerouslySetInnerHTML={{ __html: defsHtml }} />}
         {doc.referenceImage && <ReferenceImageLayer referenceImage={doc.referenceImage} width={doc.width} height={doc.height} />}
@@ -574,6 +579,7 @@ export function SvgPixelEditor() {
           />
         )}
         {cursorCell && <BrushCursor x={cursorCell.x} y={cursorCell.y} />}
+        </svg>
         {showGradientHandle && activeGrid.style.fill.mode !== 'endpoints' && (
           <GradientAngleHandle
             grid={activeGrid}
