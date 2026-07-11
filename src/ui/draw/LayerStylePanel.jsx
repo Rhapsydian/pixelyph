@@ -37,6 +37,7 @@ function fillSelectKind(fill) {
 function FillEditor({ layer, updateLayerStyle }) {
   const addPaletteColor = useStore((s) => s.addPaletteColor);
   const addPaletteFill = useStore((s) => s.addPaletteFill);
+  const requestName = useStore((s) => s.requestName);
   const gradientHandleEnabledGridId = useStore((s) => s.gradientHandleEnabledGridId);
   const setGradientHandleEnabled = useStore((s) => s.setGradientHandleEnabled);
   const fill = layer.style.fill;
@@ -62,9 +63,13 @@ function FillEditor({ layer, updateLayerStyle }) {
     else if (newKind === 'gradient') updateLayerStyle(layer.id, { fill: DEFAULT_GRADIENT });
   }
 
-  function saveToPalette() {
+  async function saveToPalette() {
     if (kind === 'solid') addPaletteColor(fill);
-    else if (kind === 'gradient') addPaletteFill(fill);
+    else if (kind === 'gradient') {
+      const name = await requestName('Name this gradient');
+      if (name == null) return;
+      addPaletteFill({ ...fill, name });
+    }
   }
 
   return (
@@ -239,6 +244,7 @@ export function LayerStylePanel() {
   const canvas = useStore((s) => s.canvas);
   const updateGridStyle = useStore((s) => s.updateGridStyle);
   const addPaletteStyle = useStore((s) => s.addPaletteStyle);
+  const requestName = useStore((s) => s.requestName);
 
   if (canvas.tier !== 'advanced') return null;
   const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
@@ -257,7 +263,15 @@ export function LayerStylePanel() {
     <div className="panel">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <strong>Style — {grid.name}</strong>
-        <IconButton icon={<SaveToPaletteIcon size={20} />} label="Save style" onClick={() => addPaletteStyle(grid.style)} />
+        <IconButton
+          icon={<SaveToPaletteIcon size={20} />}
+          label="Save style"
+          onClick={async () => {
+            const name = await requestName('Name this style');
+            if (name == null) return;
+            addPaletteStyle(grid.style, name);
+          }}
+        />
       </div>
       <FillEditor layer={grid} updateLayerStyle={boundUpdate} />
       <StrokeEditor layer={grid} updateLayerStyle={boundUpdate} />

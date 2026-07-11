@@ -744,8 +744,8 @@ export const useStore = create((set, get) => {
       addPaletteFillModel(get().canvas.palette, fillValue);
       commit();
     },
-    addPaletteStyle: (styleValue) => {
-      addPaletteStyleModel(get().canvas.palette, cloneLayerStyle(styleValue));
+    addPaletteStyle: (styleValue, name) => {
+      addPaletteStyleModel(get().canvas.palette, name != null ? { ...cloneLayerStyle(styleValue), name } : cloneLayerStyle(styleValue));
       commit();
     },
     removePaletteEntry: (group, key) => {
@@ -862,6 +862,17 @@ export const useStore = create((set, get) => {
     resolvePaletteImportMode: (result) => {
       get().paletteImportModeDialog?.resolve(result);
       set({ paletteImportModeDialog: null });
+    },
+
+    // Same promise-based pattern as requestConfirm/resolveConfirm, but for
+    // prompting a text name (e.g. naming a palette gradient/style on save)
+    // instead of a yes/no choice — resolves to the trimmed name string, or
+    // null on Cancel/Escape.
+    nameDialog: null,
+    requestName: (label, defaultValue = '') => new Promise((resolve) => set({ nameDialog: { label, defaultValue, resolve } })),
+    resolveName: (result) => {
+      get().nameDialog?.resolve(result);
+      set({ nameDialog: null });
     },
 
     // --- Project lifecycle (Phase 4) ---

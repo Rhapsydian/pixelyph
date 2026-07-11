@@ -14,6 +14,7 @@ import { ImportImageModal } from './ui/ImportImageModal.jsx';
 import { ReferenceImageModal } from './ui/ReferenceImageModal.jsx';
 import { AboutModal } from './ui/AboutModal.jsx';
 import { ConfirmModal } from './ui/ConfirmModal.jsx';
+import { NamePromptModal } from './ui/NamePromptModal.jsx';
 import { PaletteImportModeModal } from './ui/PaletteImportModeModal.jsx';
 import { IconButton } from './ui/IconButton.jsx';
 import { FullscreenIcon, FullscreenExitIcon, UndoIcon, RedoIcon } from './ui/icons.jsx';
@@ -253,6 +254,7 @@ export default function App() {
         <ExportModal />
         <AboutModal />
         <ConfirmModal />
+        <NamePromptModal />
       </div>
       {!projectOpen && <StartupScreen />}
     </>

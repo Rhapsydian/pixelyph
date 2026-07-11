@@ -113,6 +113,7 @@ function FillsGroup() {
   const removePaletteEntry = useStore((s) => s.removePaletteEntry);
   const applyPaletteEntryToActiveGrid = useStore((s) => s.applyPaletteEntryToActiveGrid);
   const requestConfirm = useStore((s) => s.requestConfirm);
+  const requestName = useStore((s) => s.requestName);
   const [selected, setSelected] = useState(null);
   const [draftGradient, setDraftGradient] = useState(null); // non-null while the "add" modal is open
 
@@ -124,8 +125,10 @@ function FillsGroup() {
     setDraftGradient(null);
   }
 
-  function confirmAddGradient() {
-    addPaletteFill(draftGradient);
+  async function confirmAddGradient() {
+    const name = await requestName('Name this gradient');
+    if (name == null) return;
+    addPaletteFill({ ...draftGradient, name });
     setDraftGradient(null);
   }
 
