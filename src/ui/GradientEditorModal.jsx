@@ -31,6 +31,7 @@ import { useRef, useState } from 'react';
 import { Modal, ModalActions } from './Modal.jsx';
 import { ColorAlphaInput } from './ColorAlphaInput.jsx';
 import { FillSwatch } from './FillSwatch.jsx';
+import { endpointsFromAngle, angleFromEndpoints } from '../export/svg/layerStyle.js';
 
 const MODAL_WIDTH = 340;
 const STOP_LIST_MAX_HEIGHT = 160;
@@ -106,8 +107,27 @@ export function GradientEditorModal({ gradient, onChange, onCancel, onConfirm })
 
   function setType(type) {
     if (type === gradient.type) return;
-    if (type === 'linear-gradient') onChange({ type: 'linear-gradient', angle: 0, stops: gradient.stops });
+    if (type === 'linear-gradient') onChange({ type: 'linear-gradient', mode: 'angle', angle: 0, stops: gradient.stops });
     else onChange({ type: 'radial-gradient', cx: 0.5, cy: 0.5, r: 0.5, stops: gradient.stops });
+  }
+
+  // Both representations (angle, and x1/y1/x2/y2) stay on the gradient object once
+  // Endpoints mode has been entered — only recomputed at the moment of an explicit
+  // mode switch, not kept continuously in sync during a drag.
+  function setMode(mode) {
+    if (mode === gradient.mode) return;
+    if (mode === 'endpoints') {
+      const { x1, y1, x2, y2 } = endpointsFromAngle(gradient.angle ?? 0);
+      onChange({ ...gradient, mode, x1, y1, x2, y2 });
+    } else {
+      const angle = angleFromEndpoints(gradient.x1, gradient.y1, gradient.x2, gradient.y2);
+      onChange({ ...gradient, mode, angle });
+    }
+  }
+
+  function resetGeometry() {
+    if (gradient.type === 'linear-gradient') onChange({ ...gradient, mode: 'angle', angle: 0 });
+    else onChange({ ...gradient, cx: 0.5, cy: 0.5, r: 0.5 });
   }
 
   function updateStop(index, patch) {
@@ -135,9 +155,37 @@ export function GradientEditorModal({ gradient, onChange, onCancel, onConfirm })
             <option value="radial-gradient">Radial</option>
           </select>
           {gradient.type === 'linear-gradient' && (
+            <select value={gradient.mode ?? 'angle'} onChange={(e) => setMode(e.target.value)}>
+              <option value="angle">Angle</option>
+              <option value="endpoints">Endpoints</option>
+            </select>
+          )}
+          <button className="btn" onClick={resetGeometry} style={{ marginLeft: 'auto' }} title="Reset position/geometry to defaults (stops are untouched)">
+            Reset
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {gradient.type === 'linear-gradient' && (gradient.mode ?? 'angle') === 'angle' && (
             <label>
               Angle: <input type="number" value={gradient.angle} onChange={(e) => onChange({ ...gradient, angle: Number(e.target.value) })} style={{ width: 60 }} />°
             </label>
+          )}
+          {gradient.type === 'linear-gradient' && gradient.mode === 'endpoints' && (
+            <span style={{ display: 'inline-flex', gap: 8, flexWrap: 'wrap' }}>
+              <label>
+                x1: <input type="number" step={0.05} value={gradient.x1} onChange={(e) => onChange({ ...gradient, x1: Number(e.target.value) })} style={{ width: 50 }} />
+              </label>
+              <label>
+                y1: <input type="number" step={0.05} value={gradient.y1} onChange={(e) => onChange({ ...gradient, y1: Number(e.target.value) })} style={{ width: 50 }} />
+              </label>
+              <label>
+                x2: <input type="number" step={0.05} value={gradient.x2} onChange={(e) => onChange({ ...gradient, x2: Number(e.target.value) })} style={{ width: 50 }} />
+              </label>
+              <label>
+                y2: <input type="number" step={0.05} value={gradient.y2} onChange={(e) => onChange({ ...gradient, y2: Number(e.target.value) })} style={{ width: 50 }} />
+              </label>
+            </span>
           )}
           {gradient.type === 'radial-gradient' && (
             <span style={{ display: 'inline-flex', gap: 8 }}>

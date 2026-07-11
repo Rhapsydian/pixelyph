@@ -19,12 +19,14 @@ export function serializeFill(fill, gradientId) {
   if (typeof fill === 'string') return { attr: fill, def: '' };
   const stops = fill.stops.map((s) => `<stop offset="${s.offset}" stop-color="${escapeAttr(s.color)}"/>`).join('');
   if (fill.type === 'linear-gradient') {
+    if (fill.mode === 'endpoints') {
+      const def = `<linearGradient id="${gradientId}" x1="${fill.x1}" y1="${fill.y1}" x2="${fill.x2}" y2="${fill.y2}">${stops}</linearGradient>`;
+      return { attr: `url(#${gradientId})`, def };
+    }
     // Unit vector at `angle` degrees (0 = left-to-right), centered in objectBoundingBox
     // space so it spans the layer's own bounding box regardless of its size.
-    const rad = ((fill.angle ?? 0) * Math.PI) / 180;
-    const dx = Math.cos(rad) * 0.5;
-    const dy = Math.sin(rad) * 0.5;
-    const def = `<linearGradient id="${gradientId}" x1="${0.5 - dx}" y1="${0.5 - dy}" x2="${0.5 + dx}" y2="${0.5 + dy}">${stops}</linearGradient>`;
+    const { x1, y1, x2, y2 } = endpointsFromAngle(fill.angle ?? 0);
+    const def = `<linearGradient id="${gradientId}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">${stops}</linearGradient>`;
     return { attr: `url(#${gradientId})`, def };
   }
   if (fill.type === 'radial-gradient') {
@@ -46,6 +48,36 @@ export function serializeFill(fill, gradientId) {
  */
 export function angleFromVector(dx, dy) {
   return (Math.atan2(dy, dx) * 180) / Math.PI;
+}
+
+/**
+ * Forward: angle (degrees) -> the linear gradient's x1/y1/x2/y2 endpoint
+ * pair in 0.5-centered objectBoundingBox-fraction space — the same math
+ * serializeFill's angle branch uses, extracted so Endpoints mode can seed
+ * itself from an Angle-mode value on an explicit mode switch.
+ * @param {number} angle degrees
+ * @returns {{x1:number,y1:number,x2:number,y2:number}}
+ */
+export function endpointsFromAngle(angle) {
+  const rad = (angle * Math.PI) / 180;
+  const dx = Math.cos(rad) * 0.5;
+  const dy = Math.sin(rad) * 0.5;
+  return { x1: 0.5 - dx, y1: 0.5 - dy, x2: 0.5 + dx, y2: 0.5 + dy };
+}
+
+/**
+ * Inverse of endpointsFromAngle — direction-only (drops magnitude), so this
+ * is a lossy UI-convenience seed for switching Endpoints -> Angle mode, not
+ * a true round-trip: an asymmetric endpoint pair collapses to whichever
+ * angle points the same direction.
+ * @param {number} x1
+ * @param {number} y1
+ * @param {number} x2
+ * @param {number} y2
+ * @returns {number} angle in degrees
+ */
+export function angleFromEndpoints(x1, y1, x2, y2) {
+  return angleFromVector(x2 - x1, y2 - y1);
 }
 
 /**

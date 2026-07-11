@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { serializeFill, serializeStroke, escapeAttr, angleFromVector } from '../../../src/export/svg/layerStyle.js';
+import { serializeFill, serializeStroke, escapeAttr, angleFromVector, endpointsFromAngle, angleFromEndpoints } from '../../../src/export/svg/layerStyle.js';
 
 test('serializeFill: null fill serializes to fill="none" with no def', () => {
   const { attr, def } = serializeFill(null, 'grad-1');
@@ -28,6 +28,35 @@ test('serializeFill: radial-gradient carries cx/cy/r through verbatim', () => {
   const { attr, def } = serializeFill(fill, 'grad-2');
   assert.equal(attr, 'url(#grad-2)');
   assert.match(def, /<radialGradient id="grad-2" cx="0\.5" cy="0\.4" r="0\.6">/);
+});
+
+test('serializeFill: linear-gradient with mode "endpoints" passes x1/y1/x2/y2 through verbatim', () => {
+  const fill = {
+    type: 'linear-gradient',
+    mode: 'endpoints',
+    x1: 0.1,
+    y1: 0.2,
+    x2: 0.9,
+    y2: 0.8,
+    angle: 45, // stale angle left over from a prior mode switch — must be ignored in endpoints mode
+    stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }],
+  };
+  const { attr, def } = serializeFill(fill, 'grad-3');
+  assert.equal(attr, 'url(#grad-3)');
+  assert.match(def, /<linearGradient id="grad-3" x1="0\.1" y1="0\.2" x2="0\.9" y2="0\.8">/);
+});
+
+test('endpointsFromAngle/angleFromEndpoints round-trip at 0/90/45 degrees', () => {
+  for (const angle of [0, 90, 45]) {
+    const { x1, y1, x2, y2 } = endpointsFromAngle(angle);
+    assert.ok(Math.abs(angleFromEndpoints(x1, y1, x2, y2) - angle) < 1e-9);
+  }
+});
+
+test('angleFromEndpoints: direction-only on an asymmetric endpoint pair (not a true magnitude round-trip)', () => {
+  // (0,0)->(2,0) and (0,0)->(1,0) point the same direction but have different lengths;
+  // angleFromEndpoints only recovers direction, so both collapse to the same angle.
+  assert.equal(angleFromEndpoints(0, 0, 2, 0), angleFromEndpoints(0, 0, 1, 0));
 });
 
 test('serializeStroke: no stroke serializes to an empty string', () => {
