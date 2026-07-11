@@ -21,6 +21,36 @@ blocking issue is fixed); and open ideas flagged for later discussion
 rather than acted on immediately. Review this list once all
 currently-planned phases are complete.
 
+## DONE: Fix animated SVG export gap/misordering for mixed-duration frames
+
+Shipped session 25 (2026-07-10), commit `ee16e90`. User-reported bug: an
+animation with all frames at 300ms except one at 600ms showed a gap right
+before the 600ms frame, with the following frame appearing too early.
+
+**Root cause:** `buildAnimationCss` (`src/export/svg/animatedSvg.js`)
+computed each frame's CSS `animation-delay` from the cumulative duration of
+every frame *before* it. A negative `animation-delay` means "act as if the
+animation already ran this long" — so the delay actually needs to reflect
+how far the frame's slot sits from the *end* of the cycle, not the start.
+The old formula only produced correct output by coincidence in the trivial
+2-equal-duration-frame case (confirmed via a 100,000-sample timeline
+simulation comparing generated CSS output against the expected schedule);
+any animation with 3+ frames had frames landing in shuffled real-time
+slots, which only became a *visible* gap once a duration actually differed
+from its neighbors.
+
+**Fix:** delay changed from `-(cumulativeMs / 1000)` to
+`-((totalMs - cumulativeMs) / 1000)`. Tests: 403/403 → 404/404 (updated two
+existing assertions that had hard-coded the old, buggy delay values, and
+added a regression test for the exact reported scenario that scrubs the
+generated CSS's actual on/off timeline rather than just checking numbers).
+Manually verified two ways: scrubbing the Web Animations API's
+`currentTime` across a full cycle in the browser (exact match to the
+expected per-frame windows, no gaps/overlaps), and a live check against
+the user's actual project in standalone Chrome (the Claude Code Browser
+pane surfaced an unrelated double-save-dialog quirk during testing, absent
+in standalone Chrome — a preview-tool artifact, not an app bug).
+
 ## DONE: Narrow the tier distinction to one axis, and rename it (Pixel / Shape)
 
 Shipped in session 19 (2026-07-09), 4 commits on `main`. Fed by two Tokenote
