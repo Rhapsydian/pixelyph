@@ -1,16 +1,17 @@
 # Backlog
 
-## NEXT SESSION: Checkpoint 7 sub-step 2 (gradient handles)
+## NEXT SESSION: Palette naming, frame reorder, Layers panel cleanup
 
-Full spec: [`docs/gradient-handle-plan.md`](./docs/gradient-handle-plan.md),
-broken into five independently-shippable checkpoints. **Start at
-Checkpoint 1** — fixing the shipped linear-angle handle's spoke length
-(currently scales with shape bbox size, should be a fixed length pivoting
-at the shape's center). Checkpoints 2-3 add a linear-endpoints drag mode
-alongside the existing angle mode; checkpoints 4-5 add radial center/
-radius/focal-point handles. Each checkpoint is its own implement → test →
-verify → commit cycle — pause for confirmation between them rather than
-doing all five in one sitting.
+Full spec: [`docs/palette-frames-cleanup-plan.md`](./docs/palette-frames-cleanup-plan.md),
+three independent, small items pulled from `.claude/tokenote-notes.md`'s ⚡
+Priority section. **Start at Checkpoint 1** — prompt for a name when saving
+a gradient/style to the palette (reuses the existing `requestConfirm`-style
+promise-based dialog pattern). Checkpoint 2 adds frame reorder controls as a
+shared toolbar (mirroring `LayersPanel`'s convention) plus switches the
+frame strip to horizontal-only scrolling. Checkpoint 3 removes the
+Layers panel's layer-level flip/rotate buttons (redundant with the
+Transform menu). Each checkpoint is its own implement → test → verify →
+commit cycle — pause for confirmation between them.
 
 Two kinds of deferred items live here: features that were built, then
 deliberately hidden or disabled behind a known issue, rather than shipped
@@ -20,6 +21,49 @@ is switched off — so restoring them is a small, targeted change once the
 blocking issue is fixed); and open ideas flagged for later discussion
 rather than acted on immediately. Review this list once all
 currently-planned phases are complete.
+
+## DONE: Checkpoint 7 sub-step 2 (gradient handles)
+
+Shipped session 26 (2026-07-11), 8 commits on `main`
+(`b75e426..e12fc2e`). Full spec:
+[`docs/gradient-handle-plan.md`](./docs/gradient-handle-plan.md).
+
+**Five checkpoints, each committed independently:**
+1. **Fixed the linear angle handle's spoke length** (`b75e426`) — pivots at
+   the shape's bbox center with a fixed length, instead of scaling with
+   bbox size.
+2. **Linear endpoints mode: data + modal** (`568d365`) — `mode`/
+   `x1/y1/x2/y2` schema, `serializeFill`'s endpoints branch, the editor
+   modal's Angle/Endpoints select, Reset button.
+3. **Shared drag-handle infra + linear endpoints on-canvas handle**
+   (`569a4a1`) — `useGradientDragHandle` hook extracted from the angle
+   handle's pointer-lifecycle pattern, `GradientPointHandle` (generic
+   draggable point), wired into `SvgPixelEditor.jsx`; checkbox relabeled
+   "Gradient fine controls".
+4. **Radial center + radius on-canvas handle** (`11fe8a3`) — center/radius
+   drag handles, checkbox gate extended to radial gradients.
+5. **Radial focal point** (`e94e7ce`) — `fx/fy` schema (defaults to
+   `cx/cy`), a clamped diamond handle, modal fx/fy inputs.
+
+**Plus three refinements from live testing:**
+- **Off-canvas handle visibility** (`c1a9562`) — the artwork/overlays now
+  render in a nested, still-clipped `<svg>`, while the outer `<svg>` (where
+  handles render) is `overflow: visible`, so a dragged handle stays visible
+  and grabbable past the canvas edge instead of vanishing at the viewBox
+  boundary.
+- **Focal-point clamp margin** (`66c8661`) — clamped to 97% of the radius
+  instead of exactly `r`; SVG renders a visible seam when a radial
+  gradient's focal point sits exactly on the boundary.
+- **Focal point follows center/radius changes** (`e12fc2e`) — an
+  explicitly-set focal point now translates when the center moves and
+  rescales proportionally when the radius changes (both the on-canvas
+  handles and the modal's numeric cx/cy/r inputs), instead of staying at a
+  fixed absolute position that could drift outside the radius.
+
+Test suite: 404/404 → 422/422. Manually verified throughout via the
+Browser pane, including exact numeric confirmation of the clamp/rescale
+math (distance-to-radius ratios matching before/after to within floating
+point).
 
 ## DONE: Fix animated SVG export gap/misordering for mixed-duration frames
 
