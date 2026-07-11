@@ -19,6 +19,7 @@ import { tools } from './tools/index.js';
 import { GridOverlay } from './GridOverlay.jsx';
 import { BrushCursor } from './BrushCursor.jsx';
 import { GradientAngleHandle } from './GradientAngleHandle.jsx';
+import { GradientLinearEndpointsHandle } from './GradientLinearEndpointsHandle.jsx';
 import { ReferenceImageLayer } from './ReferenceImageLayer.jsx';
 import { TransparencyBackground } from './TransparencyBackground.jsx';
 import { composeLayersBody, composeFrameBody } from '../../export/svg/composeLayersSvg.js';
@@ -573,7 +574,7 @@ export function SvgPixelEditor() {
           />
         )}
         {cursorCell && <BrushCursor x={cursorCell.x} y={cursorCell.y} />}
-        {showGradientHandle && (
+        {showGradientHandle && activeGrid.style.fill.mode !== 'endpoints' && (
           <GradientAngleHandle
             grid={activeGrid}
             getCanvasPoint={clientToCanvasFloat}
@@ -583,6 +584,26 @@ export function SvgPixelEditor() {
             }}
             onCommitAngle={(angle) => {
               useStore.getState().updateGridStyle(activeLayer.id, activeGrid.id, { fill: { ...activeGrid.style.fill, angle } });
+            }}
+          />
+        )}
+        {showGradientHandle && activeGrid.style.fill.mode === 'endpoints' && (
+          <GradientLinearEndpointsHandle
+            grid={activeGrid}
+            getCanvasPoint={clientToCanvasFloat}
+            onDragStart={(patch) => {
+              useStore.getState().updateGridStyleLive(activeLayer.id, activeGrid.id, { fill: { ...activeGrid.style.fill, ...patch } });
+              tick((n) => n + 1);
+            }}
+            onCommitStart={(patch) => {
+              useStore.getState().updateGridStyle(activeLayer.id, activeGrid.id, { fill: { ...activeGrid.style.fill, ...patch } });
+            }}
+            onDragEnd={(patch) => {
+              useStore.getState().updateGridStyleLive(activeLayer.id, activeGrid.id, { fill: { ...activeGrid.style.fill, ...patch } });
+              tick((n) => n + 1);
+            }}
+            onCommitEnd={(patch) => {
+              useStore.getState().updateGridStyle(activeLayer.id, activeGrid.id, { fill: { ...activeGrid.style.fill, ...patch } });
             }}
           />
         )}

@@ -65,3 +65,34 @@ export function angleFromHandleDrag(bounds, px, py) {
   const center = gradientBoundsCenter(bounds);
   return angleFromVector(px - center.x, py - center.y);
 }
+
+/**
+ * Forward: a 0-1 objectBoundingBox fraction (fx,fy) -> canvas-cell-space
+ * point within `bounds` — generic, unclamped. Shared by every point-style
+ * gradient handle (radial center, linear endpoints, focal point).
+ * @param {{minX:number,minY:number,maxX:number,maxY:number}} bounds
+ * @param {number} fx
+ * @param {number} fy
+ * @returns {{x:number,y:number}}
+ */
+export function fractionToCanvasPoint(bounds, fx, fy) {
+  return {
+    x: bounds.minX + fx * (bounds.maxX - bounds.minX),
+    y: bounds.minY + fy * (bounds.maxY - bounds.minY),
+  };
+}
+
+/**
+ * Inverse of fractionToCanvasPoint — a raw canvas-cell-space point ->
+ * 0-1 objectBoundingBox fraction, unclamped.
+ * @param {{minX:number,minY:number,maxX:number,maxY:number}} bounds
+ * @param {number} px
+ * @param {number} py
+ * @returns {{fx:number,fy:number}}
+ */
+export function canvasPointToFraction(bounds, px, py) {
+  return {
+    fx: (px - bounds.minX) / (bounds.maxX - bounds.minX),
+    fy: (py - bounds.minY) / (bounds.maxY - bounds.minY),
+  };
+}

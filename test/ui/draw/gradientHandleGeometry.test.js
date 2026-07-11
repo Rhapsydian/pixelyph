@@ -7,6 +7,8 @@ import {
   gradientBoundsCenter,
   angleFromHandleDrag,
   ANGLE_HANDLE_LENGTH,
+  fractionToCanvasPoint,
+  canvasPointToFraction,
 } from '../../../src/ui/draw/gradientHandleGeometry.js';
 
 function mockGrid({ width, height, offsetX, offsetY, painted }) {
@@ -65,6 +67,23 @@ test('angleFromHandleDrag: inverts gradientHandlePosition at cardinal angles', (
   assert.ok(Math.abs(angleFromHandleDrag(bounds, right.x, right.y) - 0) < 1e-9);
   const bottom = gradientHandlePosition(bounds, 90);
   assert.ok(Math.abs(angleFromHandleDrag(bounds, bottom.x, bottom.y) - 90) < 1e-9);
+});
+
+test('fractionToCanvasPoint: maps corners and center of a non-square bounds', () => {
+  const bounds = { minX: 2, minY: 4, maxX: 12, maxY: 8 };
+  assert.deepEqual(fractionToCanvasPoint(bounds, 0, 0), { x: 2, y: 4 });
+  assert.deepEqual(fractionToCanvasPoint(bounds, 1, 1), { x: 12, y: 8 });
+  assert.deepEqual(fractionToCanvasPoint(bounds, 0.5, 0.5), { x: 7, y: 6 });
+});
+
+test('fractionToCanvasPoint/canvasPointToFraction round-trip, including unclamped fractions outside 0-1', () => {
+  const bounds = { minX: -4, minY: 5, maxX: 20, maxY: 9 };
+  for (const [fx, fy] of [[0, 0], [1, 1], [0.3, 0.7], [-0.5, 1.5]]) {
+    const { x, y } = fractionToCanvasPoint(bounds, fx, fy);
+    const back = canvasPointToFraction(bounds, x, y);
+    assert.ok(Math.abs(back.fx - fx) < 1e-9);
+    assert.ok(Math.abs(back.fy - fy) < 1e-9);
+  }
 });
 
 test('round-trip: angleFromHandleDrag(gradientHandlePosition(angle)) recovers angle, including on non-square bounds', () => {

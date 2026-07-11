@@ -96,14 +96,14 @@ function FillEditor({ layer, updateLayerStyle }) {
       {fill?.type === 'linear-gradient' && (
         <label
           style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}
-          title="Show a draggable handle on the canvas for rotating this gradient's angle directly, instead of only through the gradient editor"
+          title="Show draggable on-canvas controls for this gradient's position/angle, instead of only through the gradient editor"
         >
           <input
             type="checkbox"
             checked={gradientHandleEnabledGridId === layer.id}
             onChange={(e) => setGradientHandleEnabled(layer.id, e.target.checked)}
           />
-          Show angle handle on canvas
+          Gradient fine controls
         </label>
       )}
 
