@@ -93,7 +93,7 @@ function FillEditor({ layer, updateLayerStyle }) {
         {kind !== 'none' && <IconButton icon={<SaveToPaletteIcon size={20} />} label="Save to palette" onClick={saveToPalette} />}
       </div>
 
-      {fill?.type === 'linear-gradient' && (
+      {(fill?.type === 'linear-gradient' || fill?.type === 'radial-gradient') && (
         <label
           style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}
           title="Show draggable on-canvas controls for this gradient's position/angle, instead of only through the gradient editor"

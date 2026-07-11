@@ -9,6 +9,9 @@ import {
   ANGLE_HANDLE_LENGTH,
   fractionToCanvasPoint,
   canvasPointToFraction,
+  radialEdgeCanvasPosition,
+  radialRadiusFromDrag,
+  MIN_RADIAL_R,
 } from '../../../src/ui/draw/gradientHandleGeometry.js';
 
 function mockGrid({ width, height, offsetX, offsetY, painted }) {
@@ -84,6 +87,21 @@ test('fractionToCanvasPoint/canvasPointToFraction round-trip, including unclampe
     assert.ok(Math.abs(back.fx - fx) < 1e-9);
     assert.ok(Math.abs(back.fy - fy) < 1e-9);
   }
+});
+
+test('radialEdgeCanvasPosition: sits due east of center at distance r (fraction space), on a non-square bounds', () => {
+  const bounds = { minX: 0, minY: 0, maxX: 20, maxY: 10 };
+  const point = radialEdgeCanvasPosition(bounds, 0.5, 0.5, 0.25);
+  assert.deepEqual(point, { x: 15, y: 5 }); // cx+r=0.75 -> 0.75*20=15; cy=0.5 -> 0.5*10=5
+});
+
+test('radialRadiusFromDrag: recovers r from a canvas-space drag point, ignoring the drag\'s y component', () => {
+  const bounds = { minX: 0, minY: 0, maxX: 20, maxY: 10 };
+  const point = radialEdgeCanvasPosition(bounds, 0.5, 0.5, 0.25);
+  assert.ok(Math.abs(radialRadiusFromDrag(bounds, point.x, 0.5) - 0.25) < 1e-9);
+  // dragging past center still floors at MIN_RADIAL_R, never zero/negative
+  assert.equal(radialRadiusFromDrag(bounds, bounds.minX, 0.5), MIN_RADIAL_R);
+  assert.equal(radialRadiusFromDrag(bounds, bounds.minX - 100, 0.5), MIN_RADIAL_R);
 });
 
 test('round-trip: angleFromHandleDrag(gradientHandlePosition(angle)) recovers angle, including on non-square bounds', () => {

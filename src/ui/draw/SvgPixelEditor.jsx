@@ -20,6 +20,7 @@ import { GridOverlay } from './GridOverlay.jsx';
 import { BrushCursor } from './BrushCursor.jsx';
 import { GradientAngleHandle } from './GradientAngleHandle.jsx';
 import { GradientLinearEndpointsHandle } from './GradientLinearEndpointsHandle.jsx';
+import { GradientRadialHandle } from './GradientRadialHandle.jsx';
 import { ReferenceImageLayer } from './ReferenceImageLayer.jsx';
 import { TransparencyBackground } from './TransparencyBackground.jsx';
 import { composeLayersBody, composeFrameBody } from '../../export/svg/composeLayersSvg.js';
@@ -467,12 +468,12 @@ export function SvgPixelEditor() {
 
   const activeLayer = doc && doc.tier === 'advanced' ? doc.layers.find((l) => l.id === doc.activeLayerId) : null;
   const activeGrid = activeLayer?.frames[currentFrameIndex(doc)]?.grids.find((g) => g.id === doc.activeGridId);
-  // Gated on all three: a linear-gradient fill (the only case the handle's
-  // math supports so far), the Style tab actually visible (that's where the
-  // toggle enabling this lives), and the per-shape toggle itself — see
-  // LayerStylePanel.jsx's FillEditor "Show angle handle on canvas" checkbox.
+  // Gated on all three: a gradient fill (linear or radial), the Style tab
+  // actually visible (that's where the toggle enabling this lives), and the
+  // per-shape toggle itself — see LayerStylePanel.jsx's FillEditor
+  // "Gradient fine controls" checkbox.
   const showGradientHandle =
-    activeGrid?.style?.fill?.type === 'linear-gradient' &&
+    (activeGrid?.style?.fill?.type === 'linear-gradient' || activeGrid?.style?.fill?.type === 'radial-gradient') &&
     sidePanelTab === 'style' &&
     gradientHandleEnabledGridId === activeGrid?.id;
 
@@ -580,7 +581,7 @@ export function SvgPixelEditor() {
         )}
         {cursorCell && <BrushCursor x={cursorCell.x} y={cursorCell.y} />}
         </svg>
-        {showGradientHandle && activeGrid.style.fill.mode !== 'endpoints' && (
+        {showGradientHandle && activeGrid.style.fill.type === 'linear-gradient' && activeGrid.style.fill.mode !== 'endpoints' && (
           <GradientAngleHandle
             grid={activeGrid}
             getCanvasPoint={clientToCanvasFloat}
@@ -593,7 +594,7 @@ export function SvgPixelEditor() {
             }}
           />
         )}
-        {showGradientHandle && activeGrid.style.fill.mode === 'endpoints' && (
+        {showGradientHandle && activeGrid.style.fill.type === 'linear-gradient' && activeGrid.style.fill.mode === 'endpoints' && (
           <GradientLinearEndpointsHandle
             grid={activeGrid}
             getCanvasPoint={clientToCanvasFloat}
@@ -610,6 +611,26 @@ export function SvgPixelEditor() {
             }}
             onCommitEnd={(patch) => {
               useStore.getState().updateGridStyle(activeLayer.id, activeGrid.id, { fill: { ...activeGrid.style.fill, ...patch } });
+            }}
+          />
+        )}
+        {showGradientHandle && activeGrid.style.fill.type === 'radial-gradient' && (
+          <GradientRadialHandle
+            grid={activeGrid}
+            getCanvasPoint={clientToCanvasFloat}
+            onDragCenter={(patch) => {
+              useStore.getState().updateGridStyleLive(activeLayer.id, activeGrid.id, { fill: { ...activeGrid.style.fill, ...patch } });
+              tick((n) => n + 1);
+            }}
+            onCommitCenter={(patch) => {
+              useStore.getState().updateGridStyle(activeLayer.id, activeGrid.id, { fill: { ...activeGrid.style.fill, ...patch } });
+            }}
+            onDragRadius={(r) => {
+              useStore.getState().updateGridStyleLive(activeLayer.id, activeGrid.id, { fill: { ...activeGrid.style.fill, r } });
+              tick((n) => n + 1);
+            }}
+            onCommitRadius={(r) => {
+              useStore.getState().updateGridStyle(activeLayer.id, activeGrid.id, { fill: { ...activeGrid.style.fill, r } });
             }}
           />
         )}

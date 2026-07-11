@@ -96,3 +96,38 @@ export function canvasPointToFraction(bounds, px, py) {
     fy: (py - bounds.minY) / (bounds.maxY - bounds.minY),
   };
 }
+
+/** Radial gradient's `r` can never reach zero/negative through the drag handle — SVG treats r<=0 as "no gradient". */
+export const MIN_RADIAL_R = 0.02;
+
+/**
+ * Forward: a radial gradient's center (cx,cy) + radius (r), all 0-1
+ * fractions -> the on-canvas position of the radius-edge drag handle,
+ * placed along the horizontal spoke from center (matching the wireframe's
+ * `(cx+r, cy)` convention — a single scalar `r` has no natural per-axis
+ * direction on a non-square bounds, so the handle always sits due "east"
+ * of center).
+ * @param {{minX:number,minY:number,maxX:number,maxY:number}} bounds
+ * @param {number} cx
+ * @param {number} cy
+ * @param {number} r
+ * @returns {{x:number,y:number}}
+ */
+export function radialEdgeCanvasPosition(bounds, cx, cy, r) {
+  return fractionToCanvasPoint(bounds, cx + r, cy);
+}
+
+/**
+ * Inverse of radialEdgeCanvasPosition — only the horizontal component of
+ * the drag point matters (dragging the radius handle moves it along its
+ * fixed horizontal spoke), floored at MIN_RADIAL_R so `r` can't collapse to
+ * zero/negative even if dragged past or onto the center.
+ * @param {{minX:number,minY:number,maxX:number,maxY:number}} bounds
+ * @param {number} px canvas-cell-space x
+ * @param {number} cx center x, 0-1 fraction
+ * @returns {number} r, 0-1 fraction, >= MIN_RADIAL_R
+ */
+export function radialRadiusFromDrag(bounds, px, cx) {
+  const fx = (px - bounds.minX) / (bounds.maxX - bounds.minX);
+  return Math.max(MIN_RADIAL_R, fx - cx);
+}
