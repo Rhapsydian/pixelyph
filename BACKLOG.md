@@ -1,18 +1,5 @@
 # Backlog
 
-## NEXT SESSION: Palette naming, frame reorder, Layers panel cleanup
-
-Full spec: [`docs/palette-frames-cleanup-plan.md`](./docs/palette-frames-cleanup-plan.md),
-three independent, small items pulled from `.claude/tokenote-notes.md`'s ⚡
-Priority section. **Start at Checkpoint 1** — prompt for a name when saving
-a gradient/style to the palette (reuses the existing `requestConfirm`-style
-promise-based dialog pattern). Checkpoint 2 adds frame reorder controls as a
-shared toolbar (mirroring `LayersPanel`'s convention) plus switches the
-frame strip to horizontal-only scrolling. Checkpoint 3 removes the
-Layers panel's layer-level flip/rotate buttons (redundant with the
-Transform menu). Each checkpoint is its own implement → test → verify →
-commit cycle — pause for confirmation between them.
-
 Two kinds of deferred items live here: features that were built, then
 deliberately hidden or disabled behind a known issue, rather than shipped
 half-broken or removed outright (the underlying model/logic is left intact
@@ -22,11 +9,46 @@ blocking issue is fixed); and open ideas flagged for later discussion
 rather than acted on immediately. Review this list once all
 currently-planned phases are complete.
 
+## DONE: Palette naming, frame reorder, Layers panel cleanup
+
+Shipped session 27 (2026-07-11), 6 commits on `main`. Three independent,
+small items pulled from `.claude/tokenote-notes.md`'s ⚡ Priority section.
+
+1. **Name-prompt dialog for palette saves** (`5c7f090`) — a new
+   promise-based `nameDialog`/`requestName`/`resolveName` pair in
+   `store.js` (mirrors the existing `confirmDialog` pattern) and a new
+   `NamePromptModal.jsx`, wired into the three palette-save call sites:
+   gradient "Save to palette" (solids stay unprompted), "Save style", and
+   `PalettePanel`'s "Add a new gradient" draft flow (Cancel leaves the
+   draft open). Caught and fixed a real bug during manual testing: the
+   modal stayed mounted between separate dialogs, so the name field
+   carried over the previous entry's text instead of resetting.
+2. **Animation frame reorder controls** (`3045c8e`, `8b33eb7`, `b824067`)
+   — a new `reorderFrame` in `Canvas.js` swaps a frame across every
+   layer's `frames` plus `frameDurations` in lockstep; `FrameStrip.jsx`
+   restructured into a shared toolbar (Move left/right, Duplicate,
+   Delete) mirroring `LayersPanel`'s toolbar convention, and the strip
+   switched to horizontal-only scroll instead of wrapping. Two follow-up
+   fixes from live use: bumped `MIN_HEIGHT` to match the panel's actual
+   rendered height, and fixed the frame-thumbnail border corners looking
+   clipped (the `.cell` wrapper needed `overflow: hidden` so its rounded
+   border wasn't overpainted by the flush square thumbnail).
+3. **Removed the Layers panel's flip/rotate buttons** (`5e80f4b`,
+   `10f9a03`) — first the layer-level branch (redundant with the
+   Transform menu's Layer scope), then by follow-up request the
+   shape-level branch too (redundant with the Transform menu's Shape
+   scope) — flip/rotate is now only reachable through the Transform menu.
+
+Test suite: 422/422 → 424/424 (new coverage: `reorderFrame` at both the
+model and store level, including its undo-tracking and the two
+`activeFrame` remap branches). Manually verified every checkpoint live in
+the browser via the Browser pane.
+
 ## DONE: Checkpoint 7 sub-step 2 (gradient handles)
 
 Shipped session 26 (2026-07-11), 8 commits on `main`
-(`b75e426..e12fc2e`). Full spec:
-[`docs/gradient-handle-plan.md`](./docs/gradient-handle-plan.md).
+(`b75e426..e12fc2e`). Full write-up folded into this entry — the original
+planning doc, `docs/gradient-handle-plan.md`, was removed after shipping.
 
 **Five checkpoints, each committed independently:**
 1. **Fixed the linear angle handle's spoke length** (`b75e426`) — pivots at
@@ -290,10 +312,9 @@ vector art tools that would be appropriate for Pixelyph.") — session 20
 did a full 23-item survey of Pixel-mode gaps vs. standard pixel-art tools
 and Shape-mode gaps vs. standard vector-art tools, sorted every item into
 implement/backlog/dismiss, then scoped the 11 "implement" items into seven
-checkpoints. **Full spec: [`docs/tool-roadmap.md`](./docs/tool-roadmap.md)**
-(which in turn points to [`docs/tool-options.md`](./docs/tool-options.md)
-for Checkpoint 1's deep technical detail); also has the full sort
-accounting (backlog/long-term-backlog/dismissed items).
+checkpoints. **Full spec: [`docs/tool-roadmap.md`](./docs/tool-roadmap.md)**,
+which also has the full sort accounting (backlog/long-term-backlog/dismissed
+items).
 
 **Shipped:**
 - **Checkpoint 1** (session 21) — pixel paint-tool cluster (brush width,
@@ -565,21 +586,6 @@ group is back to plain "Gradients."
 a small tile-drawing surface (reusing the pixel-grid editing primitives
 already in `src/model`) rather than a paste-a-string textarea — scoped as
 its own planning session, not a slice of a larger phase.
-
-## Canvas and layer axis flipping — scoped, see tool roadmap
-
-**Now scoped**, along with 90° rotation and shape-level flip/rotate, as
-Checkpoint 6 of [`docs/tool-roadmap.md`](./docs/tool-roadmap.md) — see the
-"NEXT SESSION: Tool roadmap" entry above. Flip the whole canvas, a single
-layer, or a single shape, horizontally and/or vertically.
-
-## Whole-image and layer 90° rotations — scoped, see tool roadmap
-
-**Now scoped** alongside axis flipping above, as Checkpoint 6 of
-[`docs/tool-roadmap.md`](./docs/tool-roadmap.md). Rotate the whole canvas,
-a single layer, or a single shape, in 90° increments — including the
-resolved Glyph-mode behavior (re-crop/pad back to `pixelsPerEm`, behind a
-warning confirmation).
 
 ## Demo projects
 

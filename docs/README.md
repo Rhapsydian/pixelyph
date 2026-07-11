@@ -9,13 +9,6 @@ shapes, the active-grid selection pointer, the auto grow/shrink and
 merge algorithms, and the save-file migration path. Read this before
 touching `src/model/` or `src/io/projectFile.js`.
 
-## `tool-options.md`
-
-A design spec (not implemented) for four gaps in the Draw-mode tool set:
-brush width for pencil/eraser/line, freehand lasso select, a dithering
-brush, and bucket fill tolerance/global mode. See `BACKLOG.md`'s "Tool
-review" entry for how this fits into the backlog.
-
 ## `session-logs/`
 
 A markdown log for each Claude Code session used to build Pixelyph,

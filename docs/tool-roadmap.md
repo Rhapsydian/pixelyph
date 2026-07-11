@@ -333,6 +333,15 @@ checkpoint above, pick up once a dependency lands):**
   other items, not standalone.
 
 **Backlog (no urgency, no blockers):**
+- Freehand/lasso select — `marqueeSelect.js` is rect-only today; a lasso
+  needs a point-in-polygon test (no existing helper) and a
+  `selection.kind: 'rect' | 'polygon'` discriminant so `copySelection`/
+  `cutSelection` can dispatch to the right extractor. Not a data-model
+  rewrite — the floating-selection buffer is already a sparse `{x, y,
+  width, height, cells}` shape regardless of source shape, so it needs no
+  change. Originally scoped in the now-removed `docs/tool-options.md`;
+  was the largest/lowest-priority of that doc's four gaps, which is why it
+  didn't make it into Checkpoint 1 above.
 - Magic wand (select by color, Pixel tier only).
 - Auto-trim canvas to content.
 - Color replace / recolor-only paint mode.
