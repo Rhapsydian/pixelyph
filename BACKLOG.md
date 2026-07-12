@@ -11,6 +11,61 @@ blocking issue is fixed); and open ideas flagged for later discussion
 rather than acted on immediately. Review this list once all
 currently-planned phases are complete.
 
+### Tool-gap backlog, carried over from the retired tool-roadmap doc
+
+`docs/tool-roadmap.md`'s own 7 checkpoints all shipped (see this file's
+Shipped section) and the doc was retired session 28 — its "Full sort
+results" section (session 20's 23-item Pixel/Shape-mode gap-analysis
+pass) is consolidated here rather than left behind in a deleted file.
+Object select-and-drag, that section's other top-of-backlog item, also
+shipped session 28 (see Shipped); the items below did not.
+
+**Top-of-backlog** (has real dependencies between items, unlike the
+plain list below):
+- **Multi-select interaction** (shift/ctrl-click in `LayersPanel.jsx`) —
+  the shared prerequisite unblocking both items below; bumped up
+  specifically because of that, not because it's independently urgent.
+- **Boolean shape operations** (union/subtract/intersect) — blocked on
+  multi-select above, or could instead follow the Merge-Down convention
+  ("act on the active shape + whatever's below it in stack") to avoid
+  that dependency entirely — worth deciding which approach when this is
+  picked up.
+- **Alignment/distribution tools** — also blocked on multi-select above.
+
+**Backlog** (no urgency, no blockers):
+- Freehand/lasso select — `marqueeSelect.js` is rect-only today; needs a
+  point-in-polygon test (no existing helper) and a
+  `selection.kind: 'rect' | 'polygon'` discriminant so
+  `copySelection`/`cutSelection` can dispatch to the right extractor. The
+  floating-selection buffer itself needs no change (already a sparse
+  `{x, y, width, height, cells}` shape regardless of source shape).
+- Magic wand (select by color, Pixel tier only).
+- Auto-trim canvas to content.
+- Color replace / recolor-only paint mode.
+- Custom/preset brush shapes.
+- Style eyedropper (copy a shape's full fill+stroke+effects).
+- Rounded-rectangle corner radius / polygon-star shape tool.
+- Post-creation resize/transform handles on an existing shape.
+
+**Long-term backlog:**
+- Alpha/opacity-blend painting tool — deep architectural mismatch (every
+  pixel is a strict boolean 0/1 today, save format bit-packs one bit per
+  pixel); blast radius comparable to the whole Layer/Frame/Grid redesign,
+  not a single-tool addition.
+
+**Dismissed** (checked and explicitly rejected during session 20's pass,
+not overlooked — full rationale is in git history, on
+`docs/tool-roadmap.md` as of the commit before its removal): a bezier pen
+tool / arbitrary path authoring (shapes are pixel grids authored by
+painting, not vector paths with control-point handles — doesn't fit the
+architecture); arbitrary rotate/skew/scale of a shape (would need pixel
+resampling, breaking the "every pixel is a deliberate, exact choice"
+premise — 90°-only rotation sidesteps this by staying resample-free).
+
+**To resolve:** each item needs its own scoping pass when picked up —
+this is an accounting of what didn't make the original 7 checkpoints,
+not a ready-to-implement spec.
+
 ### WOFF2 font export — disabled, times out in real browsers
 
 `wawoff2`'s WOFF2 compression (`src/export/font/woff.js`'s `toWoff2`) was
@@ -77,10 +132,11 @@ alternative to the current always-preserve behavior?
 
 **Not scoped — a discussion topic, not a planned feature.** Surfaced
 during session 20's tool-gap-analysis pass, deliberately filed here in
-the general project backlog rather than in
-[`docs/tool-roadmap.md`](./docs/tool-roadmap.md)'s tools-specific list,
-since it's bigger and more cross-cutting than anything else that pass
-scoped. Two related but distinct ideas:
+the general project backlog rather than in the tool-specific roadmap doc
+that pass produced (`docs/tool-roadmap.md`, retired session 28 once its
+content shipped/migrated — see this file's own "Tool-gap backlog" entry
+above), since it's bigger and more cross-cutting than anything else that
+pass scoped. Two related but distinct ideas:
 - **Clipping masks** — a mask gating visibility, using another pixel
   buffer as the mask shape. No blocker in principle, but touches export
   (`composeLayersSvg.js` and friends), the data model (a new per-shape or
@@ -204,6 +260,58 @@ docs site, so people can try or use Pixelyph without cloning and running it
 locally.
 
 ## Shipped
+
+### DONE: Object select-and-drag tool + Transform menu Selection scope
+
+Shipped session 28 (2026-07-11), 2 commits on `main`. Two items from
+`docs/tool-roadmap.md`'s "Full sort results" backlog, picked up directly
+by user request (not flagged in Tokenote) — the doc itself is retired as
+of this session (see the "Tool-gap backlog" Open entry and the "DONE:
+Tool roadmap Checkpoints 1-6..." entry below for where its remaining
+content landed).
+
+1. **Object select-and-drag tool** (`5c99d99`) — new `selectMove` tool
+   (`src/ui/draw/tools/selectMove.js`): click a shape in Shape tier to
+   select and drag it (new `setGridPropsLive`); drag anywhere in Pixel
+   tier/Glyph mode to shift the whole active layer's frame content (new
+   `nudgeLayerFrameLive`). Both reuse the existing `paintCellLive`/
+   `commitStroke` live-then-commit split so a full drag is exactly one
+   undo step. New `topLayerAndGridAt` hit-test helper in `Canvas.js`
+   (mirrors `topVisibleLayerAt`'s traversal, also returning the shape
+   actually hit, skipping locked shapes). New `SelectMoveIcon` (a 4-arrow
+   move cross, the Photoshop/Aseprite convention for this tool).
+2. **Transform menu Flip/Rotate now acts on the active selection**
+   (`e4ceb65`) — a marquee selection (raw or already-floating) takes
+   priority over the Canvas/Layer/Shape scope modal in both Draw and
+   Glyph mode: the selection's cells transform in place, for the current
+   frame only, with no scope picker. New `transformSelectionCells`
+   (`selection.js`) remaps the sparse floating-selection cell list,
+   matching `Grid.js`'s `flipPixelsH/V`/`rotatePixels90` direction; new
+   `flipSelectionH/V`/`rotateSelection90/180/CCW90` store actions
+   auto-lift a raw selection first (destructive, same as an ordinary
+   drag-move lift). Caught and fixed a real pre-existing bug during
+   manual testing: `commit()`'s glyph-mode branch only ever bumped
+   `glyphSet`'s reference, never `glyphCanvas`'s, so any call to
+   `dropFloatingSelection` that bypassed `SvgPixelEditor`'s `ctx`-wrapped
+   local re-render `tick()` — the Enter-key handler, Edit menu's "Commit
+   move", and now this new Selection scope — left the composed-SVG
+   `useMemo` stale after a drop, rendering nothing (or the pre-drop
+   content) instead of the just-pasted result. `commit()` now refreshes
+   `glyphCanvas` too, mirroring how the Draw-mode branch already
+   refreshes `canvas`.
+
+Test suite: 424/424 → 433/433 (new coverage: `topLayerAndGridAt`;
+`setGridPropsLive`/`nudgeLayerFrameLive`'s no-commit-until-drop behavior
+plus the single commit on drag-end; `transformSelectionCells` for all
+three transform kinds; the selection-scope store actions covering both
+"raw selection only" and "already-floating" starting states). Manually
+verified live in the browser: shape drag + undo (Shape tier), whole-layer
+drag + undo (Pixel tier and Glyph mode), and selection flip via the
+Transform menu with no modal and a correct one-step undo, in both Draw
+and Glyph mode — the `glyphCanvas` staleness bug above was caught this
+way, by inspecting the live SVG DOM directly rather than trusting a
+disconnected `import()`'d store instance (the "Testing-methodology note"
+lower in this file, from session 23, still applies and bit again here).
 
 ### DONE: Palette naming, frame reorder, Layers panel cleanup
 
@@ -477,9 +585,11 @@ vector art tools that would be appropriate for Pixelyph.") — session 20
 did a full 23-item survey of Pixel-mode gaps vs. standard pixel-art tools
 and Shape-mode gaps vs. standard vector-art tools, sorted every item into
 implement/backlog/dismiss, then scoped the 11 "implement" items into seven
-checkpoints. **Full spec: [`docs/tool-roadmap.md`](./docs/tool-roadmap.md)**,
-which also has the full sort accounting (backlog/long-term-backlog/dismissed
-items).
+checkpoints. **Full spec lived in `docs/tool-roadmap.md`** — removed
+session 28 once every checkpoint below had shipped; its full sort
+accounting (backlog/long-term-backlog/dismissed items) is now this
+file's own "Tool-gap backlog, carried over from the retired tool-roadmap
+doc" Open entry, above.
 
 **Shipped:**
 - **Checkpoint 1** (session 21) — pixel paint-tool cluster (brush width,
@@ -516,13 +626,9 @@ items).
   instead of one. Radial gradients are still out of scope (sub-step 2,
   not started).
 
-**To resolve:** Checkpoint 7 sub-step 2 (radial gradient cx/cy/r on-canvas
-handle) is unscheduled — the tool-roadmap doc's own sequencing note called
-this "the biggest, most architecturally novel item... best done last/
-alone," and sub-step 1 already absorbed a full session. Pick up when
-ready; re-read `docs/tool-roadmap.md`'s Checkpoint 7 section first, since
-the linear sub-step's design (drag math, live/commit split) generalizes
-directly to radial once picked back up.
+**Checkpoint 7 sub-step 2** (radial gradient cx/cy/r + focal-point
+on-canvas handles) shipped session 26 — see the "DONE: Checkpoint 7
+sub-step 2 (gradient handles)" entry above.
 
 ### DONE: Toolbar reorganization (Transform menu target-picker + Checkpoint E)
 
