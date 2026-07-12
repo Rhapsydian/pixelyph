@@ -171,7 +171,7 @@ export function ContextBar() {
             )}
 
             {showsSelectScope && (
-              <label title="Whether Select/Copy/Cut/Paste read only the active shape or the whole active layer">
+              <label title="Whether Select/Copy/Cut/Paste and Transform > Flip/Rotate (when nothing is already selected) act on only the active shape or the whole active layer">
                 Select from:{' '}
                 <select value={selectionScope} onChange={(e) => setSelectionScope(e.target.value)}>
                   <option value="activeShape">Active shape</option>

@@ -5,8 +5,8 @@ this document. Session 1: model layer. Session 2: export. Session 3: UI.
 Session 4: tests) — see `BACKLOG.md`'s "Layer/Frame/Grid model redesign"
 entry (marked DONE) for the session-by-session breakdown. Everything below
 describes the current model, not a target. See "Pixel/Shape tier rename"
-at the end of this document for one later change that postdates the
-original Session 0-4 write-up.
+and "Selection" at the end of this document for two later changes that
+postdate the original Session 0-4 write-up.
 
 ## Why this model exists
 
@@ -569,6 +569,99 @@ Grid of that color via a new pixel-OR helper, `unionGridInto` (`Grid.js`,
 factored out of `mergeGridDown`/3b). Shape tier is exempt — it legitimately
 keeps same-color shapes separate.
 
+## Selection (Session 29 redesign)
+
+Selection had never been documented at the data-model level despite
+touching this model directly, even though it existed well before this
+section was written. A from-scratch redesign replaced an earlier,
+undocumented implementation that had accreted **four independent,
+loosely-related concepts** across many prior sessions — a marquee
+rect/floating buffer, the active-grid paint-target pointer (also driven by
+a since-renamed `targetMove` tool), a three-way "Select from" scope, and a
+`LayersPanel.jsx`-local row-click tracker — with the scope flag read under
+genuinely different semantics by different consuming functions and no UI
+signal of the split. What follows describes the current design, not that
+history.
+
+**Two floating mechanisms, matched to what needs preserving, not one
+concept forced onto both:**
+
+- **`floatingSelection`** — Pixel tier, Glyph mode, and any content with no
+  per-shape style to preserve. A sparse `{ x, y, width, height, cells:
+  {dx, dy, color}[] }` buffer.
+- **`floatingGridSelection`** — Shape tier, for both lifting existing
+  content and pasting new content in. Real, detached Grid clones (`{
+  layerId, rect, clones: [{ originGridId, originSnapshot, grid }] }`), each
+  keeping its own style/gradient/identity intact. This exists because a
+  flat per-cell-color buffer can't represent a gradient, stroke, or
+  effect — the reason an earlier flat-cell path for Shape tier lost style
+  on every move/transform. `originGridId`/`originSnapshot` (both `null`
+  for copy-drag or externally-pasted content, since there's nothing to
+  write back into) record which real Grid a clone will write its geometry
+  back into on finalize, and exactly which of that Grid's cells to clear
+  first — frozen at lift time, never touched by a later Move/Transform.
+
+**Move and Transform are the same underlying operation.** Lifting (a
+marquee drag, Cut, Copy+Paste, an external image paste, or Transform >
+Selection with nothing yet floating) creates one of the two floating
+buffers above; any combination of Move and/or Transform (flip/rotate) can
+then be applied to it, any number of times, in any order, before one
+eventual **Finalize** (Enter, click outside, tool-switch) or **Cancel**
+(Escape). Nothing is written into `canvas.layers` until Finalize runs —
+`floatingGridSelection`'s clones are cropped copies, and clearing the
+source is deferred to finalize (`clearGridSelectionSource`) — so Cancel is
+a true no-op, not a history revert.
+
+**Rendering during the pending state** (`buildFloatingGridPreviewDoc`): a
+destructively-lifted clone's real Grid keeps rendering throughout the
+pending state, with only the cells the clone actually came from
+(`originSnapshot`) hidden from it — never the whole Grid. A
+partially-selected shape's un-lifted remainder therefore stays visible at
+its real position the entire time, matching exactly what Finalize will
+actually leave behind.
+
+**Lock/hidden immunity, applied uniformly:** a locked or hidden shape (or a
+hidden frame) is fully excluded from every scope-consuming operation —
+lift, clear, move, transform — including `activeShape` scope, which
+previously checked neither. There's no "refuse the whole action"
+fallback; the operation simply has nothing to act on if the only candidate
+is locked/hidden.
+
+**Scope:** `selectionScope` is two-valued, `activeShape` | `activeLayer`,
+for Copy/Cut/Paste and Transform > Selection alike — a former third
+option, `allVisible` (cross-layer), was removed entirely. Real vector/
+raster tools (Aseprite, Photoshop, Illustrator) never do cross-layer
+marquee operations, treating multi-object transforms as an explicit,
+separate mode instead where they support them at all. This doesn't touch
+Pixel tier's/Glyph mode's own unconditional topmost-color-across-all-layers
+read (`extractRectColors`/`colorAt`) — that's not a scope choice, just how
+those tiers always work, since their per-color grids are auto-managed and
+invisible to the user as separate objects.
+
+**Paste-in-place:** `copySelection`/`cutSelection` record `originRect` on
+the clipboard payload; `pasteClipboard` lands the new floating selection
+there (clamped to stay in bounds) instead of centering, when present.
+External paste (`pasteImageBlob`, an OS-clipboard image) never touches
+`clipboard`, so it's unaffected and always centers — there's no "original
+position" to restore for content that never had one on this canvas.
+
+**External-paste color handling, Shape tier only:** a Grid is one style +
+one boolean bitmap, so a multi-color pasted image (e.g. from MS Paint) has
+two legitimate interpretations. `pasteColorMode: 'multiple'` (default)
+groups pasted pixels into one Grid clone per distinct color
+(`buildGridClonesByColor`) — full color fidelity, N shapes. `'single'`
+unions every non-empty pasted pixel into one Grid clone painted with the
+currently-active color (`buildGridCloneUnioned`) — one restylable shape,
+discarding per-pixel color; the right tool for importing a raster
+silhouette/mask. The choice only matters — and the ContextBar toggle only
+appears — when the pasted content actually has 2+ distinct colors; with
+one color, both paths produce the same shape, so the setting is
+deliberately ignored in that case rather than surprising a later
+same-color paste with a stale preference. `pasteRaw`/`touched` on
+`floatingGridSelection` let the toggle regenerate the pending clones once,
+right after paste, but lock out once the user has moved or transformed the
+pending selection.
+
 ## Critical files
 
 - `src/model/Layer.js` — `growToInclude`/`isEmpty` are the direct basis
@@ -585,6 +678,12 @@ keeps same-color shapes separate.
   Grids by style within the active frame," retiring `colorToLayerId`.
 - `src/io/projectFile.js` — houses the v3 migration; the version-branch
   pattern already established by `decodePixels` is the direct template.
+- `src/model/selection.js` — the Selection section above: both floating
+  mechanisms' create/move/transform/finalize/preview logic
+  (`floatingSelection`'s helpers plus `floatingGridSelection`'s
+  `liftGridSelection`/`moveGridSelectionBy`/`transformGridSelection`/
+  `finalizeGridSelection`/`buildFloatingGridPreviewDoc`/
+  `buildGridClonesByColor`/`buildGridCloneUnioned`).
 - `src/ui/draw/LayersPanel.jsx`, `src/ui/draw/LayerStylePanel.jsx`,
   `src/ui/draw/GridOverlay.jsx`, `src/ui/draw/SvgPixelEditor.jsx` — the
   new shape sub-rows and per-layer shape toolbar (section 4), style panel
