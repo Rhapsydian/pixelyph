@@ -6,7 +6,7 @@
 // live-update-then-commit-once split as painting (paintCellLive +
 // commitStroke) so a full drag gesture is exactly one undo entry.
 
-export const selectMoveTool = {
+export const targetMoveTool = {
   onPointerDown(ctx, x, y) {
     if (ctx.tier === 'advanced') {
       const hit = ctx.hitTestShape(x, y);

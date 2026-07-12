@@ -16,7 +16,7 @@ import {
   RectangleIcon,
   EllipseIcon,
   SelectIcon,
-  SelectMoveIcon,
+  TargetMoveIcon,
 } from '../icons.jsx';
 
 const TOOL_ICONS = {
@@ -28,7 +28,7 @@ const TOOL_ICONS = {
   rectangle: RectangleIcon,
   ellipse: EllipseIcon,
   marqueeSelect: SelectIcon,
-  selectMove: SelectMoveIcon,
+  targetMove: TargetMoveIcon,
 };
 
 const TOOL_LABELS = {
@@ -40,7 +40,7 @@ const TOOL_LABELS = {
   rectangle: 'Rectangle',
   ellipse: 'Ellipse',
   marqueeSelect: 'Select',
-  selectMove: 'Move',
+  targetMove: 'Move',
 };
 
 export function ToolRail() {
