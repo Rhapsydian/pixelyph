@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createCanvas, paintCell, colorAt, addLayer, addGrid } from '../../src/model/Canvas.js';
+import { get } from '../../src/model/Grid.js';
 import {
   normalizeRect,
   extractRectColors,
@@ -354,6 +355,31 @@ test('buildFloatingGridPreviewDoc excludes a destructively-lifted clone\'s real 
   assert.equal(previewGrids.some((g) => g.id === fgs.clones[0].grid.id), true, "the clone itself is in the preview's grid list");
   // The real canvas itself is never mutated by building a preview.
   assert.equal(canvas.layers[0].frames[0].grids.length, 2);
+});
+
+test('buildFloatingGridPreviewDoc keeps rendering the un-lifted remainder of a partially-selected shape (regression: previously the whole shape vanished during the pending preview)', () => {
+  const canvas = createCanvas({ width: 8, height: 2 });
+  canvas.tier = 'advanced';
+  addLayer(canvas, { name: 'L' });
+  paintCell(canvas, 0, 0, '#ff0000');
+  paintCell(canvas, 1, 0, '#ff0000');
+  paintCell(canvas, 2, 0, '#ff0000'); // one shape, three consecutive filled cells at dx 0,1,2 -- no gaps
+  const gridA = canvas.layers[0].frames[0].grids[0];
+  assert.equal(gridA.width, 3, 'sanity check: one 3-wide shape, no gaps');
+
+  // Only lift dx 0-1 -- dx 2 is deliberately left un-selected.
+  const fgs = liftGridSelection(canvas, 'activeShape', { x0: 0, y0: 0, x1: 1, y1: 0 }, true);
+  const previewDoc = buildFloatingGridPreviewDoc(canvas, fgs);
+  const remainder = previewDoc.layers[0].frames[0].grids.find((g) => g.id === gridA.id);
+
+  assert.ok(remainder, "shape A's remainder still renders -- previously the whole shape was excluded from the preview, hiding the un-selected dx=2 cell too");
+  assert.notEqual(remainder, gridA, 'the remainder is a fresh object -- building a preview must never mutate the real grid');
+  assert.equal(get(remainder, 2 - remainder.offsetX, 0), 1, 'the un-selected dx=2 cell is still painted in the remainder, at its real position');
+  assert.equal(get(remainder, 0 - remainder.offsetX, 0), 0, 'the lifted dx=0 cell is hidden from the remainder (rendered only by the floating clone)');
+  assert.equal(get(remainder, 1 - remainder.offsetX, 0), 0, 'the lifted dx=1 cell is hidden from the remainder too');
+
+  assert.equal(fgs.clones[0].grid.width, 2, 'the clone itself only covers the actually-lifted dx 0-1');
+  assert.equal(gridA.width, 3, 'the real canvas is never mutated by building a preview -- shape A still has all 3 of its original cells');
 });
 
 test('buildFloatingGridPreviewDoc returns the doc unchanged when nothing is floating', () => {

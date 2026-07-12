@@ -433,13 +433,21 @@ export function finalizeGridSelection(canvas, fgs) {
  * A floatingGridSelection formed from destructively-lifted (originGridId
  * set) clones, stripped down to just its Grid-shaped clones — the
  * render-only substitution SvgPixelEditor's composeLayersBody call needs:
- * a shallow-copied preview `doc` where each such clone's *real* grid is
- * excluded from its layer/frame (so it doesn't render twice, once at its
- * old position and once at the floating one) and the clone renders in its
- * place instead. Copy-drag/external-paste clones (no real grid to hide)
- * just render as an addition. Never mutates `doc` — every level touched
- * (doc, its layers array, the one affected layer, its frames array) is a
- * fresh shallow copy.
+ * a shallow-copied preview `doc` where each such clone's *real* grid has
+ * just its lifted cells hidden (per `originSnapshot`, the same cells
+ * `clearGridSelectionSource` will actually clear at finalize) so it
+ * doesn't render twice, once at its old position and once at the floating
+ * one — and the clone renders in its place instead. Any part of that real
+ * grid *outside* the lift rect (a partially-selected shape) keeps
+ * rendering at its real position/style throughout the pending preview,
+ * matching what finalize will actually leave behind; previously the whole
+ * real grid was excluded outright, which made a partially-lifted shape's
+ * unselected remainder vanish from the canvas for the entire pending
+ * preview even though the underlying document still had it. Copy-drag/
+ * external-paste clones (no real grid to hide) just render as an
+ * addition. Never mutates `doc` — every level touched (doc, its layers
+ * array, the one affected layer, its frames array, and any grid that gets
+ * a cell hidden) is a fresh shallow copy.
  *
  * @param {object} doc
  * @param {{layerId:string, clones:object[]}|null} fgs
@@ -447,7 +455,7 @@ export function finalizeGridSelection(canvas, fgs) {
  */
 export function buildFloatingGridPreviewDoc(doc, fgs) {
   if (!fgs) return doc;
-  const excludedIds = new Set(fgs.clones.filter((c) => c.originGridId).map((c) => c.originGridId));
+  const snapshotById = new Map(fgs.clones.filter((c) => c.originGridId).map((c) => [c.originGridId, c.originSnapshot]));
   const frameIndex = currentFrameIndex(doc);
   return {
     ...doc,
@@ -457,8 +465,19 @@ export function buildFloatingGridPreviewDoc(doc, fgs) {
         ...layer,
         frames: layer.frames.map((frame, i) => {
           if (i !== frameIndex) return frame;
-          const kept = frame.grids.filter((g) => !excludedIds.has(g.id));
-          return { ...frame, grids: [...kept, ...fgs.clones.map((c) => c.grid)] };
+          const remaining = frame.grids.map((g) => {
+            const snap = snapshotById.get(g.id);
+            if (!snap) return g;
+            const remainder = { ...g, pixels: g.pixels.slice() };
+            for (let ly = 0; ly < snap.height; ly++) {
+              for (let lx = 0; lx < snap.width; lx++) {
+                if (!snap.pixels[ly * snap.width + lx]) continue;
+                set(remainder, snap.offsetX + lx - g.offsetX, snap.offsetY + ly - g.offsetY, 0);
+              }
+            }
+            return remainder;
+          });
+          return { ...frame, grids: [...remaining, ...fgs.clones.map((c) => c.grid)] };
         }),
       };
     }),
