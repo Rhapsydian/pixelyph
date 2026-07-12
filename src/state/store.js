@@ -158,6 +158,27 @@ function extractSelection(canvas, selectionScope, rect) {
   return extractRectColors(canvas, rect);
 }
 
+/** A flat floatingSelection's current bounds, in the same {x0,y0,x1,y1} shape as a rect. */
+function floatingSelectionRect(fs) {
+  return { x0: fs.x, y0: fs.y, x1: fs.x + fs.width - 1, y1: fs.y + fs.height - 1 };
+}
+
+/**
+ * Where a clipboard payload's `originRect` lands on `doc` — same position
+ * it was copied/cut from (paste-in-place), clamped to stay fully in
+ * bounds if the origin doesn't fit (a smaller target canvas, or a
+ * near-edge origin). Every clipboard payload carries an `originRect` (set
+ * by copySelection/cutSelection) — external paste (pasteImageBlob) never
+ * goes through `clipboard` at all, so it isn't affected by this and keeps
+ * its own independent centering.
+ */
+function pastePosition(doc, clipboard) {
+  return {
+    x: Math.max(0, Math.min(doc.width - clipboard.width, clipboard.originRect.x0)),
+    y: Math.max(0, Math.min(doc.height - clipboard.height, clipboard.originRect.y0)),
+  };
+}
+
 /**
  * Snapshots a floatingGridSelection's current clones onto the clipboard —
  * independent deep copies (own `pixels` arrays), so later dragging/
@@ -1405,7 +1426,7 @@ export const useStore = create((set, get) => {
         return;
       }
       if (floatingSelection) {
-        set({ clipboard: { kind: 'flat', width: floatingSelection.width, height: floatingSelection.height, cells: floatingSelection.cells } });
+        set({ clipboard: { kind: 'flat', originRect: floatingSelectionRect(floatingSelection), width: floatingSelection.width, height: floatingSelection.height, cells: floatingSelection.cells } });
         return;
       }
       if (!doc || !selection) return;
@@ -1419,7 +1440,7 @@ export const useStore = create((set, get) => {
       const width = rect.x1 - rect.x0 + 1;
       const height = rect.y1 - rect.y0 + 1;
       const cells = extractSelection(doc, selectionScope, rect);
-      set({ clipboard: { kind: 'flat', width, height, cells }, selection: null, floatingSelection: { x: rect.x0, y: rect.y0, width, height, cells } });
+      set({ clipboard: { kind: 'flat', originRect: rect, width, height, cells }, selection: null, floatingSelection: { x: rect.x0, y: rect.y0, width, height, cells } });
     },
     cutSelection: () => {
       const { mode, canvas, glyphCanvas, selection, floatingSelection, floatingGridSelection, selectionScope } = get();
@@ -1437,7 +1458,7 @@ export const useStore = create((set, get) => {
         return;
       }
       if (floatingSelection) {
-        set({ clipboard: { kind: 'flat', width: floatingSelection.width, height: floatingSelection.height, cells: floatingSelection.cells }, selection: null, floatingSelection: null, floatingGridSelection: null });
+        set({ clipboard: { kind: 'flat', originRect: floatingSelectionRect(floatingSelection), width: floatingSelection.width, height: floatingSelection.height, cells: floatingSelection.cells }, selection: null, floatingSelection: null, floatingGridSelection: null });
         commit();
         return;
       }
@@ -1455,7 +1476,7 @@ export const useStore = create((set, get) => {
       }
       const cells = extractSelection(doc, selectionScope, rect);
       clearSelectionRect(doc, selectionScope, rect);
-      set({ clipboard: { kind: 'flat', width: rect.x1 - rect.x0 + 1, height: rect.y1 - rect.y0 + 1, cells }, selection: null });
+      set({ clipboard: { kind: 'flat', originRect: rect, width: rect.x1 - rect.x0 + 1, height: rect.y1 - rect.y0 + 1, cells }, selection: null });
       commit();
     },
     pasteClipboard: () => {
@@ -1466,8 +1487,7 @@ export const useStore = create((set, get) => {
         if (doc.tier !== 'advanced') return; // a Shape-tier clipboard has nothing meaningful to paste into Pixel tier/Glyph mode
         const layer = doc.layers.find((l) => l.id === doc.activeLayerId);
         if (!layer) return;
-        const targetX = Math.max(0, Math.min(doc.width - clipboard.width, Math.floor((doc.width - clipboard.width) / 2)));
-        const targetY = Math.max(0, Math.min(doc.height - clipboard.height, Math.floor((doc.height - clipboard.height) / 2)));
+        const { x: targetX, y: targetY } = pastePosition(doc, clipboard);
         const dx = targetX - clipboard.originRect.x0;
         const dy = targetY - clipboard.originRect.y0;
         const clones = clipboard.clones.map((c) => ({
@@ -1479,8 +1499,7 @@ export const useStore = create((set, get) => {
         set({ activeTool: 'marqueeSelect', selection: null, floatingSelection: null, floatingGridSelection: fgs });
         return;
       }
-      const x = Math.max(0, Math.min(doc.width - clipboard.width, Math.floor((doc.width - clipboard.width) / 2)));
-      const y = Math.max(0, Math.min(doc.height - clipboard.height, Math.floor((doc.height - clipboard.height) / 2)));
+      const { x, y } = pastePosition(doc, clipboard);
       set({ activeTool: 'marqueeSelect', selection: null, floatingGridSelection: null, floatingSelection: { x, y, width: clipboard.width, height: clipboard.height, cells: clipboard.cells } });
     },
 

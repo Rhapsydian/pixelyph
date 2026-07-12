@@ -90,7 +90,7 @@ test('cross-glyph copy-paste: selecting in glyph A, switching to glyph B, and pa
   const glyphB = useStore.getState().glyphSet.glyphs.get(66);
 
   assert.ok(onlyColumnFilled(glyphA, 0), "glyph A's pixels are untouched by the paste into B");
-  assert.ok(columnIsFilled(glyphB, 5), "glyph B received the pasted stem (centered paste at x=floor((12-1)/2)=5)");
+  assert.ok(columnIsFilled(glyphB, 0), 'glyph B received the pasted stem at its original x=0 -- paste-in-place, not centered, since both glyphs are the same size');
 });
 
 test('palette actions (add/remove/reorder/clear) are undo-tracked, same as any other structural edit', async () => {
@@ -347,6 +347,66 @@ test('selectionScope defaults to "activeShape"; copy honors it, excluding a diff
   assert.ok(fgs);
   assert.equal(fgs.clones[0].originGridId, null, 'a copy never writes back into the source shape');
   assert.equal(useStore.getState().canvas.layers[0].frames[0].grids.find((g) => g.id === shapeAId)?.offsetX, 0, 'the original shape A is untouched by copy');
+});
+
+test('paste-in-place, Shape tier: copy then paste lands the new floating selection at the original position, not centered', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  store.setTier('advanced');
+  const canvas = useStore.getState().canvas;
+  store.paintCellLive(3, 4, '#00ff00');
+  store.commitStroke();
+
+  store.startSelection(3, 4);
+  store.updateSelection(3, 4);
+  store.copySelection();
+  store.dropFloatingSelection(); // finalize the floating duplicate copy left behind, back where it started
+
+  store.pasteClipboard();
+  const fgs = useStore.getState().floatingGridSelection;
+  assert.ok(fgs);
+  assert.equal(fgs.rect.x0, 3, "lands at the shape's original x, not canvas-centered");
+  assert.equal(fgs.rect.y0, 4, "lands at the shape's original y, not canvas-centered");
+  assert.notEqual(fgs.rect.x0, Math.floor((canvas.width - 1) / 2), 'sanity check: original position genuinely differs from what centering would have produced');
+});
+
+test('paste-in-place, Shape tier: cut then paste lands back at the original position', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  store.setTier('advanced');
+  store.paintCellLive(2, 5, '#ff00ff');
+  store.commitStroke();
+
+  store.startSelection(2, 5);
+  store.updateSelection(2, 5);
+  store.cutSelection();
+  assert.equal(useStore.getState().canvas.layers[0].frames[0].grids.length, 0, 'the shape is really gone after cut, not just pending');
+
+  store.pasteClipboard();
+  const fgs = useStore.getState().floatingGridSelection;
+  assert.ok(fgs);
+  assert.equal(fgs.rect.x0, 2);
+  assert.equal(fgs.rect.y0, 5);
+});
+
+test('paste-in-place, Pixel tier: copy then paste lands the flat floating selection at the original position', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw'); // starts in Pixel tier
+  const canvas = useStore.getState().canvas;
+  store.paintCellLive(1, 2, '#0000ff');
+  store.commitStroke();
+
+  store.startSelection(1, 2);
+  store.updateSelection(1, 2);
+  store.copySelection();
+  store.dropFloatingSelection();
+
+  store.pasteClipboard();
+  const fs = useStore.getState().floatingSelection;
+  assert.ok(fs);
+  assert.equal(fs.x, 1);
+  assert.equal(fs.y, 2);
+  assert.notEqual(fs.x, Math.floor((canvas.width - 1) / 2), 'sanity check: original position genuinely differs from what centering would have produced');
 });
 
 test('applyPaletteEntryToActiveGrid: a saved style replaces fill+stroke+effects wholesale', async () => {
