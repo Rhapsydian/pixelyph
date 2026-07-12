@@ -1564,6 +1564,15 @@ export const useStore = create((set, get) => {
      * point — instead of importRasterImage's own immediate full-canvas
      * paint+commit. Mode-aware like pasteClipboard/colorAt.
      *
+     * Target size is clamped to `min(image dimension, doc dimension)` per
+     * axis — a source image larger than the canvas still downsamples to
+     * fit (the common "paste a screenshot" case), but a source already
+     * smaller than the canvas (e.g. a small pixel-art snippet) pastes in at
+     * its own native size instead of being upscaled to fill the whole
+     * canvas. Passing `importRasterToGrid` the same size as the source on
+     * that axis makes its nearest/average sampling an exact identity copy,
+     * one image pixel per cell.
+     *
      * Shape tier default (`pasteColorMode: 'multiple'`): one Grid clone per
      * distinct pasted color (buildGridClonesByColor) — a Grid is one style +
      * one bitmap, so a multi-color paste can't become a single shape without
@@ -1576,7 +1585,9 @@ export const useStore = create((set, get) => {
       const doc = mode === 'glyph' ? glyphCanvas : canvas;
       if (!doc) return;
       const image = await decodeImageFile(blob);
-      const result = importRasterToGrid(image, doc.width, doc.height);
+      const targetWidth = Math.min(image.width, doc.width);
+      const targetHeight = Math.min(image.height, doc.height);
+      const result = importRasterToGrid(image, targetWidth, targetHeight);
       const cells = [];
       for (let y = 0; y < result.height; y++) {
         for (let x = 0; x < result.width; x++) {
