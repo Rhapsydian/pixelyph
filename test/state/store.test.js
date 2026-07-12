@@ -194,6 +194,65 @@ test('nudgeLayerFrameLive shifts a layer\'s active-frame content without growing
   assert.equal(useStore.getState().colorAt(0, 0), '#0000ff', 'undo reverts to the pre-drag position, not a mid-drag one');
 });
 
+test('flipSelectionH transforms an already-floating selection without committing; dropFloatingSelection afterward is exactly one undo step', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  store.paintCellLive(0, 0, '#ff0000'); // 'A'
+  store.paintCellLive(2, 0, '#00ff00'); // 'B'
+  store.commitStroke();
+
+  store.startSelection(0, 0);
+  store.updateSelection(2, 0);
+  store.liftSelection(true); // destructive lift, matching an ordinary drag-move
+  const stackLengthBeforeTransform = useStore.getState().history.stack.length;
+
+  store.flipSelectionH();
+  assert.equal(useStore.getState().history.stack.length, stackLengthBeforeTransform, 'a still-floating transform must not push an undo snapshot');
+  const cellsByColor = Object.fromEntries(useStore.getState().floatingSelection.cells.map((c) => [c.color, c.dx]));
+  assert.deepEqual(cellsByColor, { '#ff0000': 2, '#00ff00': 0 }, 'flipH mirrors dx across the selection\'s own width (3 wide: dx 0..2)');
+
+  store.dropFloatingSelection();
+  assert.equal(useStore.getState().history.stack.length, stackLengthBeforeTransform + 1, 'drop commits exactly one undo step for the whole gesture');
+  assert.equal(useStore.getState().colorAt(0, 0), '#00ff00');
+  assert.equal(useStore.getState().colorAt(2, 0), '#ff0000');
+});
+
+test('rotateSelection90 auto-lifts a raw (not-yet-floating) selection first, destructively clearing the source', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  store.paintCellLive(0, 0, '#ff0000');
+  store.commitStroke();
+
+  store.startSelection(0, 0);
+  store.updateSelection(0, 0); // a raw 1x1 selection rect, never explicitly lifted
+  assert.equal(useStore.getState().floatingSelection, null);
+
+  store.rotateSelection90();
+  assert.ok(useStore.getState().floatingSelection, 'rotate auto-lifts the raw selection into a floating one');
+  assert.equal(useStore.getState().colorAt(0, 0), null, 'auto-lift is destructive, same as an ordinary drag-move lift');
+  assert.deepEqual(useStore.getState().floatingSelection.cells, [{ dx: 0, dy: 0, color: '#ff0000' }]);
+});
+
+test('rotateSelection180 swaps width/height twice, landing back on the original bounds', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  store.paintCellLive(0, 0, '#ff0000');
+  store.paintCellLive(2, 0, '#00ff00');
+  store.commitStroke();
+  store.startSelection(0, 0);
+  store.updateSelection(2, 0);
+  store.liftSelection(true);
+  assert.equal(useStore.getState().floatingSelection.width, 3);
+  assert.equal(useStore.getState().floatingSelection.height, 1);
+
+  store.rotateSelection180();
+  const fs = useStore.getState().floatingSelection;
+  assert.equal(fs.width, 3, '180 = rotate90 applied twice, so the swap undoes itself');
+  assert.equal(fs.height, 1);
+  const cellsByColor = Object.fromEntries(fs.cells.map((c) => [c.color, c.dx]));
+  assert.deepEqual(cellsByColor, { '#ff0000': 2, '#00ff00': 0 }, '180deg is still a real transform, not a no-op');
+});
+
 test('selectionScope defaults to "activeShape"; copy honors it, excluding a different shape in the same layer', async () => {
   const store = useStore.getState();
   await store.newProject('draw');

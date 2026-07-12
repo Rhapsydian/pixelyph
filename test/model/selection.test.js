@@ -1,7 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createCanvas, paintCell, colorAt, addLayer, addGrid } from '../../src/model/Canvas.js';
-import { normalizeRect, extractRectColors, extractRectFromActiveLayer, extractRectFromActiveGrid, clearRect, clearRectAllLayers, pasteCells } from '../../src/model/selection.js';
+import {
+  normalizeRect,
+  extractRectColors,
+  extractRectFromActiveLayer,
+  extractRectFromActiveGrid,
+  clearRect,
+  clearRectAllLayers,
+  pasteCells,
+  transformSelectionCells,
+} from '../../src/model/selection.js';
 
 test('normalizeRect handles corners given in any order', () => {
   assert.deepEqual(normalizeRect(3, 3, 0, 0), { x0: 0, y0: 0, x1: 3, y1: 3 });
@@ -120,6 +129,35 @@ test('extractRectFromActiveGrid returns nothing when there is no active shape', 
   addLayer(canvas);
   canvas.activeGridId = null;
   assert.deepEqual(extractRectFromActiveGrid(canvas, { x0: 0, y0: 0, x1: 1, y1: 1 }), []);
+});
+
+// --- transformSelectionCells (Checkpoint 2: Transform menu Selection scope) ---
+
+const SAMPLE_CELLS = [
+  { dx: 0, dy: 0, color: 'A' },
+  { dx: 2, dy: 0, color: 'B' },
+  { dx: 0, dy: 1, color: 'C' },
+]; // a 3-wide, 2-tall sparse selection
+
+function byColor(cells) {
+  return Object.fromEntries(cells.map((c) => [c.color, { dx: c.dx, dy: c.dy }]));
+}
+
+test('transformSelectionCells flipH mirrors dx across width, leaving dy untouched', () => {
+  const result = transformSelectionCells(3, 2, SAMPLE_CELLS, 'flipH');
+  assert.deepEqual(byColor(result), { A: { dx: 2, dy: 0 }, B: { dx: 0, dy: 0 }, C: { dx: 2, dy: 1 } });
+});
+
+test('transformSelectionCells flipV mirrors dy across height, leaving dx untouched', () => {
+  const result = transformSelectionCells(3, 2, SAMPLE_CELLS, 'flipV');
+  assert.deepEqual(byColor(result), { A: { dx: 0, dy: 1 }, B: { dx: 2, dy: 1 }, C: { dx: 0, dy: 0 } });
+});
+
+test('transformSelectionCells rotate90 matches Grid.js\'s rotatePixels90 direction (90deg clockwise)', () => {
+  // Same forward remap as Grid.js's buffer-based rotatePixels90, expressed as a point transform:
+  // dx' = height - 1 - dy, dy' = dx. Output bounds are height x width (swapped).
+  const result = transformSelectionCells(3, 2, SAMPLE_CELLS, 'rotate90');
+  assert.deepEqual(byColor(result), { A: { dx: 1, dy: 0 }, B: { dx: 1, dy: 2 }, C: { dx: 0, dy: 0 } });
 });
 
 test('clearRectAllLayers clears each cell from whichever layer actually owns it, not just the active layer', () => {

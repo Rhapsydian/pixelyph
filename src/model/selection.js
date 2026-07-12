@@ -136,3 +136,27 @@ export function clearRectAllLayers(canvas, rect) {
 export function pasteCells(canvas, originX, originY, cells) {
   for (const cell of cells) paintCell(canvas, originX + cell.dx, originY + cell.dy, cell.color);
 }
+
+/**
+ * Flips/rotates a floating selection's sparse `{dx,dy,color}[]` cell list in
+ * place around its own `width x height` bounds — the Transform menu's
+ * Selection scope. `floatingSelection.cells` isn't a dense raster, so this
+ * remaps points directly rather than round-tripping through Grid.js's
+ * byte-typed buffer helpers (which can't hold color strings). Remap math
+ * matches Grid.js's flipPixelsH/flipPixelsV/rotatePixels90 exactly, just
+ * expressed as a forward point transform instead of an index lookup.
+ *
+ * @param {number} width
+ * @param {number} height
+ * @param {{dx:number,dy:number,color:string}[]} cells
+ * @param {'flipH'|'flipV'|'rotate90'} kind
+ * @returns {{dx:number,dy:number,color:string}[]} `rotate90` output is sized `height x width` (swapped)
+ */
+export function transformSelectionCells(width, height, cells, kind) {
+  return cells.map((cell) => {
+    if (kind === 'flipH') return { ...cell, dx: width - 1 - cell.dx };
+    if (kind === 'flipV') return { ...cell, dy: height - 1 - cell.dy };
+    // rotate90 (90° CW, matching rotatePixels90's direction)
+    return { ...cell, dx: height - 1 - cell.dy, dy: cell.dx };
+  });
+}

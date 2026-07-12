@@ -153,6 +153,11 @@ export function MenuBar() {
   const rotateActiveGlyph90 = useStore((s) => s.rotateActiveGlyph90);
   const rotateActiveGlyph180 = useStore((s) => s.rotateActiveGlyph180);
   const rotateActiveGlyphCCW90 = useStore((s) => s.rotateActiveGlyphCCW90);
+  const flipSelectionH = useStore((s) => s.flipSelectionH);
+  const flipSelectionV = useStore((s) => s.flipSelectionV);
+  const rotateSelection90 = useStore((s) => s.rotateSelection90);
+  const rotateSelection180 = useStore((s) => s.rotateSelection180);
+  const rotateSelectionCCW90 = useStore((s) => s.rotateSelectionCCW90);
   const [resizeModalOpen, setResizeModalOpen] = useState(false);
   // The pending flip/rotate operation awaiting a target ("Canvas"/"Layer"/
   // "Shape") and, unless Shape is picked, a frame-scope answer — null means
@@ -223,16 +228,23 @@ export function MenuBar() {
 
   /**
    * Flip/Rotate menu items funnel through here rather than straight to
-   * runAndClose: Glyph mode has no target concept (no layers/shapes), so
-   * `glyphAction` just runs directly. Draw mode always opens the scope
-   * modal — "Canvas or Layer" (Pixel tier) / "Canvas, Layer, or Shape"
-   * (Shape tier) is always a real choice, even with just one layer.
-   * `layerActions`/`shapeActions` are `{h, v, cw, ccw, r180}` — `shapeActions`
-   * is omitted entirely when Shape tier has no active grid to target.
+   * runAndClose. An active selection (marquee rect or already-floating)
+   * always wins, in *either* mode — it acts on the selection directly, for
+   * the current frame only, with no scope-picker modal. Otherwise: Glyph
+   * mode has no target concept (no layers/shapes), so `glyphAction` just
+   * runs directly. Draw mode always opens the scope modal — "Canvas or
+   * Layer" (Pixel tier) / "Canvas, Layer, or Shape" (Shape tier) is always a
+   * real choice there, even with just one layer. `layerActions`/
+   * `shapeActions` are `{h, v, cw, ccw, r180}` — `shapeActions` is omitted
+   * entirely when Shape tier has no active grid to target.
    */
   function runTransform(title, op, glyphAction, canvasAction, layerActions, shapeActions) {
     return () => {
       setOpenMenu(null);
+      if (hasSelection) {
+        selectionActions[op]();
+        return;
+      }
       if (mode === 'glyph') {
         glyphAction();
         return;
@@ -247,6 +259,7 @@ export function MenuBar() {
   const shapeActions = hasActiveShape
     ? { h: flipActiveShapeH, v: flipActiveShapeV, cw: rotateActiveShape90, ccw: rotateActiveShapeCCW90, r180: rotateActiveShape180 }
     : null;
+  const selectionActions = { h: flipSelectionH, v: flipSelectionV, cw: rotateSelection90, ccw: rotateSelectionCCW90, r180: rotateSelection180 };
 
   return (
     <div ref={rootRef} style={{ display: 'flex' }}>

@@ -53,7 +53,7 @@ import {
 } from '../model/Canvas.js';
 import { mirrorPoints } from '../model/mirror.js';
 import { createHistory, pushSnapshot, undo as historyUndo, redo as historyRedo, canUndo as historyCanUndo, canRedo as historyCanRedo } from '../model/history.js';
-import { normalizeRect, extractRectColors, extractRectFromActiveLayer, extractRectFromActiveGrid, clearRect, clearRectAllLayers, pasteCells } from '../model/selection.js';
+import { normalizeRect, extractRectColors, extractRectFromActiveLayer, extractRectFromActiveGrid, clearRect, clearRectAllLayers, pasteCells, transformSelectionCells } from '../model/selection.js';
 import { parseLospecPalette } from '../model/paletteImport.js';
 import {
   addColor as addPaletteColorModel,
@@ -226,13 +226,66 @@ export const useStore = create((set, get) => {
         if (glyph) glyph.pixels = canvasToGlyphPixels(glyphCanvas);
       }
       pushSnapshot(history, glyphContentSnapshot(glyphSet));
-      set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history) });
+      set({
+        glyphSet: { ...glyphSet },
+        // Mirrors draw mode's `canvas: { ...canvas }` below: any store
+        // action that mutates `glyphCanvas` in place and commits directly
+        // (bypassing SvgPixelEditor's ctx.*-wrapped `tick()` re-render,
+        // e.g. dropFloatingSelection called from the Enter-key handler or
+        // MenuBar's Edit > Commit move / Transform > Selection scope) needs
+        // a fresh `glyphCanvas` reference here so the composed-SVG useMemo
+        // (keyed on `[doc, canvas, glyphCanvas, tickCount]`) actually
+        // recomputes instead of returning stale pre-commit markup.
+        glyphCanvas: glyphCanvas ? { ...glyphCanvas } : glyphCanvas,
+        history: { ...history },
+        canUndo: historyCanUndo(history),
+        canRedo: historyCanRedo(history),
+      });
       autosaveScheduler(serializeGlyphSetProject(glyphSet));
     } else {
       pushSnapshot(history, contentSnapshot(canvas));
       set({ canvas: { ...canvas }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history) });
       autosaveScheduler(serializeProject(canvas));
     }
+  }
+
+  /**
+   * Transform-menu "Selection" scope (Checkpoint 2): flips/rotates the
+   * current selection's cells in place `times` times, for the active frame
+   * only — no per-frame concept, same as any other floating-selection
+   * operation. Lifts a still-rectangular `selection` first (destructive,
+   * same as an ordinary drag-move lift) if nothing's floating yet. No
+   * commit() — a still-floating selection is a pending edit, same as
+   * moveFloatingSelection; only dropFloatingSelection/cancelFloatingSelection
+   * are real undo boundaries.
+   * @param {'flipH'|'flipV'|'rotate90'} kind
+   * @param {number} times
+   */
+  function transformSelectionInStore(kind, times) {
+    let fs = get().floatingSelection;
+    if (!fs) {
+      get().liftSelection(true);
+      fs = get().floatingSelection;
+      if (!fs) return;
+      // liftSelection's destructive clear mutates the doc in place without
+      // swapping its reference — SvgPixelEditor's own ctx.liftSelection call
+      // sites paper over this with a local re-render `tick()`, but this
+      // store action is called directly from MenuBar.jsx, which has no
+      // access to that tick. Without a fresh doc reference here, the
+      // memoized composed SVG body (keyed on `[doc, canvas, glyphCanvas,
+      // tickCount]`) stays stale and the cleared source stays visibly
+      // duplicated underneath the floating (flipped/rotated) preview until
+      // the eventual drop. Mirrors pasteImageBlob's same mode-aware pattern.
+      const { mode, canvas, glyphCanvas } = get();
+      const doc = mode === 'glyph' ? glyphCanvas : canvas;
+      set(mode === 'glyph' ? { glyphCanvas: { ...doc } } : { canvas: { ...doc } });
+    }
+    let { width, height, cells } = fs;
+    for (let i = 0; i < times; i++) {
+      cells = transformSelectionCells(width, height, cells, kind);
+      if (kind === 'rotate90') [width, height] = [height, width];
+    }
+    set({ floatingSelection: { ...fs, cells, width, height } });
   }
 
   /**
@@ -1200,6 +1253,11 @@ export const useStore = create((set, get) => {
       set({ floatingSelection: { x: rect.x0, y: rect.y0, width: rect.x1 - rect.x0 + 1, height: rect.y1 - rect.y0 + 1, cells } });
     },
     moveFloatingSelection: (x, y) => set((s) => (s.floatingSelection ? { floatingSelection: { ...s.floatingSelection, x, y } } : {})),
+    flipSelectionH: () => transformSelectionInStore('flipH', 1),
+    flipSelectionV: () => transformSelectionInStore('flipV', 1),
+    rotateSelection90: () => transformSelectionInStore('rotate90', 1),
+    rotateSelection180: () => transformSelectionInStore('rotate90', 2),
+    rotateSelectionCCW90: () => transformSelectionInStore('rotate90', 3),
     dropFloatingSelection: () => {
       const { mode, canvas, glyphCanvas, floatingSelection } = get();
       const doc = mode === 'glyph' ? glyphCanvas : canvas;
