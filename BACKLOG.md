@@ -11,6 +11,101 @@ blocking issue is fixed); and open ideas flagged for later discussion
 rather than acted on immediately. Review this list once all
 currently-planned phases are complete.
 
+### IN PROGRESS: Selection-transform (Transform > Selection) corruption bugs on Shape tier — mid-session, uncommitted, pick up here next
+
+**Start here next session.** Working tree currently has *uncommitted*
+changes on top of the 3 committed session-28 checkpoints (`aaa5783` and
+earlier) — `src/model/Canvas.js`, `src/model/Grid.js`,
+`src/model/selection.js`, `src/state/store.js`, and matching test files
+(`test/model/Canvas.test.js`, `test/model/Grid.test.js`,
+`test/state/store.test.js`). Deliberately left uncommitted: `npm test` is
+green (443/443) but a real bug (last bullet below) is still unresolved —
+don't commit until it's fixed and re-verified.
+
+**User-reported, in the user's own real project (loaded via "Continue
+Last Session" — same origin/IndexedDB as this dev server, not a synthetic
+test project):**
+1. Selecting an entire shape (Active shape scope) and transforming it
+   corrupted a *different* shape in the same layer.
+2. Active layer scope "doesn't work correctly at all."
+3. (User's own architectural correction, mid-session:) the transform must
+   operate on each shape's own grid data directly — style must never be
+   affected, and *every* shape with cells in the selected area must
+   transform (not just the topmost cell per position).
+
+**Root causes found (all in the pre-existing `liftSelection`/
+`clearSelectionRect`/`pasteCells` flat-cell-color machinery, `selection.js`
++ `store.js`):**
+- `clearSelectionRect` only special-cased `allVisible` scope; `activeLayer`
+  fell through to `clearRect`, which only ever erases
+  `canvas.activeGridId`'s one grid — under-clearing when the active layer
+  has more than one shape in the rect. **Fixed**: new
+  `clearRectFromActiveLayer` (mirrors `clearRectAllLayers`, scoped to one
+  layer, `eraseFromLayer` per cell).
+- Destructively clearing a *fully*-selected shape empties and deletes its
+  Grid, which reassigns `canvas.activeGridId` to a sibling shape
+  (`paintCell`/`eraseFromLayer`'s existing fallback-to-`frame.grids[0]`
+  behavior) — so the later paste-back silently painted into that sibling.
+  **Fixed**: `liftSelection` now captures `activeGridId` before the
+  destructive clear and restores it after.
+- `pasteCells` always painted through `canvas.activeGridId` regardless of
+  each cell's own color — a multi-color paste (`activeLayer`/`allVisible`
+  scope) collapsed every color after the first into one grid/style.
+  **Fixed**: `pasteCells` now groups cells by color for advanced tier.
+- **Superseded by a full redesign anyway** (per the user's correction
+  above): flat-cell-color extraction can't preserve gradient/stroke/
+  effects at all — confirmed live (a gradient-filled shape's overlapping
+  cells extracted as a flat gray placeholder, then pasted back as a real,
+  wrong, solid-gray shape). The three fixes above still stand and still
+  matter (they also apply to plain marquee drag-move, not just Transform),
+  but Shape tier's Transform > Selection no longer goes through this path
+  at all — see next.
+
+**Redesign implemented**: for advanced (Shape) tier with no
+already-floating selection, Transform > Selection now bypasses
+`liftSelection`/`floatingSelection` entirely.
+`transformGridRegion` (new, `Grid.js`) flips/rotates only the portion of
+one Grid's own pixel buffer inside the selection rect, remapped around the
+rect's own bounds, in place — never touches `style`, never merges shapes.
+`transformSelectionRegion` (new, `Canvas.js`) resolves which Grids a scope
+puts in play (`activeShape`: just the active grid; `activeLayer`: every
+visible/unlocked grid in the active layer; `allVisible`: every
+visible/unlocked grid in every visible layer) and calls
+`transformGridRegion` on each independently. `store.js`'s
+`transformSelectionInStore` branches to this path first; Pixel tier/Glyph
+mode/an-already-floating-Shape-tier-selection still use the original
+flat-cell path (no style to lose there). Commits immediately, single undo
+step, no floating-preview stage for Shape tier at all.
+
+**Verified working, live, in the user's real project:** Active shape scope
+on a fully-selected flat-color shape (no longer corrupts the sibling
+gradient-filled heart shape, single-step undo confirmed via SVG `path`
+`d`/`transform` diffing, not just eyeballing screenshots). Active layer
+scope spanning both the flat-color shape and part of the gradient heart
+(both transform independently, gradient/glow style fully intact, no
+ghost/extra shape, `npm test` 443/443 including 10 new regression tests
+in `Grid.test.js`/`Canvas.test.js`/`store.test.js`).
+
+**NOT yet resolved — found last, mid-verification, session ended before
+diagnosing:** after that same Active layer two-shape flip, clicking Undo
+only reverted the flat-color shape; the gradient-styled shape's `path`
+`d`/`transform` (checked directly via DOM, not a screenshot) stayed at its
+post-flip value even after a second Undo click, with `canUndo` reading
+false (nothing left to undo) — i.e. the two shapes' changes don't appear
+to be reverting together as the single atomic commit they should be.
+Not yet root-caused. **Next session: start by writing a store-test
+reproduction** (two shapes in one layer, one flat-color, one
+gradient-object-styled, `activeLayer` scope, `flipSelectionH`, then
+`undo()`, assert *both* shapes' `offsetX`/`pixels` revert) — the existing
+new store.test.js case for this feature only checks the transform itself
+and one undo step's *count*, not that both shapes' geometry actually
+round-trips. Likely places to look: `contentSnapshot`/
+`applyContentSnapshot`/`history.js` (does `structuredClone` genuinely
+deep-copy every grid touched, or could two Grids in the same frame somehow
+end up pixel-array-aliased after `growGridToInclude`'s `resizeAt` calls?),
+or whether `commit()` is somehow reading a not-fully-mutated `canvas` in
+this two-grid-in-one-call case.
+
 ### Tool-gap backlog, carried over from the retired tool-roadmap doc
 
 `docs/tool-roadmap.md`'s own 7 checkpoints all shipped (see this file's
