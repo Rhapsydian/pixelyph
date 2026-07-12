@@ -299,6 +299,9 @@ export function SvgPixelEditor() {
       get tier() {
         return getActiveDocument()?.tier ?? 'simple';
       },
+      get selectionScope() {
+        return useStore.getState().selectionScope;
+      },
       get activeLayerId() {
         return getActiveDocument()?.activeLayerId ?? null;
       },
