@@ -409,6 +409,74 @@ test('paste-in-place, Pixel tier: copy then paste lands the flat floating select
   assert.notEqual(fs.x, Math.floor((canvas.width - 1) / 2), 'sanity check: original position genuinely differs from what centering would have produced');
 });
 
+test('setPasteColorMode regenerates a pending, untouched, paste-sourced floatingGridSelection in place; leaves clones alone once touched or when there is nothing to regenerate from', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  store.setTier('advanced');
+  const layer = useStore.getState().canvas.layers[0];
+  store.setActiveColor('#123456');
+
+  // No pending selection at all -- just updates the persisted default.
+  store.setPasteColorMode('single');
+  assert.equal(useStore.getState().pasteColorMode, 'single');
+  assert.equal(useStore.getState().floatingGridSelection, null);
+  store.setPasteColorMode('multiple');
+
+  // A pending selection with no pasteRaw (e.g. an ordinary marquee lift, not an external paste) -- nothing to regenerate from, so clones are left alone.
+  const ordinaryFgs = { layerId: layer.id, rect: { x0: 0, y0: 0, x1: 0, y1: 0 }, clones: ['unchanged'] };
+  useStore.setState({ floatingGridSelection: ordinaryFgs });
+  store.setPasteColorMode('single');
+  assert.equal(useStore.getState().floatingGridSelection.clones, ordinaryFgs.clones);
+
+  // A pending, untouched, paste-sourced selection (2+ distinct colors) -- the toggle regenerates its clones from the raw pasted cells.
+  const cells = [
+    { dx: 0, dy: 0, color: '#ff0000' },
+    { dx: 1, dy: 0, color: '#00ff00' },
+  ];
+  useStore.setState({
+    floatingGridSelection: { layerId: layer.id, rect: { x0: 0, y0: 0, x1: 1, y1: 0 }, clones: [], pasteRaw: { x: 0, y: 0, cells }, touched: false },
+  });
+
+  store.setPasteColorMode('single');
+  let fgs = useStore.getState().floatingGridSelection;
+  assert.equal(fgs.clones.length, 1, 'regenerated to one unioned clone');
+  assert.equal(fgs.clones[0].grid.style.fill, '#123456', 'painted with the active color, not any pasted color');
+  assert.equal(fgs.rect.x0, 0, 'rect/layerId are untouched by the toggle');
+
+  store.setPasteColorMode('multiple');
+  fgs = useStore.getState().floatingGridSelection;
+  assert.equal(fgs.clones.length, 2, 'regenerated back to one clone per distinct pasted color');
+
+  // Once touched (moved/transformed), the pending clones are left alone -- only the persisted default updates.
+  useStore.setState((s) => ({ floatingGridSelection: { ...s.floatingGridSelection, touched: true } }));
+  const clonesBeforeToggle = useStore.getState().floatingGridSelection.clones;
+  store.setPasteColorMode('single');
+  assert.equal(useStore.getState().pasteColorMode, 'single', 'the persisted default still updates');
+  assert.equal(useStore.getState().floatingGridSelection.clones, clonesBeforeToggle, 'a touched pending selection is left untouched');
+
+  store.setPasteColorMode('multiple'); // pasteColorMode is working-session state, not reset by newProject -- restore the default so later tests aren't affected
+});
+
+test('moveGridSelectionBy and flipSelectionH/rotateSelection90 both mark a pending floatingGridSelection as touched, closing the door on regenerating its paste color mode', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  store.setTier('advanced');
+  const layer = useStore.getState().canvas.layers[0];
+  const cells = [
+    { dx: 0, dy: 0, color: '#ff0000' },
+    { dx: 1, dy: 0, color: '#00ff00' },
+  ];
+  const makeFgs = () => ({ layerId: layer.id, rect: { x0: 0, y0: 0, x1: 1, y1: 0 }, clones: [], pasteRaw: { x: 0, y: 0, cells }, touched: false });
+
+  useStore.setState({ floatingGridSelection: makeFgs() });
+  store.moveGridSelectionBy(1, 0);
+  assert.equal(useStore.getState().floatingGridSelection.touched, true, 'a drag-move touches the pending selection');
+
+  useStore.setState({ floatingGridSelection: makeFgs() });
+  store.flipSelectionH();
+  assert.equal(useStore.getState().floatingGridSelection.touched, true, 'a Transform-menu flip touches the pending selection too');
+});
+
 test('applyPaletteEntryToActiveGrid: a saved style replaces fill+stroke+effects wholesale', async () => {
   const store = useStore.getState();
   await store.newProject('draw');

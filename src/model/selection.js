@@ -513,3 +513,48 @@ export function buildGridClonesByColor(originX, originY, cells) {
   }
   return clones;
 }
+
+/**
+ * Collapses flat {dx,dy,color} cells (as decoded from an external raster
+ * paste) into a single Grid-shaped clone — a boolean union of every
+ * non-empty pixel regardless of its original color, painted with `style`
+ * (the currently-active color/style, not anything from the pasted image).
+ * The alternative interpretation to `buildGridClonesByColor` above: the
+ * right tool for importing a raster silhouette/outline/mask as one
+ * paintable, later-restylable shape, at the cost of discarding per-pixel
+ * color fidelity (a Grid is one style + one boolean bitmap, so it can't
+ * keep both). `originGridId: null` — new content, nothing to write back
+ * into.
+ *
+ * @param {number} originX canvas-space
+ * @param {number} originY canvas-space
+ * @param {{dx:number,dy:number,color:string}[]} cells
+ * @param {{fill:*, effects:object[]}} style
+ * @returns {object[]} floatingGridSelection.clones (always length 1)
+ */
+export function buildGridCloneUnioned(originX, originY, cells, style) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const cell of cells) {
+    const x = originX + cell.dx;
+    const y = originY + cell.dy;
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  const width = maxX - minX + 1;
+  const height = maxY - minY + 1;
+  const pixels = new Uint8Array(width * height);
+  for (const cell of cells) {
+    const x = originX + cell.dx;
+    const y = originY + cell.dy;
+    pixels[(y - minY) * width + (x - minX)] = 1;
+  }
+  return [
+    {
+      originGridId: null,
+      originSnapshot: null,
+      grid: { id: makeGridId(), name: 'Shape', offsetX: minX, offsetY: minY, width, height, pixels, style, opacity: 1, visible: true, locked: false },
+    },
+  ];
+}

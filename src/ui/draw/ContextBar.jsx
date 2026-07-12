@@ -65,6 +65,9 @@ export function ContextBar() {
   const setTier = useStore((s) => s.setTier);
   const selectionScope = useStore((s) => s.selectionScope);
   const setSelectionScope = useStore((s) => s.setSelectionScope);
+  const floatingGridSelection = useStore((s) => s.floatingGridSelection);
+  const pasteColorMode = useStore((s) => s.pasteColorMode);
+  const setPasteColorMode = useStore((s) => s.setPasteColorMode);
   const requestConfirm = useStore((s) => s.requestConfirm);
 
   const isGlyphMode = mode === 'glyph';
@@ -76,7 +79,13 @@ export function ContextBar() {
   const showsToolOptions = showsBrushWidth || showsDither || showsPixelPerfect || showsFillOptions;
   const symmetryMode = isGlyphMode ? (glyphCanvas?.symmetryMode ?? 'none') : canvasSymmetryMode;
   const showsSelectScope = !isGlyphMode && tier === 'advanced';
-  const hasToolSpecificControls = showsShapeToggle || showsSelectScope || showsToolOptions;
+  // Only while a pending, unmodified, external-paste-sourced
+  // floatingGridSelection with 2+ distinct colors is around — pasteRaw is
+  // only ever set in that case (see pasteImageBlob), and disappears once
+  // the user moves/transforms the pending selection (touched), so the
+  // choice can't be changed mid-manipulation.
+  const showsPasteColorMode = !isGlyphMode && tier === 'advanced' && floatingGridSelection?.pasteRaw && !floatingGridSelection.touched;
+  const hasToolSpecificControls = showsShapeToggle || showsSelectScope || showsPasteColorMode || showsToolOptions;
 
   async function handleTierChange(newTier) {
     if (newTier === tier) return;
@@ -167,6 +176,16 @@ export function ContextBar() {
                 <select value={selectionScope} onChange={(e) => setSelectionScope(e.target.value)}>
                   <option value="activeShape">Active shape</option>
                   <option value="activeLayer">Active layer</option>
+                </select>
+              </label>
+            )}
+
+            {showsPasteColorMode && (
+              <label title="Multiple shapes preserves the pasted image's per-pixel colors as separate shapes. Single shape unions every pasted pixel into one shape painted with the active color, discarding per-pixel color.">
+                Paste as:{' '}
+                <select value={pasteColorMode} onChange={(e) => setPasteColorMode(e.target.value)}>
+                  <option value="multiple">Multiple shapes (by color)</option>
+                  <option value="single">Single shape</option>
                 </select>
               </label>
             )}

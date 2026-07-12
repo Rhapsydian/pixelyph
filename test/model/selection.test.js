@@ -15,6 +15,7 @@ import {
   finalizeGridSelection,
   buildFloatingGridPreviewDoc,
   buildGridClonesByColor,
+  buildGridCloneUnioned,
 } from '../../src/model/selection.js';
 
 /** Two independent shapes in one layer: A (flat color, dx 0-2) and B (gradient-object style, dx 5), both painted in row y=0. */
@@ -382,5 +383,32 @@ test('buildGridClonesByColor groups pasted cells into one clone per distinct col
   assert.equal(green.grid.offsetY, 22);
   assert.equal(green.grid.width, 1);
   assert.equal(green.grid.height, 1);
+});
+
+test('buildGridCloneUnioned collapses multi-color pasted cells into a single clone, unioning pixels and using the passed style instead of any pasted color', () => {
+  const cells = [
+    { dx: 0, dy: 0, color: '#ff0000' },
+    { dx: 1, dy: 0, color: '#ff0000' },
+    { dx: 3, dy: 2, color: '#00ff00' },
+  ];
+  const style = { fill: '#123456', effects: [] };
+  const clones = buildGridCloneUnioned(10, 20, cells, style);
+
+  assert.equal(clones.length, 1);
+  const clone = clones[0];
+  assert.equal(clone.originGridId, null);
+  assert.equal(clone.originSnapshot, null);
+  assert.equal(clone.grid.style, style, 'the passed-in style is used verbatim, not derived from any pasted color');
+  // Bounding box spans all three cells (dx 0..3, dy 0..2), not per-color sub-boxes.
+  assert.equal(clone.grid.offsetX, 10);
+  assert.equal(clone.grid.offsetY, 20);
+  assert.equal(clone.grid.width, 4);
+  assert.equal(clone.grid.height, 3);
+  // Every originally-non-empty pixel is set to 1 regardless of its original color; everything else stays 0.
+  assert.deepEqual(Array.from(clone.grid.pixels), [
+    1, 1, 0, 0, // y=0: dx 0, 1 painted
+    0, 0, 0, 0, // y=1: nothing painted
+    0, 0, 0, 1, // y=2: dx 3 painted
+  ]);
 });
 

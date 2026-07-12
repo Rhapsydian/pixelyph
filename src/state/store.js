@@ -71,6 +71,7 @@ import {
   pruneEmptyGridsForSelection,
   buildFloatingGridPreviewDoc,
   buildGridClonesByColor,
+  buildGridCloneUnioned,
 } from '../model/selection.js';
 import { parseLospecPalette } from '../model/paletteImport.js';
 import {
@@ -343,7 +344,7 @@ export const useStore = create((set, get) => {
         if (!fgs) return;
       }
       for (let i = 0; i < times; i++) transformGridSelectionModel(fgs, kind);
-      set({ floatingGridSelection: { ...fgs }, selection: null });
+      set({ floatingGridSelection: { ...fgs, touched: true }, selection: null });
       return;
     }
 
@@ -427,6 +428,13 @@ export const useStore = create((set, get) => {
     shapeFilled: false,
     brushWidth: 1,
     ditherEnabled: false,
+    // Shape-tier external-paste color handling: 'multiple' groups pasted
+    // pixels into one Grid clone per distinct color (buildGridClonesByColor,
+    // full color fidelity, N shapes); 'single' unions them into one Grid
+    // clone painted with activeColor (buildGridCloneUnioned, one restylable
+    // shape, discards per-pixel color). See docs/data-model.md's Selection
+    // section.
+    pasteColorMode: 'multiple',
     fillGlobal: false,
     fillTolerance: 0,
     pixelPerfect: false,
@@ -449,6 +457,26 @@ export const useStore = create((set, get) => {
     setShapeFilled: (filled) => set({ shapeFilled: filled }),
     setBrushWidth: (brushWidth) => set({ brushWidth }),
     setDitherEnabled: (ditherEnabled) => set({ ditherEnabled }),
+    /**
+     * Also regenerates a pending, untouched, external-paste-sourced
+     * floatingGridSelection's clones in place (same rect/layerId, rebuilt
+     * from the raw decoded cells it was created from) — the "decided once
+     * at paste-creation time" choice from docs/data-model.md's Selection
+     * section, just deferred by one toggle click after the paste keystroke.
+     * Once the user has moved/transformed the pending selection (`touched`),
+     * this only updates the persisted default for the next paste — the
+     * ContextBar control itself hides at that point (see ContextBar.jsx),
+     * so regrouping shape count mid-manipulation can't happen.
+     */
+    setPasteColorMode: (pasteColorMode) =>
+      set((s) => {
+        const fgs = s.floatingGridSelection;
+        if (!fgs || !fgs.pasteRaw || fgs.touched) return { pasteColorMode };
+        const { x, y, cells } = fgs.pasteRaw;
+        const clones =
+          pasteColorMode === 'single' ? buildGridCloneUnioned(x, y, cells, { fill: s.activeColor, effects: [] }) : buildGridClonesByColor(x, y, cells);
+        return { pasteColorMode, floatingGridSelection: { ...fgs, clones } };
+      }),
     setFillGlobal: (fillGlobal) => set({ fillGlobal }),
     setFillTolerance: (fillTolerance) => set({ fillTolerance }),
     setPixelPerfect: (pixelPerfect) => set({ pixelPerfect }),
@@ -1372,7 +1400,7 @@ export const useStore = create((set, get) => {
     moveGridSelectionBy: (dx, dy) =>
       set((s) => {
         if (!s.floatingGridSelection) return {};
-        const fgs = { ...s.floatingGridSelection };
+        const fgs = { ...s.floatingGridSelection, touched: true };
         moveGridSelectionByModel(fgs, dx, dy);
         return { floatingGridSelection: fgs };
       }),
@@ -1529,13 +1557,15 @@ export const useStore = create((set, get) => {
      * point — instead of importRasterImage's own immediate full-canvas
      * paint+commit. Mode-aware like pasteClipboard/colorAt.
      *
-     * Shape tier default: one Grid clone per distinct pasted color
-     * (buildGridClonesByColor) — a Grid is one style + one bitmap, so a
-     * multi-color paste can't become a single shape without losing color
-     * data (see docs/data-model.md's Selection section).
+     * Shape tier default (`pasteColorMode: 'multiple'`): one Grid clone per
+     * distinct pasted color (buildGridClonesByColor) — a Grid is one style +
+     * one bitmap, so a multi-color paste can't become a single shape without
+     * losing color data. `pasteColorMode: 'single'` instead unions every
+     * pasted pixel into one Grid clone painted with the active color
+     * (buildGridCloneUnioned) — see docs/data-model.md's Selection section.
      */
     pasteImageBlob: async (blob) => {
-      const { mode, canvas, glyphCanvas } = get();
+      const { mode, canvas, glyphCanvas, pasteColorMode, activeColor } = get();
       const doc = mode === 'glyph' ? glyphCanvas : canvas;
       if (!doc) return;
       const image = await decodeImageFile(blob);
@@ -1556,8 +1586,24 @@ export const useStore = create((set, get) => {
       if (doc.tier === 'advanced') {
         const layer = doc.layers.find((l) => l.id === doc.activeLayerId);
         if (!layer) return;
-        const clones = buildGridClonesByColor(x, y, cells);
-        const fgs = { layerId: layer.id, rect: { x0: x, y0: y, x1: x + result.width - 1, y1: y + result.height - 1 }, clones };
+        // pasteRaw/touched, and the 'single' mode itself, only matter when
+        // there's an actual choice to offer (2+ distinct colors) — with
+        // exactly one pasted color, buildGridClonesByColor already produces
+        // one clone at that color, which is the unambiguous right answer;
+        // forcing 'single' mode's recolor-to-activeColor here would silently
+        // repaint a same-color paste just because the toggle happened to be
+        // left on 'single' from an earlier, different paste.
+        const distinctColors = new Set(cells.map((c) => c.color)).size;
+        const clones =
+          pasteColorMode === 'single' && distinctColors >= 2
+            ? buildGridCloneUnioned(x, y, cells, { fill: activeColor, effects: [] })
+            : buildGridClonesByColor(x, y, cells);
+        const fgs = {
+          layerId: layer.id,
+          rect: { x0: x, y0: y, x1: x + result.width - 1, y1: y + result.height - 1 },
+          clones,
+          ...(distinctColors >= 2 ? { pasteRaw: { x, y, cells }, touched: false } : {}),
+        };
         set({
           ...(mode === 'glyph' ? { glyphCanvas: { ...doc } } : { canvas: { ...doc } }),
           activeTool: 'marqueeSelect',
