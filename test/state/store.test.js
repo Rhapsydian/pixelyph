@@ -253,6 +253,18 @@ test('rotateSelection180 swaps width/height twice, landing back on the original 
   assert.deepEqual(cellsByColor, { '#ff0000': 2, '#00ff00': 0 }, '180deg is still a real transform, not a no-op');
 });
 
+/** Full geometry + style snapshot of a grid, for deep before/after/undo/redo comparison -- not just offsetX, per checkpoint 6's strengthened round-trip requirement. */
+function snapshotGrid(grid) {
+  return {
+    offsetX: grid.offsetX,
+    offsetY: grid.offsetY,
+    width: grid.width,
+    height: grid.height,
+    pixels: Array.from(grid.pixels),
+    style: JSON.parse(JSON.stringify(grid.style)),
+  };
+}
+
 test('flipSelectionH on Shape tier lifts into a floatingGridSelection (pending until finalize), single commit on drop, styles preserved on both shapes', async () => {
   const store = useStore.getState();
   await store.newProject('draw');
@@ -274,6 +286,9 @@ test('flipSelectionH on Shape tier lifts into a floatingGridSelection (pending u
   store.startSelection(0, 0);
   store.updateSelection(6, 0); // spans both shapes
   const stackLengthBefore = useStore.getState().history.stack.length;
+  const gridsBeforeFlip = useStore.getState().canvas.layers[0].frames[0].grids;
+  const preFlipA = snapshotGrid(gridsBeforeFlip.find((g) => g.id === gridAId));
+  const preFlipB = snapshotGrid(gridsBeforeFlip.find((g) => g.id === gridBId));
 
   store.flipSelectionH();
 
@@ -300,11 +315,32 @@ test('flipSelectionH on Shape tier lifts into a floatingGridSelection (pending u
   assert.equal(typeof gridB.style.fill, 'object', "shape B's gradient style survived -- never flattened to a solid color");
   assert.notEqual(gridA.offsetX, 0, 'shape A actually moved');
   assert.notEqual(gridB.offsetX, 5, 'shape B actually moved too');
+  const postFlipA = snapshotGrid(gridA);
+  const postFlipB = snapshotGrid(gridB);
 
+  // Checkpoint 6: formally re-verify the undo-atomicity bug (session 28/29's
+  // "Undo only reverted one of two shapes") is actually gone -- full
+  // geometry + style round-trip for BOTH shapes, not just offsetX, across
+  // undo, redo, and a second undo, confirming the fix is stable rather than
+  // a one-off coincidence.
   useStore.getState().undo();
-  const gridsAfterUndo = useStore.getState().canvas.layers[0].frames[0].grids;
-  assert.equal(gridsAfterUndo.find((g) => g.id === gridAId).offsetX, 0, 'undo reverts both shapes in one step');
-  assert.equal(gridsAfterUndo.find((g) => g.id === gridBId).offsetX, 5);
+  let g = useStore.getState().canvas.layers[0].frames[0].grids;
+  assert.deepEqual(snapshotGrid(g.find((x) => x.id === gridAId)), preFlipA, "undo fully reverts shape A's geometry and style");
+  assert.deepEqual(snapshotGrid(g.find((x) => x.id === gridBId)), preFlipB, "undo fully reverts shape B's geometry and style -- the originally-reported bug (only one of two shapes reverting) is gone");
+  assert.equal(useStore.getState().canRedo, true);
+  assert.equal(useStore.getState().canUndo, true, 'earlier commits (painting both shapes, styling shape B) are still further back in history -- undo is not exhausted after just the one flip step');
+
+  useStore.getState().redo();
+  g = useStore.getState().canvas.layers[0].frames[0].grids;
+  assert.deepEqual(snapshotGrid(g.find((x) => x.id === gridAId)), postFlipA, 'redo re-applies the flip to shape A exactly');
+  assert.deepEqual(snapshotGrid(g.find((x) => x.id === gridBId)), postFlipB, 'redo re-applies the flip to shape B exactly, gradient style intact');
+
+  // A second undo, after the redo -- the exact scenario the original bug report hit ("clicking Undo only reverted the flat-color shape... a second Undo click ... canUndo reading false").
+  useStore.getState().undo();
+  g = useStore.getState().canvas.layers[0].frames[0].grids;
+  assert.deepEqual(snapshotGrid(g.find((x) => x.id === gridAId)), preFlipA, 'second undo (after redo) still reverts shape A fully');
+  assert.deepEqual(snapshotGrid(g.find((x) => x.id === gridBId)), preFlipB, 'second undo (after redo) still reverts shape B fully, not stuck/partial');
+  assert.equal(useStore.getState().canUndo, true, 'still more history behind the flip -- not incorrectly exhausted');
 
   store.setSelectionScope('activeShape'); // selectionScope is working-session state, not reset by newProject -- restore the default so later tests aren't affected
 });
