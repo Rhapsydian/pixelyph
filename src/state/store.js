@@ -127,6 +127,7 @@ function contentSnapshot(canvas) {
 }
 
 function applyContentSnapshot(canvas, snapshot) {
+  const prevLayerId = canvas.activeLayerId;
   canvas.layers = snapshot.layers;
   canvas.width = snapshot.width;
   canvas.height = snapshot.height;
@@ -139,7 +140,13 @@ function applyContentSnapshot(canvas, snapshot) {
   // might no longer contain/fit them.
   clampActiveLayer(canvas);
   canvas.activeFrame = Math.max(0, Math.min(canvas.activeFrame, canvas.frameCount - 1));
-  refreshActiveGridModel(canvas);
+  // Passing prevLayerId lets refreshActiveGridModel's sticky-selection
+  // heuristic keep the same shape active across undo/redo when it's still
+  // on the same (still-existing) layer and its id survived the restore --
+  // omitting it (as this used to) makes `sameLayer` always false, so
+  // resolveActiveGrid always fell back to the layer's first shape on every
+  // single undo/redo, regardless of what was actually selected.
+  refreshActiveGridModel(canvas, prevLayerId);
 }
 
 function glyphContentSnapshot(glyphSet) {

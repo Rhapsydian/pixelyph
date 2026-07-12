@@ -345,6 +345,35 @@ test('flipSelectionH on Shape tier lifts into a floatingGridSelection (pending u
   store.setSelectionScope('activeShape'); // selectionScope is working-session state, not reset by newProject -- restore the default so later tests aren't affected
 });
 
+test('undo/redo keeps the same active shape selected when it still exists on the same layer, instead of jumping to the layer\'s first shape', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  store.setTier('advanced');
+  const layer = useStore.getState().canvas.layers[0];
+
+  store.paintCellLive(0, 0, '#ff0000');
+  store.commitStroke(); // shape A, active
+  const gridAId = useStore.getState().canvas.activeGridId;
+
+  store.addGrid(layer.id); // shape B, active -- NOT the layer's first shape
+  const gridBId = useStore.getState().canvas.activeGridId;
+  assert.notEqual(gridAId, gridBId);
+
+  store.paintCellLive(5, 0, '#0000ff');
+  store.commitStroke(); // paints into shape B, still active
+  assert.equal(useStore.getState().canvas.activeGridId, gridBId, 'sanity check: shape B is active before undo');
+
+  useStore.getState().undo();
+  assert.equal(
+    useStore.getState().canvas.activeGridId,
+    gridBId,
+    "undo must keep shape B active since it still exists on the same layer -- it must not silently fall back to shape A (the layer's first shape) just because activeLayerId wasn't passed through to the sticky-selection check",
+  );
+
+  useStore.getState().redo();
+  assert.equal(useStore.getState().canvas.activeGridId, gridBId, 'redo keeps shape B active too');
+});
+
 test('selectionScope defaults to "activeShape"; copy honors it, excluding a different shape in the same layer', async () => {
   const store = useStore.getState();
   await store.newProject('draw');
