@@ -148,6 +148,52 @@ test('applyPaletteEntryToActiveGrid: a saved fill (gradient) clones onto the act
   assert.equal(fillEntry.stops.length, 2, 'mutating the applied fill must not affect the palette entry it came from');
 });
 
+test('setGridPropsLive mutates a shape\'s offset without growing undo history; commitStroke afterward is exactly one undo step', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  store.setTier('advanced');
+  const layer = useStore.getState().canvas.layers[0];
+  store.addGrid(layer.id); // addGridModel centers a new empty shape on the canvas, not at (0,0)
+  const gridId = useStore.getState().canvas.activeGridId;
+  const gridBeforeDrag = useStore.getState().canvas.layers[0].frames[0].grids.find((g) => g.id === gridId);
+  const { offsetX: originalOffsetX, offsetY: originalOffsetY } = gridBeforeDrag;
+  const stackLengthBeforeDrag = useStore.getState().history.stack.length;
+
+  store.setGridPropsLive(layer.id, gridId, { offsetX: originalOffsetX + 3, offsetY: originalOffsetY });
+  store.setGridPropsLive(layer.id, gridId, { offsetX: originalOffsetX + 5, offsetY: originalOffsetY + 2 });
+  assert.equal(useStore.getState().history.stack.length, stackLengthBeforeDrag, 'live updates during a drag must not push undo snapshots');
+  const gridDuringDrag = () => useStore.getState().canvas.layers.find((l) => l.id === layer.id).frames[0].grids.find((g) => g.id === gridId);
+  assert.equal(gridDuringDrag().offsetX, originalOffsetX + 5);
+  assert.equal(gridDuringDrag().offsetY, originalOffsetY + 2);
+
+  store.commitStroke();
+  assert.equal(useStore.getState().history.stack.length, stackLengthBeforeDrag + 1, 'pointer-up commits exactly one undo step for the whole drag');
+
+  useStore.getState().undo();
+  const gridAfterUndo = useStore.getState().canvas.layers.find((l) => l.id === layer.id).frames[0].grids.find((g) => g.id === gridId);
+  assert.equal(gridAfterUndo.offsetX, originalOffsetX, 'undo reverts to the pre-drag offset, not a mid-drag one');
+});
+
+test('nudgeLayerFrameLive shifts a layer\'s active-frame content without growing undo history; commitStroke afterward is exactly one undo step', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  store.paintCellLive(0, 0, '#0000ff');
+  store.commitStroke();
+  const layer = useStore.getState().canvas.layers[0];
+  const stackLengthBeforeDrag = useStore.getState().history.stack.length;
+
+  store.nudgeLayerFrameLive(layer.id, 0, 1, 0);
+  store.nudgeLayerFrameLive(layer.id, 0, 1, 0);
+  assert.equal(useStore.getState().history.stack.length, stackLengthBeforeDrag, 'live updates during a drag must not push undo snapshots');
+  assert.equal(useStore.getState().colorAt(2, 0), '#0000ff', 'content already moved live, ahead of any commit');
+
+  store.commitStroke();
+  assert.equal(useStore.getState().history.stack.length, stackLengthBeforeDrag + 1, 'pointer-up commits exactly one undo step for the whole drag');
+
+  useStore.getState().undo();
+  assert.equal(useStore.getState().colorAt(0, 0), '#0000ff', 'undo reverts to the pre-drag position, not a mid-drag one');
+});
+
 test('selectionScope defaults to "activeShape"; copy honors it, excluding a different shape in the same layer', async () => {
   const store = useStore.getState();
   await store.newProject('draw');

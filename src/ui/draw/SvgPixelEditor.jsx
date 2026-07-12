@@ -24,7 +24,7 @@ import { GradientRadialHandle } from './GradientRadialHandle.jsx';
 import { ReferenceImageLayer } from './ReferenceImageLayer.jsx';
 import { TransparencyBackground } from './TransparencyBackground.jsx';
 import { composeLayersBody, composeFrameBody } from '../../export/svg/composeLayersSvg.js';
-import { currentFrameIndex } from '../../model/Canvas.js';
+import { currentFrameIndex, topLayerAndGridAt } from '../../model/Canvas.js';
 
 /**
  * The Canvas-shaped document this editor is currently painting: Draw mode's
@@ -292,12 +292,43 @@ export function SvgPixelEditor() {
       get tier() {
         return getActiveDocument()?.tier ?? 'simple';
       },
+      get activeLayerId() {
+        return getActiveDocument()?.activeLayerId ?? null;
+      },
+      get activeGridId() {
+        return getActiveDocument()?.activeGridId ?? null;
+      },
+      get activeGrid() {
+        const live = getActiveDocument();
+        const layer = live?.layers?.find((l) => l.id === live.activeLayerId);
+        return layer?.frames[currentFrameIndex(live)]?.grids.find((g) => g.id === live.activeGridId) ?? null;
+      },
+      get frameIndex() {
+        return currentFrameIndex(getActiveDocument());
+      },
+      hitTestShape: (x, y) => topLayerAndGridAt(getActiveDocument(), x, y),
       selectTopLayerAt: (x, y) => {
         useStore.getState().selectTopLayerAt(x, y);
         tick((n) => n + 1);
       },
+      setActiveGridId: (layerId, gridId) => {
+        useStore.getState().setActiveGridId(layerId, gridId);
+        tick((n) => n + 1);
+      },
+      clearActiveGrid: () => {
+        useStore.getState().clearActiveGrid();
+        tick((n) => n + 1);
+      },
       paintCellLive: (x, y, color) => {
         useStore.getState().paintCellLive(x, y, color);
+        tick((n) => n + 1);
+      },
+      setGridPropsLive: (layerId, gridId, patch) => {
+        useStore.getState().setGridPropsLive(layerId, gridId, patch);
+        tick((n) => n + 1);
+      },
+      nudgeLayerFrameLive: (layerId, frameIndex, dx, dy) => {
+        useStore.getState().nudgeLayerFrameLive(layerId, frameIndex, dx, dy);
         tick((n) => n + 1);
       },
       commitStroke: () => useStore.getState().commitStroke(),

@@ -399,6 +399,11 @@ export const useStore = create((set, get) => {
       canvas.activeGridId = gridId;
       touchCanvas();
     },
+    /** Deselects the active shape (select-and-drag tool: clicking empty canvas in Shape tier) — mirrors setActiveGridId, minus a target to select. */
+    clearActiveGrid: () => {
+      get().canvas.activeGridId = null;
+      touchCanvas();
+    },
     addLayer: () => {
       addLayerModel(get().canvas, {});
       commit();
@@ -448,6 +453,14 @@ export const useStore = create((set, get) => {
       Object.assign(grid, patch);
       commit();
     },
+    /** Live (uncommitted) shape-drag variant of setGridProps — the select-and-drag tool's pointer-drag hot path. Mutates in place, no commit() call; pointer-up calls the ordinary committing action once (via commitStroke), same paintCellLive/commitStroke split used for painting. */
+    setGridPropsLive: (layerId, gridId, patch) => {
+      const canvas = get().canvas;
+      const layer = canvas.layers.find((l) => l.id === layerId);
+      const grid = layer?.frames[currentFrameIndex(canvas)]?.grids.find((g) => g.id === gridId);
+      if (!grid) return;
+      Object.assign(grid, patch);
+    },
     /** Nudge target for Pixel tier / Glyph mode: shifts a whole layer's active-frame content, mode-aware like colorAt. */
     nudgeLayerFrame: (layerId, frameIndex, dx, dy) => {
       const { mode, canvas, glyphCanvas } = get();
@@ -455,6 +468,13 @@ export const useStore = create((set, get) => {
       if (!doc) return;
       nudgeLayerFrameModel(doc, layerId, frameIndex, dx, dy);
       commit();
+    },
+    /** Live (uncommitted) variant of nudgeLayerFrame — the select-and-drag tool's pointer-drag hot path in Pixel tier/Glyph mode. See setGridPropsLive. */
+    nudgeLayerFrameLive: (layerId, frameIndex, dx, dy) => {
+      const { mode, canvas, glyphCanvas } = get();
+      const doc = mode === 'glyph' ? glyphCanvas : canvas;
+      if (!doc) return;
+      nudgeLayerFrameModel(doc, layerId, frameIndex, dx, dy);
     },
 
     // --- Flip/rotate (Checkpoint 6) — Shape tier only (LayersPanel's Shape

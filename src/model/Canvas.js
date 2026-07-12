@@ -554,6 +554,29 @@ export function topVisibleLayerAt(canvas, x, y) {
 }
 
 /**
+ * Same traversal as `topVisibleLayerAt`, but also returns the Grid (Shape)
+ * that was actually hit — the select-and-drag tool's hit-test, which needs
+ * both (to activate the shape's layer and the shape itself). Locked shapes
+ * are skipped, same as erase.
+ *
+ * @param {object} canvas
+ * @param {number} x
+ * @param {number} y
+ * @returns {{layer: object, grid: object}|null}
+ */
+export function topLayerAndGridAt(canvas, x, y) {
+  const frameIndex = currentFrameIndex(canvas);
+  for (let i = canvas.layers.length - 1; i >= 0; i--) {
+    const layer = canvas.layers[i];
+    const frame = layer.frames[frameIndex];
+    if (!frame.visible) continue;
+    const grid = topGridAt(frame, x, y, { skipLocked: true });
+    if (grid) return { layer, grid };
+  }
+  return null;
+}
+
+/**
  * Collapses one layer's Advanced/Shape-tier shapes in the canvas's active
  * frame into Simple/Pixel tier's one-Grid-per-color shape, mutating `layer`
  * in place — `convertTier`'s per-layer building block. Scans this layer's

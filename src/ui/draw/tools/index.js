@@ -6,6 +6,7 @@ import { lineTool } from './line.js';
 import { rectangleTool } from './rectangle.js';
 import { ellipseTool } from './ellipse.js';
 import { marqueeSelectTool } from './marqueeSelect.js';
+import { selectMoveTool } from './selectMove.js';
 
 export const tools = {
   pencil: pencilTool,
@@ -16,6 +17,7 @@ export const tools = {
   rectangle: rectangleTool,
   ellipse: ellipseTool,
   marqueeSelect: marqueeSelectTool,
+  selectMove: selectMoveTool,
 };
 
 export const TOOL_NAMES = Object.keys(tools);

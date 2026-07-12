@@ -14,6 +14,7 @@ import {
   eraseFromLayer,
   clampActiveLayer,
   topVisibleLayerAt,
+  topLayerAndGridAt,
   convertTier,
   addFrame,
   duplicateFrame,
@@ -286,6 +287,27 @@ test('topVisibleLayerAt finds the topmost visible layer covering a cell, skippin
   b.frames[0].visible = false;
   assert.equal(topVisibleLayerAt(canvas, 0, 0), a);
   assert.equal(topVisibleLayerAt(canvas, 1, 1), null);
+});
+
+test('topLayerAndGridAt returns both the topmost layer and the shape actually hit, skipping a locked top shape', () => {
+  const canvas = createCanvas({ width: 2, height: 2 });
+  canvas.tier = 'advanced';
+  const a = addLayer(canvas, { name: 'A' });
+  paintCell(canvas, 0, 0, '#f00');
+  const aGrid = a.frames[0].grids[0];
+  const b = addLayer(canvas, { name: 'B' });
+  paintCell(canvas, 0, 0, '#0f0');
+  const bGrid = b.frames[0].grids[0];
+
+  let hit = topLayerAndGridAt(canvas, 0, 0);
+  assert.equal(hit.layer, b);
+  assert.equal(hit.grid, bGrid);
+  assert.equal(topLayerAndGridAt(canvas, 1, 1), null);
+
+  bGrid.locked = true;
+  hit = topLayerAndGridAt(canvas, 0, 0);
+  assert.equal(hit.layer, a);
+  assert.equal(hit.grid, aGrid);
 });
 
 // "convertTier simple -> advanced flips autoManaged off..." (the

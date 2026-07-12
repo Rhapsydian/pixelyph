@@ -90,6 +90,20 @@ export function SelectIcon(props) {
   );
 }
 
+/** Object select-and-drag tool — the standard 4-arrow "move" cross (Photoshop/Aseprite convention), distinct from SelectIcon's dashed marquee rect. */
+export function SelectMoveIcon(props) {
+  return (
+    <Svg {...props}>
+      <path d="M10 3v14" />
+      <path d="M3 10h14" />
+      <path d="M7.5 5.5 10 3l2.5 2.5" />
+      <path d="M7.5 14.5 10 17l2.5-2.5" />
+      <path d="M5.5 7.5 3 10l2.5 2.5" />
+      <path d="M14.5 7.5 17 10l-2.5 2.5" />
+    </Svg>
+  );
+}
+
 export function UndoIcon(props) {
   return (
     <Svg {...props}>
