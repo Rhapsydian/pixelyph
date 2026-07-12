@@ -264,9 +264,11 @@ locally.
 ### DONE: Selection system redesign (full 8-checkpoint plan)
 
 Design + checkpoints 1-4 shipped session 29 (2026-07-12); checkpoints 5-8
-plus three additional bug fixes shipped session 30 (2026-07-12), 6 commits
-on `main` (`98250a5`, `01e7f25`, `cb32bca`, `84591c4`, `f6d2087`,
-`166c790`). Followed up on user-reported corruption bugs ("Selecting an
+plus four additional bug fixes shipped session 30 (2026-07-12), 8 commits
+on `main` (`98250a5`, `01e7f25`, `84591c4`, `f6d2087`, `cb32bca`,
+`166c790`, `550ed12`, `842216a` — chronological order; the four bug fixes
+landed interleaved with checkpoints 6-8, each fixed as soon as it was
+reported rather than batched to the end). Followed up on user-reported corruption bugs ("Selecting an
 entire shape (Active shape scope) and transforming it corrupted a
 *different* shape in the same layer"; "Active layer scope doesn't work
 correctly at all") with a full from-scratch redesign, at the user's
@@ -275,11 +277,10 @@ that selection had accreted four independent, loosely-related concepts
 across many prior sessions, with a scope flag read under genuinely
 different semantics by different consuming functions. Full design
 rationale: `docs/data-model.md`'s "Selection" section (the durable
-reference now; the original planning doc and
-[session 29's own write-up](./docs/session-logs/session-29-2026-07-12.md)
-carry the decision-by-decision history from where the design was created —
-this session's own write-up will be added to `docs/session-logs/` at its
-close-out).
+reference now; the original planning doc and both sessions' own
+write-ups — [session 29](./docs/session-logs/session-29-2026-07-12.md),
+[session 30](./docs/session-logs/session-30-2026-07-12.md) — carry the
+decision-by-decision history and the four bugs' root-cause narratives).
 
 **Checkpoints 1-4 (session 29):** tool rename (`selectMove` →
 `targetMove`); `allVisible` scope removed entirely (`selectionScope` is
@@ -306,7 +307,8 @@ clipboard payload).
 7. `docs/data-model.md` gained a "Selection" section (this concept had
    never been documented at the data-model level); `ContextBar.jsx`'s
    "Select from:" tooltip updated to mention Transform.
-8. Full regression sweep: `npm test` 443/443 → 460/460; live-verified
+8. Full regression sweep: `npm test` 455/455 (session 29's ending count)
+   → 460/460; live-verified
    move-then-transform-then-finalize, transform-then-move-then-finalize,
    paste-drag-transform-finalize, cut-then-paste-in-place, Escape
    cancelling with the model byte-for-byte unchanged, locked/hidden
@@ -314,7 +316,7 @@ clipboard payload).
    confirmed gone (an Active-shape-scope transform on one shape leaves
    sibling shapes in the same layer provably byte-for-byte unchanged).
 
-**Three additional bugs found and fixed along the way** (all in the
+**Four additional bugs found and fixed along the way** (all in the
 just-redesigned or adjacent code, reported live by the user mid-session):
 - `buildFloatingGridPreviewDoc` excluded a destructively-lifted shape
   entirely from the pending-preview render, instead of hiding just the
@@ -336,11 +338,22 @@ just-redesigned or adjacent code, reported live by the user mid-session):
   its own size. Fixed: clamp the target size to `min(image dimension,
   doc dimension)` per axis — a larger source (e.g. a screenshot) still
   downsamples to fit, unchanged.
+- `targetMoveTool` (the click-to-drag Move tool) never read
+  `selectionScope` on Shape tier — "Select from: Active layer" had no
+  effect on it at all, always dragging just the single clicked shape.
+  Fixed: the topmost-visible-shape hit-test is unchanged, but an
+  `activeLayer` scope now drags every shape in the hit shape's layer
+  together via the existing generic `nudgeLayerFrameLive` (already used
+  for Pixel tier/Glyph mode's whole-layer drag, and already correct for
+  multi-grid layers). Added `test/ui/draw/tools/targetMove.test.js` — this
+  tool had no test coverage at all before.
 
-Test suite: 443/443 (session 29 baseline) → 460/460 (17 new tests across
-the two sessions). Every fix above was verified live in the browser via
-direct DOM/SVG inspection, not just automated tests, per this project's
-established testing convention.
+Test suite: 443/443 (before session 29) → 455/455 (session 29's ending
+count) → 464/464 (session 30's ending count, 9 new tests: checkpoint 5's
+coverage, the partial-lift-preview regression test, and the new
+`targetMove.test.js`). Every fix above was verified live in the browser
+via direct DOM/SVG inspection, not just automated tests, per this
+project's established testing convention.
 
 ### DONE: Object select-and-drag tool + Transform menu Selection scope
 
