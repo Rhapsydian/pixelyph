@@ -16,7 +16,7 @@
 // always lands on the active layer (see pasteCells).
 
 import { colorAt, paintCell, eraseFromLayer, topGridAt, currentFrameIndex } from './Canvas.js';
-import { get } from './Grid.js';
+import { get, set, transformGridRegion, growGridToInclude, shrinkGridToFit, minimalBounds, makeGridId } from './Grid.js';
 
 /** Used as a floating-selection preview color when a cell's source layer has a non-solid (gradient) fill, which can't be represented per-cell. */
 const NON_SOLID_FILL_PREVIEW_COLOR = '#888888';
@@ -198,4 +198,318 @@ export function transformSelectionCells(width, height, cells, kind) {
     // rotate90 (90° CW, matching rotatePixels90's direction)
     return { ...cell, dx: height - 1 - cell.dy, dy: cell.dx };
   });
+}
+
+// --- floatingGridSelection: Shape tier's style-preserving analog of
+// floatingSelection, above. Where floatingSelection is a sparse
+// {dx,dy,color}[] (fine for Pixel tier/Glyph mode, which have no per-shape
+// style to lose), a floatingGridSelection is a set of real, detached
+// Grid-shaped clones — each keeps its own style/gradient/stroke intact and
+// its own identity (`originGridId`), so Move and Transform (flip/rotate)
+// can be applied to it, any number of times in any order, exactly like
+// floatingSelection already supports, before one Finalize/Cancel. Nothing
+// in `canvas.layers` is ever mutated until finalizeGridSelection actually
+// runs — Cancel is therefore a true no-op, not a history revert.
+//
+// Shape: { layerId, rect: {x0,y0,x1,y1}, clones: [{ originGridId, originSnapshot, grid }] }
+// - `rect` is the selection's current bounding rect — the shared pivot
+//   frame every Transform op uses (matches transformGridRegion's existing,
+//   already-tested "flip within rect, not within each shape's own bounds"
+//   convention), translated in lockstep by every Move.
+// - `grid` is a real Grid-shaped object (id/offsetX/offsetY/width/height/
+//   pixels/style/opacity/visible/locked) — what's rendered, and what
+//   Move/Transform mutate in place.
+// - `originGridId`/`originSnapshot` (both null for copy-drag or external
+//   paste) record which real grid this clone will write back into on
+//   finalize, and exactly which of that grid's cells to clear first —
+//   frozen at lift time, never touched by Move/Transform.
+
+/**
+ * Crops one Grid's own cells inside `rect` into a standalone clone
+ * (offsetX/offsetY/width/height/pixels tight around just the overlap) —
+ * the per-shape "cut" half of the cut/transform/paste model. Returns null
+ * if this grid has no pixels inside `rect` at all (nothing to lift).
+ */
+function cropGridToRect(grid, rect) {
+  const x0 = Math.max(rect.x0, grid.offsetX);
+  const x1 = Math.min(rect.x1, grid.offsetX + grid.width - 1);
+  const y0 = Math.max(rect.y0, grid.offsetY);
+  const y1 = Math.min(rect.y1, grid.offsetY + grid.height - 1);
+  if (x0 > x1 || y0 > y1) return null;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const cells = [];
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      if (!get(grid, x - grid.offsetX, y - grid.offsetY)) continue;
+      cells.push([x, y]);
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (cells.length === 0) return null;
+  const width = maxX - minX + 1;
+  const height = maxY - minY + 1;
+  const pixels = new Uint8Array(width * height);
+  for (const [x, y] of cells) pixels[(y - minY) * width + (x - minX)] = 1;
+  return { offsetX: minX, offsetY: minY, width, height, pixels };
+}
+
+/**
+ * Lifts `selectionScope`'s in-play Grids' cells inside `rect` into a new
+ * floatingGridSelection — Shape tier's entry point for marquee drag-move,
+ * Copy, and Transform > Selection alike. Locked and hidden shapes (and a
+ * hidden frame) are fully excluded, for every scope including
+ * `activeShape` — the lock/hidden immunity now applies uniformly, unlike
+ * the old per-function-inconsistent flat-cell path this replaces.
+ *
+ * `destructive: false` (Copy, or a shift-drag) strips every clone's
+ * `originGridId`/`originSnapshot` — finalize will insert fresh grids
+ * instead of writing back into the source, so the original is never
+ * touched even after finalize.
+ *
+ * Nothing here mutates `canvas` — purely a read. The clear happens later,
+ * at finalize (or, for Cut, via clearGridSelectionSource directly).
+ *
+ * @param {object} canvas
+ * @param {'activeShape'|'activeLayer'} selectionScope
+ * @param {{x0:number,y0:number,x1:number,y1:number}} rect
+ * @param {boolean} [destructive]
+ * @returns {{layerId:string, rect:object, clones:object[]}|null}
+ */
+export function liftGridSelection(canvas, selectionScope, rect, destructive = true) {
+  const frameIndex = currentFrameIndex(canvas);
+  const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
+  const frame = layer?.frames[frameIndex];
+  if (!frame || !frame.visible) return null;
+  const candidates = selectionScope === 'activeShape' ? frame.grids.filter((g) => g.id === canvas.activeGridId) : frame.grids;
+  const eligible = candidates.filter((g) => g.visible && !g.locked);
+  const clones = [];
+  for (const grid of eligible) {
+    const region = cropGridToRect(grid, rect);
+    if (!region) continue;
+    clones.push({
+      originGridId: destructive ? grid.id : null,
+      originSnapshot: destructive ? { offsetX: region.offsetX, offsetY: region.offsetY, width: region.width, height: region.height, pixels: region.pixels.slice() } : null,
+      grid: {
+        id: destructive ? grid.id : makeGridId(),
+        name: grid.name,
+        offsetX: region.offsetX,
+        offsetY: region.offsetY,
+        width: region.width,
+        height: region.height,
+        pixels: region.pixels,
+        style: grid.style,
+        opacity: grid.opacity,
+        visible: true,
+        locked: false,
+      },
+    });
+  }
+  if (clones.length === 0) return null;
+  return { layerId: layer.id, rect: { ...rect }, clones };
+}
+
+/** Translates a floatingGridSelection's rect and every clone's grid by (dx, dy), in place — the Move half of cut/transform/paste. */
+export function moveGridSelectionBy(fgs, dx, dy) {
+  fgs.rect = { x0: fgs.rect.x0 + dx, y0: fgs.rect.y0 + dy, x1: fgs.rect.x1 + dx, y1: fgs.rect.y1 + dy };
+  for (const clone of fgs.clones) {
+    clone.grid.offsetX += dx;
+    clone.grid.offsetY += dy;
+  }
+}
+
+/**
+ * Flips/rotates every clone's grid within the floatingGridSelection's
+ * current `rect` (transformGridRegion, reused directly — same shared-pivot
+ * convention already verified for the pre-redesign instant-commit path) —
+ * the Transform half of cut/transform/paste. Composable with Move and with
+ * itself: calling this again just transforms whatever's currently pending,
+ * around the same tracked rect (swapped for a 90° rotate, matching
+ * transformSelectionInStore's existing multi-rotate rect bookkeeping).
+ */
+export function transformGridSelection(fgs, kind) {
+  for (const clone of fgs.clones) transformGridRegion(clone.grid, fgs.rect, kind);
+  if (kind === 'rotate90') {
+    const { x0, y0, x1, y1 } = fgs.rect;
+    const width = x1 - x0 + 1;
+    const height = y1 - y0 + 1;
+    fgs.rect = { x0, y0, x1: x0 + height - 1, y1: y0 + width - 1 };
+  }
+}
+
+/**
+ * Clears each destructively-lifted clone's *original* cells (per
+ * `originSnapshot`, frozen at lift time — never the clone's current,
+ * possibly-moved/transformed position) from its real source grid, via
+ * `set` directly rather than `paintCell`/`eraseFromLayer` — deliberately
+ * skips their auto-delete-when-emptied side effect, since finalize always
+ * repaints this same grid object right back in the very next step; nothing
+ * should observe it as briefly empty. Cut (which never repaints) calls
+ * `pruneEmptyGridsForSelection` afterward itself. Copy-sourced clones
+ * (`originGridId: null`) are skipped — there's nothing to clear.
+ */
+export function clearGridSelectionSource(canvas, fgs) {
+  const frameIndex = currentFrameIndex(canvas);
+  const layer = canvas.layers.find((l) => l.id === fgs.layerId);
+  const frame = layer?.frames[frameIndex];
+  if (!frame) return;
+  for (const clone of fgs.clones) {
+    if (!clone.originGridId) continue;
+    const realGrid = frame.grids.find((g) => g.id === clone.originGridId);
+    if (!realGrid) continue;
+    const snap = clone.originSnapshot;
+    for (let ly = 0; ly < snap.height; ly++) {
+      for (let lx = 0; lx < snap.width; lx++) {
+        if (!snap.pixels[ly * snap.width + lx]) continue;
+        set(realGrid, snap.offsetX + lx - realGrid.offsetX, snap.offsetY + ly - realGrid.offsetY, 0);
+      }
+    }
+  }
+}
+
+/**
+ * Removes any of a floatingGridSelection's *source* grids that
+ * `clearGridSelectionSource` left fully empty — Cut's own explicit
+ * cleanup (mirrors eraseFromLayer's existing auto-delete-when-emptied
+ * convention, which `clearGridSelectionSource` deliberately skips; see its
+ * own doc comment). Not called by finalizeGridSelection, which always
+ * repaints a cleared source grid in the same pass, so it's never actually
+ * left empty long enough to prune.
+ */
+export function pruneEmptyGridsForSelection(canvas, fgs) {
+  const frameIndex = currentFrameIndex(canvas);
+  const layer = canvas.layers.find((l) => l.id === fgs.layerId);
+  const frame = layer?.frames[frameIndex];
+  if (!frame) return;
+  for (const clone of fgs.clones) {
+    if (!clone.originGridId) continue;
+    const realGrid = frame.grids.find((g) => g.id === clone.originGridId);
+    if (realGrid && !minimalBounds(realGrid)) {
+      frame.grids = frame.grids.filter((g) => g.id !== realGrid.id);
+      if (canvas.activeGridId === realGrid.id) canvas.activeGridId = frame.grids[0]?.id ?? null;
+    }
+  }
+}
+
+/**
+ * Writes a floatingGridSelection back into `canvas` — the Paste half of
+ * cut/transform/paste, and the only place any of this touches the real
+ * document. A clone with an `originGridId` clears that grid's original
+ * cells (clearGridSelectionSource) then paints its *current* (possibly
+ * moved/transformed) content back into that exact same Grid object, by
+ * id — grid count and every grid's id are unchanged, only geometry/pixels
+ * change, matching the "paste-back is strictly per-shape" invariant. A
+ * copy-drag/external-paste clone (`originGridId: null`) is inserted as a
+ * brand-new Grid instead.
+ */
+export function finalizeGridSelection(canvas, fgs) {
+  clearGridSelectionSource(canvas, fgs);
+  const frameIndex = currentFrameIndex(canvas);
+  const layer = canvas.layers.find((l) => l.id === fgs.layerId);
+  const frame = layer?.frames[frameIndex];
+  if (!frame) return;
+  for (const clone of fgs.clones) {
+    const realGrid = clone.originGridId ? frame.grids.find((g) => g.id === clone.originGridId) : null;
+    if (realGrid) {
+      for (let ly = 0; ly < clone.grid.height; ly++) {
+        for (let lx = 0; lx < clone.grid.width; lx++) {
+          if (!clone.grid.pixels[ly * clone.grid.width + lx]) continue;
+          const x = clone.grid.offsetX + lx;
+          const y = clone.grid.offsetY + ly;
+          growGridToInclude(realGrid, x, y);
+          set(realGrid, x - realGrid.offsetX, y - realGrid.offsetY, 1);
+        }
+      }
+      shrinkGridToFit(realGrid);
+      continue;
+    }
+    frame.grids.push({ ...clone.grid, visible: true, locked: false });
+  }
+}
+
+/**
+ * A floatingGridSelection formed from destructively-lifted (originGridId
+ * set) clones, stripped down to just its Grid-shaped clones — the
+ * render-only substitution SvgPixelEditor's composeLayersBody call needs:
+ * a shallow-copied preview `doc` where each such clone's *real* grid is
+ * excluded from its layer/frame (so it doesn't render twice, once at its
+ * old position and once at the floating one) and the clone renders in its
+ * place instead. Copy-drag/external-paste clones (no real grid to hide)
+ * just render as an addition. Never mutates `doc` — every level touched
+ * (doc, its layers array, the one affected layer, its frames array) is a
+ * fresh shallow copy.
+ *
+ * @param {object} doc
+ * @param {{layerId:string, clones:object[]}|null} fgs
+ * @returns {object} `doc` itself if `fgs` is null
+ */
+export function buildFloatingGridPreviewDoc(doc, fgs) {
+  if (!fgs) return doc;
+  const excludedIds = new Set(fgs.clones.filter((c) => c.originGridId).map((c) => c.originGridId));
+  const frameIndex = currentFrameIndex(doc);
+  return {
+    ...doc,
+    layers: doc.layers.map((layer) => {
+      if (layer.id !== fgs.layerId) return layer;
+      return {
+        ...layer,
+        frames: layer.frames.map((frame, i) => {
+          if (i !== frameIndex) return frame;
+          const kept = frame.grids.filter((g) => !excludedIds.has(g.id));
+          return { ...frame, grids: [...kept, ...fgs.clones.map((c) => c.grid)] };
+        }),
+      };
+    }),
+  };
+}
+
+/**
+ * Groups flat {dx,dy,color} cells (as decoded from an external raster
+ * paste) into one Grid-shaped clone per distinct color, absolute
+ * canvas-space — Shape tier's default paste-in interpretation (see
+ * docs/data-model.md's Selection section): a Grid is one style + one
+ * boolean bitmap, so a multi-color pasted image can only become one
+ * clone per color, never one clone with varying per-pixel color. Every
+ * clone is `originGridId: null` (new content, nothing to write back
+ * into).
+ *
+ * @param {number} originX canvas-space
+ * @param {number} originY canvas-space
+ * @param {{dx:number,dy:number,color:string}[]} cells
+ * @returns {object[]} floatingGridSelection.clones
+ */
+export function buildGridClonesByColor(originX, originY, cells) {
+  const byColor = new Map();
+  for (const cell of cells) {
+    if (!byColor.has(cell.color)) byColor.set(cell.color, []);
+    byColor.get(cell.color).push(cell);
+  }
+  const clones = [];
+  for (const [color, groupCells] of byColor) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const cell of groupCells) {
+      const x = originX + cell.dx;
+      const y = originY + cell.dy;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+    const width = maxX - minX + 1;
+    const height = maxY - minY + 1;
+    const pixels = new Uint8Array(width * height);
+    for (const cell of groupCells) {
+      const x = originX + cell.dx;
+      const y = originY + cell.dy;
+      pixels[(y - minY) * width + (x - minX)] = 1;
+    }
+    clones.push({
+      originGridId: null,
+      originSnapshot: null,
+      grid: { id: makeGridId(), name: 'Shape', offsetX: minX, offsetY: minY, width, height, pixels, style: { fill: color, effects: [] }, opacity: 1, visible: true, locked: false },
+    });
+  }
+  return clones;
 }

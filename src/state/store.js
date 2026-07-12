@@ -50,9 +50,9 @@ import {
   setLayerFrameVisibility as setLayerFrameVisibilityModel,
   cloneLayerStyle,
   cloneFillValue,
-  transformSelectionRegion,
 } from '../model/Canvas.js';
 import { mirrorPoints } from '../model/mirror.js';
+import { makeGridId } from '../model/Grid.js';
 import { createHistory, pushSnapshot, undo as historyUndo, redo as historyRedo, canUndo as historyCanUndo, canRedo as historyCanRedo } from '../model/history.js';
 import {
   normalizeRect,
@@ -63,6 +63,14 @@ import {
   clearRectFromActiveLayer,
   pasteCells,
   transformSelectionCells,
+  liftGridSelection as liftGridSelectionModel,
+  moveGridSelectionBy as moveGridSelectionByModel,
+  transformGridSelection as transformGridSelectionModel,
+  finalizeGridSelection as finalizeGridSelectionModel,
+  clearGridSelectionSource,
+  pruneEmptyGridsForSelection,
+  buildFloatingGridPreviewDoc,
+  buildGridClonesByColor,
 } from '../model/selection.js';
 import { parseLospecPalette } from '../model/paletteImport.js';
 import {
@@ -148,6 +156,26 @@ function extractSelection(canvas, selectionScope, rect) {
   if (canvas.tier === 'advanced' && selectionScope === 'activeShape') return extractRectFromActiveGrid(canvas, rect);
   if (canvas.tier === 'advanced' && selectionScope === 'activeLayer') return extractRectFromActiveLayer(canvas, rect);
   return extractRectColors(canvas, rect);
+}
+
+/**
+ * Snapshots a floatingGridSelection's current clones onto the clipboard —
+ * independent deep copies (own `pixels` arrays), so later dragging/
+ * transforming the still-live floating selection can never retroactively
+ * mutate what's already on the clipboard. `originRect` is the selection's
+ * rect at snapshot time, kept for same-canvas paste-in-place.
+ */
+function snapshotGridClipboard(fgs) {
+  const clones = fgs.clones.map((c) => ({
+    offsetX: c.grid.offsetX,
+    offsetY: c.grid.offsetY,
+    width: c.grid.width,
+    height: c.grid.height,
+    pixels: c.grid.pixels.slice(),
+    style: c.grid.style,
+    opacity: c.grid.opacity,
+  }));
+  return { kind: 'grid', originRect: { ...fgs.rect }, width: fgs.rect.x1 - fgs.rect.x0 + 1, height: fgs.rect.y1 - fgs.rect.y0 + 1, clones };
 }
 
 /** Clear side of a selection — matches whichever scope did the reading. */
@@ -260,48 +288,41 @@ export const useStore = create((set, get) => {
   }
 
   /**
-   * Transform-menu "Selection" scope (Checkpoint 2). Two entirely different
-   * mechanisms depending on tier, because Shape tier has per-shape style
-   * (gradient/stroke/effects) that must survive a transform, and Pixel
-   * tier/Glyph mode don't (a color *is* the whole "style" there):
+   * Transform-menu "Selection" scope. Move and Transform are now the same
+   * underlying operation (this session's selection redesign — see
+   * docs/data-model.md's Selection section): both act on whichever
+   * floating selection is pending, composably, any number of times in any
+   * order, before one eventual Finalize/Cancel — Transform is no longer a
+   * special instant-commit case.
    *
-   * - **Advanced (Shape) tier, nothing already floating**: operates
-   *   directly on each in-scope Grid's own buffer via
-   *   `transformSelectionRegion` (Canvas.js) — never touches `style`, never
-   *   flattens to a color, never routes through `canvas.activeGridId`, so
-   *   it can't corrupt an unrelated shape or merge distinct shapes/styles
-   *   together the way the flat-cell path below used to. Commits
-   *   immediately (one undo step), same as the instant Canvas/Layer/Shape
-   *   scopes — there's no floating-preview stage to it at all.
-   * - **Everything else** (Pixel tier, Glyph mode, or the rare case where a
-   *   Shape-tier selection is already mid-drag-move via marqueeSelect):
-   *   the original flat per-cell-color floating-selection path — lifts a
+   * - **Advanced (Shape) tier, no flat floatingSelection in play**: lifts
+   *   (destructively) into a `floatingGridSelection` if nothing's pending
+   *   yet — real, style-preserving Grid clones, never flattened to a
+   *   color — then applies the transform to whatever's pending (freshly
+   *   lifted or already mid-drag-move). Stays pending: no commit() here,
+   *   same as Move — only dropFloatingGridSelection/
+   *   cancelFloatingGridSelection are real undo boundaries.
+   * - **Everything else** (Pixel tier, Glyph mode): the original flat
+   *   per-cell-color floating-selection path, unchanged — lifts a
    *   still-rectangular `selection` first (destructive) if nothing's
-   *   floating yet, transforms `floatingSelection.cells`, no commit() (a
-   *   still-floating selection is a pending edit, same as
-   *   moveFloatingSelection; only dropFloatingSelection/
-   *   cancelFloatingSelection are real undo boundaries).
+   *   floating yet, transforms `floatingSelection.cells`, stays pending.
    *
    * @param {'flipH'|'flipV'|'rotate90'} kind
    * @param {number} times
    */
   function transformSelectionInStore(kind, times) {
-    const { mode, canvas, glyphCanvas, selection, floatingSelection, selectionScope } = get();
+    const { mode, canvas, glyphCanvas, selection, floatingSelection, floatingGridSelection, selectionScope } = get();
     const doc = mode === 'glyph' ? glyphCanvas : canvas;
-    if (mode === 'draw' && doc.tier === 'advanced' && !floatingSelection && selection) {
-      let rect = normalizeRect(selection.x0, selection.y0, selection.x1, selection.y1);
-      let changed = false;
-      for (let i = 0; i < times; i++) {
-        if (transformSelectionRegion(doc, selectionScope, rect, kind)) changed = true;
-        if (kind === 'rotate90') {
-          const width = rect.x1 - rect.x0 + 1;
-          const height = rect.y1 - rect.y0 + 1;
-          rect = { x0: rect.x0, y0: rect.y0, x1: rect.x0 + height - 1, y1: rect.y0 + width - 1 };
-        }
+    if (mode === 'draw' && doc.tier === 'advanced' && !floatingSelection) {
+      let fgs = floatingGridSelection;
+      if (!fgs) {
+        if (!selection) return;
+        const rect = normalizeRect(selection.x0, selection.y0, selection.x1, selection.y1);
+        fgs = liftGridSelectionModel(doc, selectionScope, rect, true);
+        if (!fgs) return;
       }
-      if (!changed) return;
-      set({ selection: { x0: rect.x0, y0: rect.y0, x1: rect.x1, y1: rect.y1 } });
-      commit();
+      for (let i = 0; i < times; i++) transformGridSelectionModel(fgs, kind);
+      set({ floatingGridSelection: { ...fgs }, selection: null });
       return;
     }
 
@@ -399,6 +420,7 @@ export const useStore = create((set, get) => {
 
     selection: null,
     floatingSelection: null,
+    floatingGridSelection: null,
     selectionScope: 'activeShape',
 
     setActiveTool: (tool) => set({ activeTool: tool }),
@@ -1024,6 +1046,7 @@ export const useStore = create((set, get) => {
           canRedo: false,
           selection: null,
           floatingSelection: null,
+          floatingGridSelection: null,
         });
       } else {
         const canvas = buildDrawDocument();
@@ -1039,6 +1062,7 @@ export const useStore = create((set, get) => {
           canRedo: false,
           selection: null,
           floatingSelection: null,
+          floatingGridSelection: null,
         });
       }
     },
@@ -1063,7 +1087,7 @@ export const useStore = create((set, get) => {
     selectGlyph: (codepoint) => {
       const { glyphSet } = get();
       const glyph = glyphSet.glyphs.get(codepoint);
-      set({ activeCodepoint: codepoint, glyphCanvas: glyph ? glyphToCanvas(glyph) : null, selection: null, floatingSelection: null });
+      set({ activeCodepoint: codepoint, glyphCanvas: glyph ? glyphToCanvas(glyph) : null, selection: null, floatingSelection: null, floatingGridSelection: null });
     },
     /** Creates a new blank glyph at `codepoint` (replacing any existing one). Callers confirm before replacing. */
     assignCodepoint: (codepoint, { name } = {}) => {
@@ -1074,7 +1098,7 @@ export const useStore = create((set, get) => {
       const glyph = createGlyph({ width, height: glyphSet.meta.pixelsPerEm, name: name ?? '' });
       setGlyphModel(glyphSet, codepoint, glyph);
       pushSnapshot(history, glyphContentSnapshot(glyphSet));
-      set({ glyphSet: { ...glyphSet }, history: { ...history }, activeCodepoint: codepoint, glyphCanvas: glyphToCanvas(glyph), canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), selection: null, floatingSelection: null });
+      set({ glyphSet: { ...glyphSet }, history: { ...history }, activeCodepoint: codepoint, glyphCanvas: glyphToCanvas(glyph), canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), selection: null, floatingSelection: null, floatingGridSelection: null });
       autosaveScheduler(serializeGlyphSetProject(glyphSet));
     },
     /** Icon-kind sets: codepoint is auto-assigned (PUA); only the name is user-facing. */
@@ -1087,7 +1111,7 @@ export const useStore = create((set, get) => {
       const glyph = createGlyph({ width: size, height: glyphSet.meta.pixelsPerEm, name, unicode });
       setGlyphModel(glyphSet, codepoint, glyph);
       pushSnapshot(history, glyphContentSnapshot(glyphSet));
-      set({ glyphSet: { ...glyphSet }, history: { ...history }, activeCodepoint: codepoint, glyphCanvas: glyphToCanvas(glyph), canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), selection: null, floatingSelection: null });
+      set({ glyphSet: { ...glyphSet }, history: { ...history }, activeCodepoint: codepoint, glyphCanvas: glyphToCanvas(glyph), canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), selection: null, floatingSelection: null, floatingGridSelection: null });
       autosaveScheduler(serializeGlyphSetProject(glyphSet));
     },
     removeGlyphAction: (codepoint) => {
@@ -1279,12 +1303,12 @@ export const useStore = create((set, get) => {
     // switching via selectGlyph) falls out for free.
     startSelection: (x, y) => set({ selection: { x0: x, y0: y, x1: x, y1: y } }),
     updateSelection: (x, y) => set((s) => (s.selection ? { selection: { ...s.selection, x1: x, y1: y } } : {})),
-    clearSelection: () => set({ selection: null, floatingSelection: null }),
+    clearSelection: () => set({ selection: null, floatingSelection: null, floatingGridSelection: null }),
     selectAll: () => {
       const { mode, canvas, glyphCanvas } = get();
       const doc = mode === 'glyph' ? glyphCanvas : canvas;
       if (!doc) return;
-      set({ activeTool: 'marqueeSelect', selection: { x0: 0, y0: 0, x1: doc.width - 1, y1: doc.height - 1 }, floatingSelection: null });
+      set({ activeTool: 'marqueeSelect', selection: { x0: 0, y0: 0, x1: doc.width - 1, y1: doc.height - 1 }, floatingSelection: null, floatingGridSelection: null });
     },
     liftSelection: (destructive) => {
       const { mode, canvas, glyphCanvas, selection, selectionScope } = get();
@@ -1309,69 +1333,155 @@ export const useStore = create((set, get) => {
       set({ floatingSelection: { x: rect.x0, y: rect.y0, width: rect.x1 - rect.x0 + 1, height: rect.y1 - rect.y0 + 1, cells } });
     },
     moveFloatingSelection: (x, y) => set((s) => (s.floatingSelection ? { floatingSelection: { ...s.floatingSelection, x, y } } : {})),
+    /**
+     * Shape tier's analog of liftSelection — never mutates `canvas` (unlike
+     * liftSelection's immediate destructive clear); clearing is deferred
+     * all the way to dropFloatingGridSelection, so cancelFloatingGridSelection
+     * can be a true no-op instead of a history revert.
+     */
+    liftGridSelection: (destructive) => {
+      const { mode, canvas, glyphCanvas, selection, selectionScope } = get();
+      const doc = mode === 'glyph' ? glyphCanvas : canvas;
+      if (!doc || !selection) return;
+      const rect = normalizeRect(selection.x0, selection.y0, selection.x1, selection.y1);
+      const fgs = liftGridSelectionModel(doc, selectionScope, rect, destructive);
+      if (!fgs) return;
+      set({ floatingGridSelection: fgs });
+    },
+    moveGridSelectionBy: (dx, dy) =>
+      set((s) => {
+        if (!s.floatingGridSelection) return {};
+        const fgs = { ...s.floatingGridSelection };
+        moveGridSelectionByModel(fgs, dx, dy);
+        return { floatingGridSelection: fgs };
+      }),
     flipSelectionH: () => transformSelectionInStore('flipH', 1),
     flipSelectionV: () => transformSelectionInStore('flipV', 1),
     rotateSelection90: () => transformSelectionInStore('rotate90', 1),
     rotateSelection180: () => transformSelectionInStore('rotate90', 2),
     rotateSelectionCCW90: () => transformSelectionInStore('rotate90', 3),
     dropFloatingSelection: () => {
-      const { mode, canvas, glyphCanvas, floatingSelection } = get();
+      const { mode, canvas, glyphCanvas, floatingSelection, floatingGridSelection } = get();
       const doc = mode === 'glyph' ? glyphCanvas : canvas;
-      if (!doc || !floatingSelection) return;
+      if (!doc) return;
+      if (floatingGridSelection) {
+        finalizeGridSelectionModel(doc, floatingGridSelection);
+        set({ selection: null, floatingSelection: null, floatingGridSelection: null });
+        commit();
+        return;
+      }
+      if (!floatingSelection) return;
       pasteCells(doc, floatingSelection.x, floatingSelection.y, floatingSelection.cells);
-      set({ selection: null, floatingSelection: null });
+      set({ selection: null, floatingSelection: null, floatingGridSelection: null });
       commit(); // mode-aware: syncs glyphCanvas back into the active Glyph's pixels in glyph mode
     },
     cancelFloatingSelection: () => {
-      const { mode, canvas, glyphSet, activeCodepoint, history } = get();
+      const { mode, canvas, glyphSet, activeCodepoint, history, floatingGridSelection } = get();
+      // floatingGridSelection never mutated the document (clearing is
+      // deferred to finalize) — cancelling it is a pure state discard, no
+      // history revert needed, unlike the flat floatingSelection path
+      // below (whose destructive liftSelection already mutated `canvas`).
+      if (floatingGridSelection) {
+        set({ selection: null, floatingGridSelection: null });
+        return;
+      }
       if (mode === 'glyph') {
         applyGlyphContentSnapshot(glyphSet, history.stack[history.index]);
         const activeGlyph = activeCodepoint != null ? glyphSet.glyphs.get(activeCodepoint) : null;
-        set({ glyphSet: { ...glyphSet }, glyphCanvas: activeGlyph ? glyphToCanvas(activeGlyph) : null, selection: null, floatingSelection: null });
+        set({ glyphSet: { ...glyphSet }, glyphCanvas: activeGlyph ? glyphToCanvas(activeGlyph) : null, selection: null, floatingSelection: null, floatingGridSelection: null });
         return;
       }
       applyContentSnapshot(canvas, history.stack[history.index]);
-      set({ canvas: { ...canvas }, selection: null, floatingSelection: null });
+      set({ canvas: { ...canvas }, selection: null, floatingSelection: null, floatingGridSelection: null });
     },
 
     clipboard: null,
 
     copySelection: () => {
-      const { mode, canvas, glyphCanvas, selection, floatingSelection, selectionScope } = get();
+      const { mode, canvas, glyphCanvas, selection, floatingSelection, floatingGridSelection, selectionScope } = get();
       const doc = mode === 'glyph' ? glyphCanvas : canvas;
+      if (floatingGridSelection) {
+        set({ clipboard: snapshotGridClipboard(floatingGridSelection) });
+        return;
+      }
       if (floatingSelection) {
-        set({ clipboard: { width: floatingSelection.width, height: floatingSelection.height, cells: floatingSelection.cells } });
+        set({ clipboard: { kind: 'flat', width: floatingSelection.width, height: floatingSelection.height, cells: floatingSelection.cells } });
         return;
       }
       if (!doc || !selection) return;
       const rect = normalizeRect(selection.x0, selection.y0, selection.x1, selection.y1);
+      if (doc.tier === 'advanced') {
+        const fgs = liftGridSelectionModel(doc, selectionScope, rect, false); // non-destructive: originals stay put, clones float as a fresh duplicate
+        if (!fgs) return;
+        set({ clipboard: snapshotGridClipboard(fgs), selection: null, floatingGridSelection: fgs });
+        return;
+      }
       const width = rect.x1 - rect.x0 + 1;
       const height = rect.y1 - rect.y0 + 1;
       const cells = extractSelection(doc, selectionScope, rect);
-      set({ clipboard: { width, height, cells }, selection: null, floatingSelection: { x: rect.x0, y: rect.y0, width, height, cells } });
+      set({ clipboard: { kind: 'flat', width, height, cells }, selection: null, floatingSelection: { x: rect.x0, y: rect.y0, width, height, cells } });
     },
     cutSelection: () => {
-      const { mode, canvas, glyphCanvas, selection, floatingSelection, selectionScope } = get();
+      const { mode, canvas, glyphCanvas, selection, floatingSelection, floatingGridSelection, selectionScope } = get();
       const doc = mode === 'glyph' ? glyphCanvas : canvas;
+      if (floatingGridSelection) {
+        // Already lifted (nothing's been cleared from `doc` yet — see
+        // liftGridSelection) — cutting it means applying just the clear
+        // half now, discarding the pending clones instead of painting them
+        // back anywhere.
+        set({ clipboard: snapshotGridClipboard(floatingGridSelection) });
+        clearGridSelectionSource(doc, floatingGridSelection);
+        pruneEmptyGridsForSelection(doc, floatingGridSelection);
+        set({ selection: null, floatingGridSelection: null });
+        commit();
+        return;
+      }
       if (floatingSelection) {
-        set({ clipboard: { width: floatingSelection.width, height: floatingSelection.height, cells: floatingSelection.cells }, selection: null, floatingSelection: null });
+        set({ clipboard: { kind: 'flat', width: floatingSelection.width, height: floatingSelection.height, cells: floatingSelection.cells }, selection: null, floatingSelection: null, floatingGridSelection: null });
         commit();
         return;
       }
       if (!doc || !selection) return;
       const rect = normalizeRect(selection.x0, selection.y0, selection.x1, selection.y1);
+      if (doc.tier === 'advanced') {
+        const fgs = liftGridSelectionModel(doc, selectionScope, rect, true);
+        if (!fgs) return;
+        set({ clipboard: snapshotGridClipboard(fgs) });
+        clearGridSelectionSource(doc, fgs);
+        pruneEmptyGridsForSelection(doc, fgs);
+        set({ selection: null });
+        commit();
+        return;
+      }
       const cells = extractSelection(doc, selectionScope, rect);
       clearSelectionRect(doc, selectionScope, rect);
-      set({ clipboard: { width: rect.x1 - rect.x0 + 1, height: rect.y1 - rect.y0 + 1, cells }, selection: null });
+      set({ clipboard: { kind: 'flat', width: rect.x1 - rect.x0 + 1, height: rect.y1 - rect.y0 + 1, cells }, selection: null });
       commit();
     },
     pasteClipboard: () => {
       const { mode, clipboard, canvas, glyphCanvas } = get();
       const doc = mode === 'glyph' ? glyphCanvas : canvas;
       if (!clipboard || !doc) return;
+      if (clipboard.kind === 'grid') {
+        if (doc.tier !== 'advanced') return; // a Shape-tier clipboard has nothing meaningful to paste into Pixel tier/Glyph mode
+        const layer = doc.layers.find((l) => l.id === doc.activeLayerId);
+        if (!layer) return;
+        const targetX = Math.max(0, Math.min(doc.width - clipboard.width, Math.floor((doc.width - clipboard.width) / 2)));
+        const targetY = Math.max(0, Math.min(doc.height - clipboard.height, Math.floor((doc.height - clipboard.height) / 2)));
+        const dx = targetX - clipboard.originRect.x0;
+        const dy = targetY - clipboard.originRect.y0;
+        const clones = clipboard.clones.map((c) => ({
+          originGridId: null,
+          originSnapshot: null,
+          grid: { ...c, id: makeGridId(), offsetX: c.offsetX + dx, offsetY: c.offsetY + dy, pixels: c.pixels.slice() },
+        }));
+        const fgs = { layerId: layer.id, rect: { x0: targetX, y0: targetY, x1: targetX + clipboard.width - 1, y1: targetY + clipboard.height - 1 }, clones };
+        set({ activeTool: 'marqueeSelect', selection: null, floatingSelection: null, floatingGridSelection: fgs });
+        return;
+      }
       const x = Math.max(0, Math.min(doc.width - clipboard.width, Math.floor((doc.width - clipboard.width) / 2)));
       const y = Math.max(0, Math.min(doc.height - clipboard.height, Math.floor((doc.height - clipboard.height) / 2)));
-      set({ activeTool: 'marqueeSelect', selection: null, floatingSelection: { x, y, width: clipboard.width, height: clipboard.height, cells: clipboard.cells } });
+      set({ activeTool: 'marqueeSelect', selection: null, floatingGridSelection: null, floatingSelection: { x, y, width: clipboard.width, height: clipboard.height, cells: clipboard.cells } });
     },
 
     // --- Raster import ---
@@ -1393,12 +1503,17 @@ export const useStore = create((set, get) => {
       commit();
     },
     /**
-     * OS-clipboard image paste-in (Checkpoint 5): decodes an external raster
-     * image (a Blob from a paste event, e.g. a screenshot copied from another
-     * app) through the same decode+quantize pipeline importRasterImage uses,
-     * but lands it as a floating selection — matching internal paste's
-     * drop-in point — instead of importRasterImage's own immediate
-     * full-canvas paint+commit. Mode-aware like pasteClipboard/colorAt.
+     * OS-clipboard image paste-in: decodes an external raster image (a Blob
+     * from a paste event, e.g. a screenshot copied from another app)
+     * through the same decode+quantize pipeline importRasterImage uses, but
+     * lands it as a floating selection — matching internal paste's drop-in
+     * point — instead of importRasterImage's own immediate full-canvas
+     * paint+commit. Mode-aware like pasteClipboard/colorAt.
+     *
+     * Shape tier default: one Grid clone per distinct pasted color
+     * (buildGridClonesByColor) — a Grid is one style + one bitmap, so a
+     * multi-color paste can't become a single shape without losing color
+     * data (see docs/data-model.md's Selection section).
      */
     pasteImageBlob: async (blob) => {
       const { mode, canvas, glyphCanvas } = get();
@@ -1419,10 +1534,25 @@ export const useStore = create((set, get) => {
       doc.palette.colors = merged;
       const x = Math.max(0, Math.min(doc.width - result.width, Math.floor((doc.width - result.width) / 2)));
       const y = Math.max(0, Math.min(doc.height - result.height, Math.floor((doc.height - result.height) / 2)));
+      if (doc.tier === 'advanced') {
+        const layer = doc.layers.find((l) => l.id === doc.activeLayerId);
+        if (!layer) return;
+        const clones = buildGridClonesByColor(x, y, cells);
+        const fgs = { layerId: layer.id, rect: { x0: x, y0: y, x1: x + result.width - 1, y1: y + result.height - 1 }, clones };
+        set({
+          ...(mode === 'glyph' ? { glyphCanvas: { ...doc } } : { canvas: { ...doc } }),
+          activeTool: 'marqueeSelect',
+          selection: null,
+          floatingSelection: null,
+          floatingGridSelection: fgs,
+        });
+        return;
+      }
       set({
         ...(mode === 'glyph' ? { glyphCanvas: { ...doc } } : { canvas: { ...doc } }),
         activeTool: 'marqueeSelect',
         selection: null,
+        floatingGridSelection: null,
         floatingSelection: { x, y, width: result.width, height: result.height, cells },
       });
     },
@@ -1519,12 +1649,12 @@ export const useStore = create((set, get) => {
       if (doc.kind === 'glyph') {
         const restored = deserializeGlyphSetProject(doc);
         const h = createHistory(glyphContentSnapshot(restored));
-        set({ mode: 'glyph', projectOpen: true, glyphSet: restored, canvas: buildDrawDocument(), glyphCanvas: null, activeCodepoint: null, history: h, canUndo: false, canRedo: false, selection: null, floatingSelection: null });
+        set({ mode: 'glyph', projectOpen: true, glyphSet: restored, canvas: buildDrawDocument(), glyphCanvas: null, activeCodepoint: null, history: h, canUndo: false, canRedo: false, selection: null, floatingSelection: null, floatingGridSelection: null });
         return;
       }
       const restored = deserializeProject(doc);
       const h = createHistory(contentSnapshot(restored));
-      set({ mode: 'draw', projectOpen: true, canvas: restored, glyphSet: null, glyphCanvas: null, history: h, canUndo: false, canRedo: false, selection: null, floatingSelection: null });
+      set({ mode: 'draw', projectOpen: true, canvas: restored, glyphSet: null, glyphCanvas: null, history: h, canUndo: false, canRedo: false, selection: null, floatingSelection: null, floatingGridSelection: null });
     },
 
     // --- Autosave recovery (startup screen) ---

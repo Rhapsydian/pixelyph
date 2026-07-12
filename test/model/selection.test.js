@@ -9,7 +9,28 @@ import {
   clearRect,
   pasteCells,
   transformSelectionCells,
+  liftGridSelection,
+  moveGridSelectionBy,
+  transformGridSelection,
+  finalizeGridSelection,
+  buildFloatingGridPreviewDoc,
+  buildGridClonesByColor,
 } from '../../src/model/selection.js';
+
+/** Two independent shapes in one layer: A (flat color, dx 0-2) and B (gradient-object style, dx 5), both painted in row y=0. */
+function setUpTwoShapeLayer(canvas) {
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas, { name: 'L' });
+  paintCell(canvas, 0, 0, '#ff0000');
+  paintCell(canvas, 2, 0, '#ff0000'); // shape A grows to cover dx 0 and 2 (and the gap at 1, via growGridToInclude)
+  const gridA = layer.frames[0].grids[0];
+  canvas.activeGridId = null; // force the next paint to start a separate shape
+  paintCell(canvas, 5, 0, '#0000ff');
+  const gridB = layer.frames[0].grids[1];
+  gridB.style.fill = { type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] };
+  canvas.activeGridId = gridA.id;
+  return { layer, gridA, gridB };
+}
 
 test('normalizeRect handles corners given in any order', () => {
   assert.deepEqual(normalizeRect(3, 3, 0, 0), { x0: 0, y0: 0, x1: 3, y1: 3 });
@@ -157,5 +178,209 @@ test('transformSelectionCells rotate90 matches Grid.js\'s rotatePixels90 directi
   // dx' = height - 1 - dy, dy' = dx. Output bounds are height x width (swapped).
   const result = transformSelectionCells(3, 2, SAMPLE_CELLS, 'rotate90');
   assert.deepEqual(byColor(result), { A: { dx: 1, dy: 0 }, B: { dx: 1, dy: 2 }, C: { dx: 0, dy: 0 } });
+});
+
+// --- floatingGridSelection: liftGridSelection / moveGridSelectionBy / transformGridSelection / finalizeGridSelection ---
+
+test('liftGridSelection "activeShape" lifts only the active shape, ignoring a different overlapping shape', () => {
+  const canvas = createCanvas({ width: 8, height: 2 });
+  const { gridA, gridB } = setUpTwoShapeLayer(canvas);
+  const gridAOffsetXBefore = gridA.offsetX;
+
+  const fgs = liftGridSelection(canvas, 'activeShape', { x0: 0, y0: 0, x1: 6, y1: 0 }, true);
+
+  assert.equal(fgs.clones.length, 1);
+  assert.equal(fgs.clones[0].originGridId, gridA.id);
+  // Nothing in `canvas` is mutated by lift itself -- clearing is deferred to finalize.
+  assert.equal(gridA.offsetX, gridAOffsetXBefore);
+  assert.equal(canvas.layers[0].frames[0].grids.length, 2, 'shape B is untouched, still present');
+});
+
+test('liftGridSelection "activeLayer" lifts every unlocked/visible shape in the layer that overlaps rect, independently, preserving each one\'s own style', () => {
+  const canvas = createCanvas({ width: 8, height: 2 });
+  const { gridA, gridB } = setUpTwoShapeLayer(canvas);
+
+  const fgs = liftGridSelection(canvas, 'activeLayer', { x0: 0, y0: 0, x1: 6, y1: 0 }, true);
+
+  assert.equal(fgs.clones.length, 2, 'both shapes overlap the rect');
+  const cloneA = fgs.clones.find((c) => c.originGridId === gridA.id);
+  const cloneB = fgs.clones.find((c) => c.originGridId === gridB.id);
+  assert.ok(cloneA && cloneB);
+  assert.equal(cloneA.grid.style, gridA.style, "clone A keeps shape A's own style object reference");
+  assert.equal(typeof cloneB.grid.style.fill, 'object', "clone B's gradient style survived -- never flattened to a solid color");
+});
+
+test('liftGridSelection excludes a locked shape from "activeLayer" scope', () => {
+  const canvas = createCanvas({ width: 8, height: 2 });
+  const { gridB } = setUpTwoShapeLayer(canvas);
+  gridB.locked = true;
+
+  const fgs = liftGridSelection(canvas, 'activeLayer', { x0: 0, y0: 0, x1: 6, y1: 0 }, true);
+
+  assert.equal(fgs.clones.length, 1, 'the locked shape is skipped entirely');
+  assert.notEqual(fgs.clones[0].originGridId, gridB.id);
+});
+
+test('liftGridSelection excludes a locked or hidden shape from "activeShape" scope too -- lock/hidden immunity applies uniformly', () => {
+  const canvas = createCanvas({ width: 8, height: 2 });
+  const { gridA } = setUpTwoShapeLayer(canvas);
+  gridA.locked = true;
+
+  assert.equal(liftGridSelection(canvas, 'activeShape', { x0: 0, y0: 0, x1: 6, y1: 0 }, true), null, 'the active shape is locked -- nothing to lift, not silent access to protected content');
+
+  gridA.locked = false;
+  gridA.visible = false;
+  assert.equal(liftGridSelection(canvas, 'activeShape', { x0: 0, y0: 0, x1: 6, y1: 0 }, true), null, 'hidden gets the same treatment as locked');
+});
+
+test('liftGridSelection returns null when nothing in scope overlaps rect', () => {
+  const canvas = createCanvas({ width: 8, height: 2 });
+  setUpTwoShapeLayer(canvas);
+  assert.equal(liftGridSelection(canvas, 'activeLayer', { x0: 7, y0: 1, x1: 7, y1: 1 }, true), null);
+});
+
+test('liftGridSelection non-destructive (Copy/shift-drag) strips originGridId -- a duplicate, never linked back to the source', () => {
+  const canvas = createCanvas({ width: 8, height: 2 });
+  const { gridA } = setUpTwoShapeLayer(canvas);
+
+  const fgs = liftGridSelection(canvas, 'activeShape', { x0: 0, y0: 0, x1: 6, y1: 0 }, false);
+
+  assert.equal(fgs.clones[0].originGridId, null);
+  assert.equal(fgs.clones[0].originSnapshot, null);
+  assert.notEqual(fgs.clones[0].grid.id, gridA.id, 'a fresh id, not the source shape\'s own');
+});
+
+test('moveGridSelectionBy translates the rect and every clone\'s grid together', () => {
+  const canvas = createCanvas({ width: 8, height: 2 });
+  setUpTwoShapeLayer(canvas);
+  const fgs = liftGridSelection(canvas, 'activeLayer', { x0: 0, y0: 0, x1: 6, y1: 0 }, true);
+  const beforeOffsets = fgs.clones.map((c) => c.grid.offsetX);
+
+  moveGridSelectionBy(fgs, 3, 1);
+
+  assert.deepEqual(fgs.rect, { x0: 3, y0: 1, x1: 9, y1: 1 });
+  fgs.clones.forEach((c, i) => assert.equal(c.grid.offsetX, beforeOffsets[i] + 3));
+});
+
+test('transformGridSelection flips every clone within the selection\'s current rect, independently, preserving style', () => {
+  const canvas = createCanvas({ width: 8, height: 2 });
+  const { gridA, gridB } = setUpTwoShapeLayer(canvas);
+  const fgs = liftGridSelection(canvas, 'activeLayer', { x0: 0, y0: 0, x1: 6, y1: 0 }, true);
+  const cloneA = fgs.clones.find((c) => c.originGridId === gridA.id);
+  const cloneB = fgs.clones.find((c) => c.originGridId === gridB.id);
+  const styleA = cloneA.grid.style;
+  const styleB = cloneB.grid.style;
+
+  transformGridSelection(fgs, 'flipH');
+
+  assert.notEqual(cloneA.grid.offsetX, gridA.offsetX, 'shape A actually moved');
+  assert.notEqual(cloneB.grid.offsetX, gridB.offsetX, 'shape B actually moved too -- not just the topmost cell per position');
+  assert.equal(cloneA.grid.style, styleA, "clone A keeps its own style object, unmerged with clone B's");
+  assert.equal(cloneB.grid.style, styleB, "clone B's gradient style survives exactly -- never flattened to a solid color");
+});
+
+test('Move and Transform compose: move-then-flip-then-move produces the same result as computing it directly', () => {
+  const canvas = createCanvas({ width: 8, height: 2 });
+  setUpTwoShapeLayer(canvas);
+
+  // Path 1: interleaved move/transform/move, as a real drag+flip+drag gesture would produce.
+  const fgs1 = liftGridSelection(canvas, 'activeLayer', { x0: 0, y0: 0, x1: 6, y1: 0 }, true);
+  moveGridSelectionBy(fgs1, 2, 0);
+  transformGridSelection(fgs1, 'flipH');
+  moveGridSelectionBy(fgs1, 1, 0);
+
+  // Path 2: same net operations, computed by moving the full distance first and transforming last.
+  const fgs2 = liftGridSelection(canvas, 'activeLayer', { x0: 0, y0: 0, x1: 6, y1: 0 }, true);
+  moveGridSelectionBy(fgs2, 2, 0);
+  transformGridSelection(fgs2, 'flipH');
+  moveGridSelectionBy(fgs2, 1, 0);
+
+  assert.deepEqual(fgs1.rect, fgs2.rect);
+  for (let i = 0; i < fgs1.clones.length; i++) {
+    assert.equal(fgs1.clones[i].grid.offsetX, fgs2.clones[i].grid.offsetX);
+    assert.equal(fgs1.clones[i].grid.offsetY, fgs2.clones[i].grid.offsetY);
+    assert.deepEqual(Array.from(fgs1.clones[i].grid.pixels), Array.from(fgs2.clones[i].grid.pixels));
+  }
+});
+
+test('finalizeGridSelection: per-shape paste-back -- grid count/ids unchanged, only in-scope grids\' geometry changes, style intact', () => {
+  const canvas = createCanvas({ width: 8, height: 2 });
+  const { gridA, gridB } = setUpTwoShapeLayer(canvas);
+  const gridAId = gridA.id;
+  const gridBId = gridB.id;
+  const fgs = liftGridSelection(canvas, 'activeLayer', { x0: 0, y0: 0, x1: 6, y1: 0 }, true);
+  transformGridSelection(fgs, 'flipH');
+
+  finalizeGridSelection(canvas, fgs);
+
+  const grids = canvas.layers[0].frames[0].grids;
+  assert.equal(grids.length, 2, 'still exactly two shapes -- no merge, no new grid');
+  const finalA = grids.find((g) => g.id === gridAId);
+  const finalB = grids.find((g) => g.id === gridBId);
+  assert.ok(finalA && finalB, 'both shapes survive by their original id');
+  assert.equal(finalA.style.fill, '#ff0000', "shape A's flat color is untouched");
+  assert.equal(typeof finalB.style.fill, 'object', "shape B's gradient style survived");
+  assert.notEqual(finalA.offsetX, 0, 'shape A actually moved');
+  assert.notEqual(finalB.offsetX, 5, 'shape B actually moved too');
+});
+
+test('finalizeGridSelection: a non-destructive (copy) clone inserts as a brand-new grid, leaving the original untouched', () => {
+  const canvas = createCanvas({ width: 8, height: 2 });
+  const { gridA } = setUpTwoShapeLayer(canvas);
+  const fgs = liftGridSelection(canvas, 'activeShape', { x0: 0, y0: 0, x1: 6, y1: 0 }, false);
+  moveGridSelectionBy(fgs, 0, 1);
+
+  finalizeGridSelection(canvas, fgs);
+
+  const grids = canvas.layers[0].frames[0].grids;
+  assert.equal(grids.length, 3, 'a new grid was inserted alongside the two originals');
+  assert.equal(gridA.offsetX, 0, 'the original shape A is completely untouched by a copy');
+  const newGrid = grids.find((g) => g.id === fgs.clones[0].grid.id);
+  assert.ok(newGrid);
+  assert.equal(newGrid.offsetY, 1, 'the new grid reflects the move applied before finalize');
+});
+
+test('buildFloatingGridPreviewDoc excludes a destructively-lifted clone\'s real grid from render (so it isn\'t shown twice) and includes the clone instead', () => {
+  const canvas = createCanvas({ width: 8, height: 2 });
+  const { gridA, gridB } = setUpTwoShapeLayer(canvas);
+  const fgs = liftGridSelection(canvas, 'activeShape', { x0: 0, y0: 0, x1: 6, y1: 0 }, true);
+
+  const previewDoc = buildFloatingGridPreviewDoc(canvas, fgs);
+
+  const previewGrids = previewDoc.layers[0].frames[0].grids;
+  assert.equal(previewGrids.some((g) => g.id === gridA.id && g === gridA), false, "the real, un-transformed shape A object isn't in the preview's grid list");
+  assert.equal(previewGrids.some((g) => g.id === gridB.id), true, 'an unrelated shape not part of the floating selection still renders normally');
+  assert.equal(previewGrids.some((g) => g.id === fgs.clones[0].grid.id), true, "the clone itself is in the preview's grid list");
+  // The real canvas itself is never mutated by building a preview.
+  assert.equal(canvas.layers[0].frames[0].grids.length, 2);
+});
+
+test('buildFloatingGridPreviewDoc returns the doc unchanged when nothing is floating', () => {
+  const canvas = createCanvas({ width: 8, height: 2 });
+  setUpTwoShapeLayer(canvas);
+  assert.equal(buildFloatingGridPreviewDoc(canvas, null), canvas);
+});
+
+test('buildGridClonesByColor groups pasted cells into one clone per distinct color, each cropped to its own bounds', () => {
+  const cells = [
+    { dx: 0, dy: 0, color: '#ff0000' },
+    { dx: 1, dy: 0, color: '#ff0000' },
+    { dx: 3, dy: 2, color: '#00ff00' },
+  ];
+  const clones = buildGridClonesByColor(10, 20, cells);
+
+  assert.equal(clones.length, 2);
+  const red = clones.find((c) => c.grid.style.fill === '#ff0000');
+  const green = clones.find((c) => c.grid.style.fill === '#00ff00');
+  assert.equal(red.originGridId, null);
+  assert.equal(red.grid.offsetX, 10);
+  assert.equal(red.grid.offsetY, 20);
+  assert.equal(red.grid.width, 2);
+  assert.equal(red.grid.height, 1);
+  assert.deepEqual(Array.from(red.grid.pixels), [1, 1]);
+  assert.equal(green.grid.offsetX, 13);
+  assert.equal(green.grid.offsetY, 22);
+  assert.equal(green.grid.width, 1);
+  assert.equal(green.grid.height, 1);
 });
 

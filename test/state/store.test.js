@@ -253,7 +253,7 @@ test('rotateSelection180 swaps width/height twice, landing back on the original 
   assert.deepEqual(cellsByColor, { '#ff0000': 2, '#00ff00': 0 }, '180deg is still a real transform, not a no-op');
 });
 
-test('flipSelectionH on Shape tier transforms grid data directly -- no floating selection ever created, single commit, styles preserved on both shapes', async () => {
+test('flipSelectionH on Shape tier lifts into a floatingGridSelection (pending until finalize), single commit on drop, styles preserved on both shapes', async () => {
   const store = useStore.getState();
   await store.newProject('draw');
   store.setTier('advanced');
@@ -277,8 +277,18 @@ test('flipSelectionH on Shape tier transforms grid data directly -- no floating 
 
   store.flipSelectionH();
 
-  assert.equal(useStore.getState().floatingSelection, null, 'Shape tier never lifts into a floating selection at all');
-  assert.equal(useStore.getState().selection !== null, true, 'the marquee selection itself stays put, showing the transformed content underneath');
+  const fgs = useStore.getState().floatingGridSelection;
+  assert.ok(fgs, 'Shape tier lifts into a floatingGridSelection instead of committing instantly');
+  assert.equal(fgs.clones.length, 2, 'both shapes were lifted');
+  assert.equal(useStore.getState().history.stack.length, stackLengthBefore, 'nothing commits yet -- still pending, same as a marquee drag-move');
+  // The real document is untouched until finalize -- both original grids still sit exactly where they started.
+  const preFinalizeGrids = useStore.getState().canvas.layers[0].frames[0].grids;
+  assert.equal(preFinalizeGrids.find((g) => g.id === gridAId).offsetX, 0);
+  assert.equal(preFinalizeGrids.find((g) => g.id === gridBId).offsetX, 5);
+
+  store.dropFloatingSelection(); // finalize
+
+  assert.equal(useStore.getState().floatingGridSelection, null);
   assert.equal(useStore.getState().history.stack.length, stackLengthBefore + 1, 'exactly one commit for the whole transform, not per-shape');
 
   const grids = useStore.getState().canvas.layers[0].frames[0].grids;
@@ -319,11 +329,24 @@ test('selectionScope defaults to "activeShape"; copy honors it, excluding a diff
   store.updateSelection(1, 0); // spans both shapes' cells
   store.copySelection();
 
-  assert.deepEqual(
-    useStore.getState().clipboard.cells,
-    [{ dx: 0, dy: 0, color: '#0000ff' }],
-    "only shape A's own cell, not shape B's, despite both being in the rect and the same layer",
-  );
+  // Shape tier's copy produces a style-preserving 'grid' clipboard (one
+  // clone per lifted shape), not the flat {dx,dy,color} cells Pixel
+  // tier/Glyph mode use.
+  const clipboard = useStore.getState().clipboard;
+  assert.equal(clipboard.kind, 'grid');
+  assert.equal(clipboard.clones.length, 1, "only shape A's own clone, not shape B's, despite both being in the rect and the same layer");
+  assert.equal(clipboard.clones[0].offsetX, 0);
+  assert.equal(clipboard.clones[0].offsetY, 0);
+  assert.equal(clipboard.clones[0].style.fill, '#0000ff');
+
+  // Copy also leaves a floating duplicate at the original position (same
+  // convention as Pixel tier/Glyph mode's copySelection) -- the original
+  // shape A is untouched, and the floating clone is a fresh copy, not
+  // linked back to it.
+  const fgs = useStore.getState().floatingGridSelection;
+  assert.ok(fgs);
+  assert.equal(fgs.clones[0].originGridId, null, 'a copy never writes back into the source shape');
+  assert.equal(useStore.getState().canvas.layers[0].frames[0].grids.find((g) => g.id === shapeAId)?.offsetX, 0, 'the original shape A is untouched by copy');
 });
 
 test('applyPaletteEntryToActiveGrid: a saved style replaces fill+stroke+effects wholesale', async () => {

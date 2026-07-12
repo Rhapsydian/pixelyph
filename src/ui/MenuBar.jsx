@@ -122,6 +122,7 @@ export function MenuBar() {
   const redo = useStore((s) => s.redo);
   const selection = useStore((s) => s.selection);
   const floatingSelection = useStore((s) => s.floatingSelection);
+  const floatingGridSelection = useStore((s) => s.floatingGridSelection);
   const clipboard = useStore((s) => s.clipboard);
   const copySelection = useStore((s) => s.copySelection);
   const cutSelection = useStore((s) => s.cutSelection);
@@ -220,11 +221,11 @@ export function MenuBar() {
   }
 
   function handleDeselect() {
-    if (floatingSelection) cancelFloatingSelection();
+    if (floatingSelection || floatingGridSelection) cancelFloatingSelection();
     else if (selection) clearSelection();
   }
 
-  const hasSelection = Boolean(selection || floatingSelection);
+  const hasSelection = Boolean(selection || floatingSelection || floatingGridSelection);
 
   /**
    * Flip/Rotate menu items funnel through here rather than straight to
@@ -288,7 +289,7 @@ export function MenuBar() {
         <MenuDivider />
         <MenuItem label="Select all" shortcut="Ctrl+A" onClick={runAndClose(selectAll)} />
         <MenuItem label="Deselect" shortcut="Esc" disabled={!hasSelection} onClick={runAndClose(handleDeselect)} />
-        <MenuItem label="Commit move" shortcut="Enter" disabled={!floatingSelection} onClick={runAndClose(dropFloatingSelection)} />
+        <MenuItem label="Commit move" shortcut="Enter" disabled={!floatingSelection && !floatingGridSelection} onClick={runAndClose(dropFloatingSelection)} />
         {mode === 'draw' && (
           <>
             <MenuDivider />

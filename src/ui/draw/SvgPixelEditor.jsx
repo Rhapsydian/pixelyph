@@ -25,6 +25,7 @@ import { ReferenceImageLayer } from './ReferenceImageLayer.jsx';
 import { TransparencyBackground } from './TransparencyBackground.jsx';
 import { composeLayersBody, composeFrameBody } from '../../export/svg/composeLayersSvg.js';
 import { currentFrameIndex, topLayerAndGridAt } from '../../model/Canvas.js';
+import { buildFloatingGridPreviewDoc } from '../../model/selection.js';
 
 /**
  * The Canvas-shaped document this editor is currently painting: Draw mode's
@@ -52,6 +53,7 @@ export function SvgPixelEditor() {
   const setViewportSize = useStore((s) => s.setViewportSize);
   const selection = useStore((s) => s.selection);
   const floatingSelection = useStore((s) => s.floatingSelection);
+  const floatingGridSelection = useStore((s) => s.floatingGridSelection);
   const onionSkinEnabled = useStore((s) => s.onionSkinEnabled);
   const sidePanelTab = useStore((s) => s.sidePanelTab);
   const gradientHandleEnabledGridId = useStore((s) => s.gradientHandleEnabledGridId);
@@ -80,7 +82,7 @@ export function SvgPixelEditor() {
   useEffect(() => {
     if (prevToolRef.current === 'marqueeSelect' && activeTool !== 'marqueeSelect') {
       const state = useStore.getState();
-      if (state.floatingSelection) state.dropFloatingSelection();
+      if (state.floatingSelection || state.floatingGridSelection) state.dropFloatingSelection();
       else if (state.selection) state.clearSelection();
     }
     prevToolRef.current = activeTool;
@@ -110,22 +112,24 @@ export function SvgPixelEditor() {
         evt.preventDefault();
         state.redo();
       } else if (evt.key === 'Escape') {
-        // Cancel a pending move/copy (revert to the last committed snapshot),
-        // or just deselect if nothing's been lifted yet.
-        if (state.floatingSelection) state.cancelFloatingSelection();
+        // Cancel a pending move/copy (revert to the last committed snapshot
+        // for the flat path; a pure no-op for floatingGridSelection, which
+        // never mutated the document — see cancelFloatingSelection), or
+        // just deselect if nothing's been lifted yet.
+        if (state.floatingSelection || state.floatingGridSelection) state.cancelFloatingSelection();
         else if (state.selection) state.clearSelection();
       } else if (evt.key === 'Enter') {
         // Commit a floating selection in place — the marquee tool's primary
         // "make the move actually happen" action, previously only reachable
         // by switching tools or clicking outside the floating rect.
-        if (state.floatingSelection) state.dropFloatingSelection();
+        if (state.floatingSelection || state.floatingGridSelection) state.dropFloatingSelection();
       } else if (isCopy) {
-        if (state.selection || state.floatingSelection) {
+        if (state.selection || state.floatingSelection || state.floatingGridSelection) {
           evt.preventDefault();
           state.copySelection();
         }
       } else if (isCut) {
-        if (state.selection || state.floatingSelection) {
+        if (state.selection || state.floatingSelection || state.floatingGridSelection) {
           evt.preventDefault();
           state.cutSelection();
         }
@@ -149,7 +153,10 @@ export function SvgPixelEditor() {
         const step = evt.shiftKey ? 10 : 1;
         const dx = evt.key === 'ArrowLeft' ? -step : evt.key === 'ArrowRight' ? step : 0;
         const dy = evt.key === 'ArrowUp' ? -step : evt.key === 'ArrowDown' ? step : 0;
-        if (state.floatingSelection) {
+        if (state.floatingGridSelection) {
+          evt.preventDefault();
+          state.moveGridSelectionBy(dx, dy);
+        } else if (state.floatingSelection) {
           evt.preventDefault();
           state.moveFloatingSelection(state.floatingSelection.x + dx, state.floatingSelection.y + dy);
         } else if (!state.selection) {
@@ -352,6 +359,16 @@ export function SvgPixelEditor() {
         useStore.getState().dropFloatingSelection();
         tick((n) => n + 1);
       },
+      // Shape tier's floatingGridSelection analog — never mutates `canvas`
+      // in place (see liftGridSelection's own doc comment), so none of
+      // these three need the tick() workaround liftSelection/
+      // dropFloatingSelection above do: `floatingGridSelection` is its own
+      // subscribed store field, a plain set() already triggers the normal
+      // React re-render.
+      getFloatingGridSelection: () => useStore.getState().floatingGridSelection,
+      liftGridSelection: (destructive) => useStore.getState().liftGridSelection(destructive),
+      moveGridSelectionBy: (dx, dy) => useStore.getState().moveGridSelectionBy(dx, dy),
+      dropFloatingGridSelection: () => useStore.getState().dropFloatingSelection(),
     }),
     [],
   );
@@ -474,9 +491,9 @@ export function SvgPixelEditor() {
   // one thing that reliably changes on every paintCellLive call, so
   // including it forces a recompute each time.
   const { body, defs } = useMemo(
-    () => (doc ? composeLayersBody(doc) : { body: '', defs: [] }),
+    () => (doc ? composeLayersBody(buildFloatingGridPreviewDoc(doc, floatingGridSelection)) : { body: '', defs: [] }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [doc, canvas, glyphCanvas, tickCount],
+    [doc, canvas, glyphCanvas, tickCount, floatingGridSelection],
   );
   const defsHtml = defs.length ? `<defs>${defs.join('')}</defs>` : '';
 
@@ -588,7 +605,23 @@ export function SvgPixelEditor() {
             />
           </g>
         )}
-        {normalizedSelection && !floatingSelection && (
+        {floatingGridSelection && (
+          // The clones' actual (styled/gradient-intact) content already
+          // renders as part of `body` above, via buildFloatingGridPreviewDoc
+          // — this is just the same dashed-outline affordance
+          // floatingSelection gets, tracking the selection's current rect.
+          <rect
+            x={floatingGridSelection.rect.x0}
+            y={floatingGridSelection.rect.y0}
+            width={floatingGridSelection.rect.x1 - floatingGridSelection.rect.x0 + 1}
+            height={floatingGridSelection.rect.y1 - floatingGridSelection.rect.y0 + 1}
+            fill="none"
+            stroke="#4da3ff"
+            strokeWidth={0.1}
+            strokeDasharray="0.3,0.2"
+          />
+        )}
+        {normalizedSelection && !floatingSelection && !floatingGridSelection && (
           <rect
             x={normalizedSelection.x0}
             y={normalizedSelection.y0}
