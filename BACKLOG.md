@@ -11,16 +11,30 @@ blocking issue is fixed); and open ideas flagged for later discussion
 rather than acted on immediately. Review this list once all
 currently-planned phases are complete.
 
-### IN PROGRESS: Selection-transform (Transform > Selection) corruption bugs on Shape tier — mid-session, uncommitted, pick up here next
+### IN PROGRESS: Selection system redesign — session 29, mid-plan, pick up here next
 
-**Start here next session.** Working tree currently has *uncommitted*
-changes on top of the 3 committed session-28 checkpoints (`aaa5783` and
-earlier) — `src/model/Canvas.js`, `src/model/Grid.js`,
-`src/model/selection.js`, `src/state/store.js`, and matching test files
-(`test/model/Canvas.test.js`, `test/model/Grid.test.js`,
-`test/state/store.test.js`). Deliberately left uncommitted: `npm test` is
-green (443/443) but a real bug (last bullet below) is still unresolved —
-don't commit until it's fixed and re-verified.
+**Start here next session — this entry is stale below this point, kept as
+historical record of how the bugs described below were first diagnosed.**
+Session 29 (2026-07-12) followed up on the corruption bugs below with a
+full from-scratch redesign of the selection system, at the user's
+explicit request, rather than a targeted patch. Checkpoints 1-4 of an
+8-checkpoint plan are **committed** (`443f46e`, `7529266`, `4a9f783`,
+`db28c8c` — tool rename, `allVisible` scope removal, the new
+`floatingGridSelection` mechanism unifying Move and Transform on Shape
+tier, paste-in-place); checkpoints 5-8 (paste color-handling toggle,
+formal undo-atomicity re-verification, a `docs/data-model.md` Selection
+section, final regression sweep) are **not started**. The corruption bugs
+and the undo bug described immediately below are superseded by that
+redesign — the undo bug in particular was confirmed live, via direct DOM
+inspection, to no longer reproduce, as an architectural side effect of the
+new finalize-based commit flow.
+
+**Full plan, design rationale, and decision log**:
+`C:\Users\husbando\.claude\plans\floating-scribbling-lampson.md` (outside
+the repo). **Session write-up**:
+[`docs/session-logs/session-29-2026-07-12.md`](./docs/session-logs/session-29-2026-07-12.md).
+Read both before continuing — this entry will get one clean rewrite into
+a Shipped writeup once checkpoint 8 lands, not before.
 
 **User-reported, in the user's own real project (loaded via "Continue
 Last Session" — same origin/IndexedDB as this dev server, not a synthetic
