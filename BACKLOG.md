@@ -11,115 +11,6 @@ blocking issue is fixed); and open ideas flagged for later discussion
 rather than acted on immediately. Review this list once all
 currently-planned phases are complete.
 
-### IN PROGRESS: Selection system redesign — session 29, mid-plan, pick up here next
-
-**Start here next session — this entry is stale below this point, kept as
-historical record of how the bugs described below were first diagnosed.**
-Session 29 (2026-07-12) followed up on the corruption bugs below with a
-full from-scratch redesign of the selection system, at the user's
-explicit request, rather than a targeted patch. Checkpoints 1-4 of an
-8-checkpoint plan are **committed** (`443f46e`, `7529266`, `4a9f783`,
-`db28c8c` — tool rename, `allVisible` scope removal, the new
-`floatingGridSelection` mechanism unifying Move and Transform on Shape
-tier, paste-in-place); checkpoints 5-8 (paste color-handling toggle,
-formal undo-atomicity re-verification, a `docs/data-model.md` Selection
-section, final regression sweep) are **not started**. The corruption bugs
-and the undo bug described immediately below are superseded by that
-redesign — the undo bug in particular was confirmed live, via direct DOM
-inspection, to no longer reproduce, as an architectural side effect of the
-new finalize-based commit flow.
-
-**Full plan, design rationale, and decision log**:
-`C:\Users\husbando\.claude\plans\floating-scribbling-lampson.md` (outside
-the repo). **Session write-up**:
-[`docs/session-logs/session-29-2026-07-12.md`](./docs/session-logs/session-29-2026-07-12.md).
-Read both before continuing — this entry will get one clean rewrite into
-a Shipped writeup once checkpoint 8 lands, not before.
-
-**User-reported, in the user's own real project (loaded via "Continue
-Last Session" — same origin/IndexedDB as this dev server, not a synthetic
-test project):**
-1. Selecting an entire shape (Active shape scope) and transforming it
-   corrupted a *different* shape in the same layer.
-2. Active layer scope "doesn't work correctly at all."
-3. (User's own architectural correction, mid-session:) the transform must
-   operate on each shape's own grid data directly — style must never be
-   affected, and *every* shape with cells in the selected area must
-   transform (not just the topmost cell per position).
-
-**Root causes found (all in the pre-existing `liftSelection`/
-`clearSelectionRect`/`pasteCells` flat-cell-color machinery, `selection.js`
-+ `store.js`):**
-- `clearSelectionRect` only special-cased `allVisible` scope; `activeLayer`
-  fell through to `clearRect`, which only ever erases
-  `canvas.activeGridId`'s one grid — under-clearing when the active layer
-  has more than one shape in the rect. **Fixed**: new
-  `clearRectFromActiveLayer` (mirrors `clearRectAllLayers`, scoped to one
-  layer, `eraseFromLayer` per cell).
-- Destructively clearing a *fully*-selected shape empties and deletes its
-  Grid, which reassigns `canvas.activeGridId` to a sibling shape
-  (`paintCell`/`eraseFromLayer`'s existing fallback-to-`frame.grids[0]`
-  behavior) — so the later paste-back silently painted into that sibling.
-  **Fixed**: `liftSelection` now captures `activeGridId` before the
-  destructive clear and restores it after.
-- `pasteCells` always painted through `canvas.activeGridId` regardless of
-  each cell's own color — a multi-color paste (`activeLayer`/`allVisible`
-  scope) collapsed every color after the first into one grid/style.
-  **Fixed**: `pasteCells` now groups cells by color for advanced tier.
-- **Superseded by a full redesign anyway** (per the user's correction
-  above): flat-cell-color extraction can't preserve gradient/stroke/
-  effects at all — confirmed live (a gradient-filled shape's overlapping
-  cells extracted as a flat gray placeholder, then pasted back as a real,
-  wrong, solid-gray shape). The three fixes above still stand and still
-  matter (they also apply to plain marquee drag-move, not just Transform),
-  but Shape tier's Transform > Selection no longer goes through this path
-  at all — see next.
-
-**Redesign implemented**: for advanced (Shape) tier with no
-already-floating selection, Transform > Selection now bypasses
-`liftSelection`/`floatingSelection` entirely.
-`transformGridRegion` (new, `Grid.js`) flips/rotates only the portion of
-one Grid's own pixel buffer inside the selection rect, remapped around the
-rect's own bounds, in place — never touches `style`, never merges shapes.
-`transformSelectionRegion` (new, `Canvas.js`) resolves which Grids a scope
-puts in play (`activeShape`: just the active grid; `activeLayer`: every
-visible/unlocked grid in the active layer; `allVisible`: every
-visible/unlocked grid in every visible layer) and calls
-`transformGridRegion` on each independently. `store.js`'s
-`transformSelectionInStore` branches to this path first; Pixel tier/Glyph
-mode/an-already-floating-Shape-tier-selection still use the original
-flat-cell path (no style to lose there). Commits immediately, single undo
-step, no floating-preview stage for Shape tier at all.
-
-**Verified working, live, in the user's real project:** Active shape scope
-on a fully-selected flat-color shape (no longer corrupts the sibling
-gradient-filled heart shape, single-step undo confirmed via SVG `path`
-`d`/`transform` diffing, not just eyeballing screenshots). Active layer
-scope spanning both the flat-color shape and part of the gradient heart
-(both transform independently, gradient/glow style fully intact, no
-ghost/extra shape, `npm test` 443/443 including 10 new regression tests
-in `Grid.test.js`/`Canvas.test.js`/`store.test.js`).
-
-**NOT yet resolved — found last, mid-verification, session ended before
-diagnosing:** after that same Active layer two-shape flip, clicking Undo
-only reverted the flat-color shape; the gradient-styled shape's `path`
-`d`/`transform` (checked directly via DOM, not a screenshot) stayed at its
-post-flip value even after a second Undo click, with `canUndo` reading
-false (nothing left to undo) — i.e. the two shapes' changes don't appear
-to be reverting together as the single atomic commit they should be.
-Not yet root-caused. **Next session: start by writing a store-test
-reproduction** (two shapes in one layer, one flat-color, one
-gradient-object-styled, `activeLayer` scope, `flipSelectionH`, then
-`undo()`, assert *both* shapes' `offsetX`/`pixels` revert) — the existing
-new store.test.js case for this feature only checks the transform itself
-and one undo step's *count*, not that both shapes' geometry actually
-round-trips. Likely places to look: `contentSnapshot`/
-`applyContentSnapshot`/`history.js` (does `structuredClone` genuinely
-deep-copy every grid touched, or could two Grids in the same frame somehow
-end up pixel-array-aliased after `growGridToInclude`'s `resizeAt` calls?),
-or whether `commit()` is somehow reading a not-fully-mutated `canvas` in
-this two-grid-in-one-call case.
-
 ### Tool-gap backlog, carried over from the retired tool-roadmap doc
 
 `docs/tool-roadmap.md`'s own 7 checkpoints all shipped (see this file's
@@ -369,6 +260,87 @@ docs site, so people can try or use Pixelyph without cloning and running it
 locally.
 
 ## Shipped
+
+### DONE: Selection system redesign (full 8-checkpoint plan)
+
+Design + checkpoints 1-4 shipped session 29 (2026-07-12); checkpoints 5-8
+plus three additional bug fixes shipped session 30 (2026-07-12), 6 commits
+on `main` (`98250a5`, `01e7f25`, `cb32bca`, `84591c4`, `f6d2087`,
+`166c790`). Followed up on user-reported corruption bugs ("Selecting an
+entire shape (Active shape scope) and transforming it corrupted a
+*different* shape in the same layer"; "Active layer scope doesn't work
+correctly at all") with a full from-scratch redesign, at the user's
+explicit request, rather than a targeted patch — the real root cause was
+that selection had accreted four independent, loosely-related concepts
+across many prior sessions, with a scope flag read under genuinely
+different semantics by different consuming functions. Full design
+rationale: `docs/data-model.md`'s "Selection" section (the durable
+reference now; the original planning doc and
+[session 29's own write-up](./docs/session-logs/session-29-2026-07-12.md)
+carry the decision-by-decision history from where the design was created —
+this session's own write-up will be added to `docs/session-logs/` at its
+close-out).
+
+**Checkpoints 1-4 (session 29):** tool rename (`selectMove` →
+`targetMove`); `allVisible` scope removed entirely (`selectionScope` is
+now two-valued, `activeShape`/`activeLayer`); new `floatingGridSelection`
+mechanism — real, detached per-shape Grid clones that preserve style/
+gradient/identity — unifying Move and Transform into one pending-then-
+finalize model on Shape tier; paste-in-place (`originRect` on the
+clipboard payload).
+
+**Checkpoints 5-8 (session 30):**
+5. External-paste color-handling toggle — "Paste as: Multiple shapes (by
+   color) / Single shape" in `ContextBar.jsx`, backed by new
+   `buildGridCloneUnioned` (`selection.js`) and `pasteColorMode`/
+   `pasteRaw`/`touched` bookkeeping (`store.js`). Only appears (and only
+   ever applies) when a pending external paste actually has 2+ distinct
+   colors, so a same-color paste can never be surprised by a stale
+   toggle setting.
+6. Formally re-verified the original undo-atomicity bug is gone —
+   strengthened `store.test.js`'s two-shape Active Layer flip test to
+   assert full geometry + style round-trip through undo, redo, and a
+   second undo (not just `offsetX`), then reproduced live via direct SVG
+   `path` `transform`/`fill` inspection through the same undo/redo/undo
+   sequence.
+7. `docs/data-model.md` gained a "Selection" section (this concept had
+   never been documented at the data-model level); `ContextBar.jsx`'s
+   "Select from:" tooltip updated to mention Transform.
+8. Full regression sweep: `npm test` 443/443 → 460/460; live-verified
+   move-then-transform-then-finalize, transform-then-move-then-finalize,
+   paste-drag-transform-finalize, cut-then-paste-in-place, Escape
+   cancelling with the model byte-for-byte unchanged, locked/hidden
+   shapes excluded from both scopes, and both originally-reported bugs
+   confirmed gone (an Active-shape-scope transform on one shape leaves
+   sibling shapes in the same layer provably byte-for-byte unchanged).
+
+**Three additional bugs found and fixed along the way** (all in the
+just-redesigned or adjacent code, reported live by the user mid-session):
+- `buildFloatingGridPreviewDoc` excluded a destructively-lifted shape
+  entirely from the pending-preview render, instead of hiding just the
+  cells actually inside the selection rect — so a marquee drag or
+  Transform > Selection on only *part* of a multi-cell shape made the
+  shape's un-selected remainder vanish from the canvas for the whole
+  pending state, even though the underlying document still had it and
+  finalize was always correct. Fixed: the real grid now renders as a
+  remainder (its own pixels minus the lifted snapshot's cells).
+- `applyContentSnapshot` (every undo/redo) called
+  `refreshActiveGridModel(canvas)` without the current `activeLayerId`,
+  so the sticky-selection check was always skipped and the active shape
+  silently jumped to the layer's *first* shape on every single undo/redo.
+  Fixed: pass the pre-restore `activeLayerId` through, matching
+  `setActiveLayerId`/`selectTopLayerAt`'s existing pattern.
+- `pasteImageBlob` always resampled a pasted image to the full canvas
+  size, so a source image smaller than the canvas (e.g. a small pixel-art
+  snippet) got upscaled to fill the whole canvas instead of landing at
+  its own size. Fixed: clamp the target size to `min(image dimension,
+  doc dimension)` per axis — a larger source (e.g. a screenshot) still
+  downsamples to fit, unchanged.
+
+Test suite: 443/443 (session 29 baseline) → 460/460 (17 new tests across
+the two sessions). Every fix above was verified live in the browser via
+direct DOM/SVG inspection, not just automated tests, per this project's
+established testing convention.
 
 ### DONE: Object select-and-drag tool + Transform menu Selection scope
 
