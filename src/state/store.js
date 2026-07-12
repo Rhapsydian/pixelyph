@@ -50,10 +50,20 @@ import {
   setLayerFrameVisibility as setLayerFrameVisibilityModel,
   cloneLayerStyle,
   cloneFillValue,
+  transformSelectionRegion,
 } from '../model/Canvas.js';
 import { mirrorPoints } from '../model/mirror.js';
 import { createHistory, pushSnapshot, undo as historyUndo, redo as historyRedo, canUndo as historyCanUndo, canRedo as historyCanRedo } from '../model/history.js';
-import { normalizeRect, extractRectColors, extractRectFromActiveLayer, extractRectFromActiveGrid, clearRect, clearRectAllLayers, pasteCells, transformSelectionCells } from '../model/selection.js';
+import {
+  normalizeRect,
+  extractRectColors,
+  extractRectFromActiveLayer,
+  extractRectFromActiveGrid,
+  clearRect,
+  clearRectFromActiveLayer,
+  pasteCells,
+  transformSelectionCells,
+} from '../model/selection.js';
 import { parseLospecPalette } from '../model/paletteImport.js';
 import {
   addColor as addPaletteColorModel,
@@ -142,8 +152,8 @@ function extractSelection(canvas, selectionScope, rect) {
 
 /** Clear side of a selection — matches whichever scope did the reading. */
 function clearSelectionRect(canvas, selectionScope, rect) {
-  if (canvas.tier === 'advanced' && selectionScope === 'allVisible') {
-    clearRectAllLayers(canvas, rect);
+  if (canvas.tier === 'advanced' && selectionScope === 'activeLayer') {
+    clearRectFromActiveLayer(canvas, rect);
     return;
   }
   clearRect(canvas, rect);
@@ -250,18 +260,51 @@ export const useStore = create((set, get) => {
   }
 
   /**
-   * Transform-menu "Selection" scope (Checkpoint 2): flips/rotates the
-   * current selection's cells in place `times` times, for the active frame
-   * only — no per-frame concept, same as any other floating-selection
-   * operation. Lifts a still-rectangular `selection` first (destructive,
-   * same as an ordinary drag-move lift) if nothing's floating yet. No
-   * commit() — a still-floating selection is a pending edit, same as
-   * moveFloatingSelection; only dropFloatingSelection/cancelFloatingSelection
-   * are real undo boundaries.
+   * Transform-menu "Selection" scope (Checkpoint 2). Two entirely different
+   * mechanisms depending on tier, because Shape tier has per-shape style
+   * (gradient/stroke/effects) that must survive a transform, and Pixel
+   * tier/Glyph mode don't (a color *is* the whole "style" there):
+   *
+   * - **Advanced (Shape) tier, nothing already floating**: operates
+   *   directly on each in-scope Grid's own buffer via
+   *   `transformSelectionRegion` (Canvas.js) — never touches `style`, never
+   *   flattens to a color, never routes through `canvas.activeGridId`, so
+   *   it can't corrupt an unrelated shape or merge distinct shapes/styles
+   *   together the way the flat-cell path below used to. Commits
+   *   immediately (one undo step), same as the instant Canvas/Layer/Shape
+   *   scopes — there's no floating-preview stage to it at all.
+   * - **Everything else** (Pixel tier, Glyph mode, or the rare case where a
+   *   Shape-tier selection is already mid-drag-move via marqueeSelect):
+   *   the original flat per-cell-color floating-selection path — lifts a
+   *   still-rectangular `selection` first (destructive) if nothing's
+   *   floating yet, transforms `floatingSelection.cells`, no commit() (a
+   *   still-floating selection is a pending edit, same as
+   *   moveFloatingSelection; only dropFloatingSelection/
+   *   cancelFloatingSelection are real undo boundaries).
+   *
    * @param {'flipH'|'flipV'|'rotate90'} kind
    * @param {number} times
    */
   function transformSelectionInStore(kind, times) {
+    const { mode, canvas, glyphCanvas, selection, floatingSelection, selectionScope } = get();
+    const doc = mode === 'glyph' ? glyphCanvas : canvas;
+    if (mode === 'draw' && doc.tier === 'advanced' && !floatingSelection && selection) {
+      let rect = normalizeRect(selection.x0, selection.y0, selection.x1, selection.y1);
+      let changed = false;
+      for (let i = 0; i < times; i++) {
+        if (transformSelectionRegion(doc, selectionScope, rect, kind)) changed = true;
+        if (kind === 'rotate90') {
+          const width = rect.x1 - rect.x0 + 1;
+          const height = rect.y1 - rect.y0 + 1;
+          rect = { x0: rect.x0, y0: rect.y0, x1: rect.x0 + height - 1, y1: rect.y0 + width - 1 };
+        }
+      }
+      if (!changed) return;
+      set({ selection: { x0: rect.x0, y0: rect.y0, x1: rect.x1, y1: rect.y1 } });
+      commit();
+      return;
+    }
+
     let fs = get().floatingSelection;
     if (!fs) {
       get().liftSelection(true);
@@ -276,9 +319,9 @@ export const useStore = create((set, get) => {
       // tickCount]`) stays stale and the cleared source stays visibly
       // duplicated underneath the floating (flipped/rotated) preview until
       // the eventual drop. Mirrors pasteImageBlob's same mode-aware pattern.
-      const { mode, canvas, glyphCanvas } = get();
-      const doc = mode === 'glyph' ? glyphCanvas : canvas;
-      set(mode === 'glyph' ? { glyphCanvas: { ...doc } } : { canvas: { ...doc } });
+      const { mode: m2, canvas: c2, glyphCanvas: g2 } = get();
+      const doc2 = m2 === 'glyph' ? g2 : c2;
+      set(m2 === 'glyph' ? { glyphCanvas: { ...doc2 } } : { canvas: { ...doc2 } });
     }
     let { width, height, cells } = fs;
     for (let i = 0; i < times; i++) {
@@ -1249,7 +1292,20 @@ export const useStore = create((set, get) => {
       if (!doc || !selection) return;
       const rect = normalizeRect(selection.x0, selection.y0, selection.x1, selection.y1);
       const cells = extractSelection(doc, selectionScope, rect);
-      if (destructive) clearSelectionRect(doc, selectionScope, rect);
+      if (destructive) {
+        const originalGridId = doc.activeGridId;
+        clearSelectionRect(doc, selectionScope, rect);
+        // Clearing can empty out (and delete) the very shape being lifted,
+        // which reassigns activeGridId to some *other* shape sharing its
+        // layer as a side effect (see paintCell/eraseFromLayer's erase
+        // branch, which falls back to `frame.grids[0]` when the active
+        // grid is the one just removed) — restore it so the eventual
+        // paste-back (pasteCells -> paintCell) targets the original shape,
+        // or safely allocates a fresh one if it's now gone, instead of
+        // silently merging the moved/transformed content into whichever
+        // unrelated shape activeGridId happened to drift to.
+        doc.activeGridId = originalGridId;
+      }
       set({ floatingSelection: { x: rect.x0, y: rect.y0, width: rect.x1 - rect.x0 + 1, height: rect.y1 - rect.y0 + 1, cells } });
     },
     moveFloatingSelection: (x, y) => set((s) => (s.floatingSelection ? { floatingSelection: { ...s.floatingSelection, x, y } } : {})),

@@ -34,6 +34,7 @@ import {
   flipCanvasFrameH,
   flipCanvasFrameV,
   rotateCanvasFrame90,
+  transformSelectionRegion,
 } from '../../src/model/Canvas.js';
 
 test('colorAt reads the topmost (last) visible layer that owns a cell', () => {
@@ -308,6 +309,73 @@ test('topLayerAndGridAt returns both the topmost layer and the shape actually hi
   hit = topLayerAndGridAt(canvas, 0, 0);
   assert.equal(hit.layer, a);
   assert.equal(hit.grid, aGrid);
+});
+
+// --- transformSelectionRegion (Transform menu Selection scope, revised for Shape tier) ---
+
+/** Two independent shapes in one layer: A (flat color, dx 0-2) and B (gradient-object style, dx 5), both painted in row y=0. */
+function setUpTwoShapeLayer(canvas) {
+  canvas.tier = 'advanced';
+  const layer = addLayer(canvas, { name: 'L' });
+  paintCell(canvas, 0, 0, '#ff0000');
+  paintCell(canvas, 2, 0, '#ff0000'); // shape A grows to cover dx 0 and 2 (and the gap at 1, via growGridToInclude)
+  const gridA = layer.frames[0].grids[0];
+  canvas.activeGridId = null; // force the next paint to start a separate shape
+  paintCell(canvas, 5, 0, '#0000ff');
+  const gridB = layer.frames[0].grids[1];
+  gridB.style.fill = { type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] };
+  canvas.activeGridId = gridA.id;
+  return { layer, gridA, gridB };
+}
+
+test('transformSelectionRegion "activeShape" only transforms the active shape, leaving a different (even overlapping-rect) shape completely untouched', () => {
+  const canvas = createCanvas({ width: 8, height: 2 });
+  const { gridA, gridB } = setUpTwoShapeLayer(canvas);
+  const gridBStyleBefore = gridB.style;
+  const gridBOffsetXBefore = gridB.offsetX;
+
+  const changed = transformSelectionRegion(canvas, 'activeShape', { x0: 0, y0: 0, x1: 6, y1: 0 }, 'flipH');
+
+  assert.equal(changed, true);
+  // Shape A starts at offsetX 0, width 3 (pixels set at dx 0 and 2 of a 7-wide rect).
+  // flipH: dx0 -> ndx6 (abs x=6), dx2 -> ndx4 (abs x=4); shrink-to-fit crops to those two set pixels.
+  assert.equal(gridA.offsetX, 4);
+  assert.equal(gridA.width, 3);
+  assert.deepEqual(Array.from(gridA.pixels), [1, 0, 1]);
+  assert.equal(canvas.layers[0].frames[0].grids.length, 2, 'still exactly two shapes -- no merge, no new grid');
+  assert.equal(gridB.offsetX, gridBOffsetXBefore, "shape B's geometry is untouched");
+  assert.equal(gridB.style, gridBStyleBefore, "shape B's style object reference is untouched -- not flattened, not lost");
+});
+
+test('transformSelectionRegion "activeLayer" transforms every shape in the layer that overlaps rect, independently, preserving each one\'s own style', () => {
+  const canvas = createCanvas({ width: 8, height: 2 });
+  const { gridA, gridB } = setUpTwoShapeLayer(canvas);
+  const gridAStyleBefore = gridA.style;
+  const gridBStyleBefore = gridB.style;
+  const gridAOffsetXBefore = gridA.offsetX;
+  const gridBOffsetXBefore = gridB.offsetX;
+
+  const changed = transformSelectionRegion(canvas, 'activeLayer', { x0: 0, y0: 0, x1: 6, y1: 0 }, 'flipH');
+
+  assert.equal(changed, true);
+  assert.equal(canvas.layers[0].frames[0].grids.length, 2, 'still exactly two independent shapes -- multi-color content never collapses into one grid');
+  assert.notEqual(gridA.offsetX, gridAOffsetXBefore, 'shape A actually moved');
+  assert.notEqual(gridB.offsetX, gridBOffsetXBefore, 'shape B actually moved too -- not just the topmost cell per position');
+  assert.equal(gridA.style, gridAStyleBefore, "shape A keeps its own style object, unmerged with shape B's");
+  assert.equal(gridB.style, gridBStyleBefore, "shape B's gradient style survives exactly -- never flattened to a solid color");
+});
+
+test('transformSelectionRegion "activeLayer" skips a locked shape', () => {
+  const canvas = createCanvas({ width: 8, height: 2 });
+  const { gridA, gridB } = setUpTwoShapeLayer(canvas);
+  gridB.locked = true;
+  const gridAOffsetXBefore = gridA.offsetX;
+  const gridBOffsetXBefore = gridB.offsetX;
+
+  transformSelectionRegion(canvas, 'activeLayer', { x0: 0, y0: 0, x1: 6, y1: 0 }, 'flipH');
+
+  assert.notEqual(gridA.offsetX, gridAOffsetXBefore, 'the unlocked shape still moves');
+  assert.equal(gridB.offsetX, gridBOffsetXBefore, 'a locked shape is skipped entirely');
 });
 
 // "convertTier simple -> advanced flips autoManaged off..." (the

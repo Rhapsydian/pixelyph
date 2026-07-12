@@ -6,18 +6,16 @@
 // exactly like a normal stroke would (simple tier).
 //
 // Advanced tier has two selection scopes (state/store.js's `selectionScope`
-// picks between them): "all visible layers" (extractRectColors, same
-// topmost-wins read as colorAt/the eyedropper) or "active layer only"
-// (extractRectFromActiveLayer, ignoring everything else regardless of
-// what's on top). Clearing has to match whichever scope did the reading —
-// clearRect only ever erases the active layer (fine for the active-layer
-// scope, and for simple tier's auto-layer-aware erase), but a multi-layer
-// selection needs clearRectAllLayers so each cell's *own* source layer gets
-// cleared, not just whatever happens to be active. Either way, paste always
-// lands on the active layer (see pasteCells) — a multi-layer selection
-// flattens onto it on drop, it doesn't reconstruct the original layers.
+// picks between them): "active shape" (extractRectFromActiveGrid, just
+// `canvas.activeGridId`) or "active layer" (extractRectFromActiveLayer,
+// topmost-wins within that one layer only, ignoring every other layer
+// regardless of what's on top). Simple tier and Glyph mode always use
+// extractRectColors/clearRect instead — not a scope choice, just how those
+// tiers work (topmost-wins across all layers, since their per-color grids
+// are auto-managed and invisible to the user as separate objects). Paste
+// always lands on the active layer (see pasteCells).
 
-import { colorAt, paintCell, topVisibleLayerAt, eraseFromLayer, topGridAt } from './Canvas.js';
+import { colorAt, paintCell, eraseFromLayer, topGridAt, currentFrameIndex } from './Canvas.js';
 import { get } from './Grid.js';
 
 /** Used as a floating-selection preview color when a cell's source layer has a non-solid (gradient) fill, which can't be represented per-cell. */
@@ -114,27 +112,68 @@ export function clearRect(canvas, rect) {
 }
 
 /**
- * Clears every cell in `rect` from *whichever layer actually owns it*
- * (topmost visible, same as extractRectColors's read) rather than only the
- * active layer — the destructive half of an "all visible layers" scoped
- * move/cut, so a multi-layer selection doesn't leave orphaned content
- * behind on the layers it didn't happen to be active on.
+ * Clears every cell in `rect` from *whichever shape within the active
+ * layer* actually owns it (topmost within that layer, same read as
+ * extractRectFromActiveLayer) — the destructive half of an "active layer"
+ * scoped move/cut. Plain `clearRect` only ever erases from
+ * `canvas.activeGridId` (one shape); when the active layer holds more than
+ * one shape (advanced tier — see docs/data-model.md), a selection can span
+ * several of that layer's shapes at once, and `clearRect` would leave the
+ * non-active ones behind un-cleared even though `extractRectFromActiveLayer`
+ * already included their cells — a source/extraction mismatch that leaves
+ * the un-cleared shape duplicated once the lifted copy is later dropped.
  *
  * @param {object} canvas
  * @param {{x0:number,y0:number,x1:number,y1:number}} rect
  */
-export function clearRectAllLayers(canvas, rect) {
+export function clearRectFromActiveLayer(canvas, rect) {
+  const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
+  if (!layer) return;
   for (let y = rect.y0; y <= rect.y1; y++) {
-    for (let x = rect.x0; x <= rect.x1; x++) {
-      const layer = topVisibleLayerAt(canvas, x, y);
-      if (layer) eraseFromLayer(canvas, layer, x, y);
-    }
+    for (let x = rect.x0; x <= rect.x1; x++) eraseFromLayer(canvas, layer, x, y);
   }
 }
 
-/** Paints `cells` (as produced by extractRectColors) back in at (originX, originY). */
+/**
+ * Paints `cells` (as produced by extractRectColors/extractRectFromActiveLayer/
+ * extractRectFromActiveGrid) back in at (originX, originY).
+ *
+ * Pixel tier's `paintCell` already resolves one Grid per distinct color via
+ * `paintSimpleCell`, so a plain per-cell loop is correct there. Advanced
+ * tier's `paintCell` instead always targets a single fixed
+ * `canvas.activeGridId` — right for a single-shape paste (`activeShape`
+ * scope, always monochrome by construction) but wrong for a multi-color one
+ * (`activeLayer` scope extracts can span several differently-styled
+ * shapes): every color after the first would silently
+ * collapse into that one grid, adopting its style and losing its own.
+ * Group by color and give each group its own paint target: the color
+ * matching whatever was originally active reuses that grid (preserving its
+ * identity/style), every other color always gets a fresh grid — never
+ * merged into an unrelated same-colored shape, which would be its own kind
+ * of silent data loss.
+ *
+ * @param {object} canvas
+ * @param {number} originX
+ * @param {number} originY
+ * @param {{dx:number,dy:number,color:string}[]} cells
+ */
 export function pasteCells(canvas, originX, originY, cells) {
-  for (const cell of cells) paintCell(canvas, originX + cell.dx, originY + cell.dy, cell.color);
+  if (canvas.tier !== 'advanced') {
+    for (const cell of cells) paintCell(canvas, originX + cell.dx, originY + cell.dy, cell.color);
+    return;
+  }
+  const byColor = new Map();
+  for (const cell of cells) {
+    if (!byColor.has(cell.color)) byColor.set(cell.color, []);
+    byColor.get(cell.color).push(cell);
+  }
+  const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
+  const frame = layer?.frames[currentFrameIndex(canvas)];
+  const originalGrid = frame?.grids.find((g) => g.id === canvas.activeGridId);
+  for (const [color, groupCells] of byColor) {
+    canvas.activeGridId = originalGrid && originalGrid.style.fill === color ? originalGrid.id : null;
+    for (const cell of groupCells) paintCell(canvas, originX + cell.dx, originY + cell.dy, cell.color);
+  }
 }
 
 /**

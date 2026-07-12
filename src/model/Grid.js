@@ -169,6 +169,67 @@ export function rotateGrid90(grid) {
   grid.offsetY = newOffsetY;
 }
 
+/**
+ * Transform-menu "Selection" scope (Checkpoint 2, revised): flips/rotates
+ * only the portion of `grid`'s own pixels that falls within `rect`
+ * (canvas-space, inclusive), remapped around rect's own bounds — so
+ * several shapes selected together stay spatially consistent, as if it
+ * were one contiguous image, matching how Grid.js's flipPixelsH/V and
+ * rotatePixels90 remap a whole buffer. Pixels outside rect, even ones
+ * belonging to this same grid, are left completely untouched.
+ *
+ * Deliberately a pure buffer/offset operation, never touching `style` —
+ * unlike the marquee tool's flat per-cell-color floating-selection model
+ * (selection.js's extract/paste helpers, still used for Pixel tier and
+ * Glyph mode, which have no per-shape style to lose), this is the only
+ * path that can move part of a gradient/stroke/effects-styled shape
+ * without flattening it to a solid color or merging it into an unrelated
+ * shape that happens to share a color.
+ *
+ * @param {object} grid mutated in place (offset/width/height/pixels only)
+ * @param {{x0:number,y0:number,x1:number,y1:number}} rect
+ * @param {'flipH'|'flipV'|'rotate90'} kind
+ * @returns {boolean} whether the grid actually had any pixels inside rect
+ */
+export function transformGridRegion(grid, rect, kind) {
+  const width = rect.x1 - rect.x0 + 1;
+  const height = rect.y1 - rect.y0 + 1;
+  const toClear = [];
+  const toSet = [];
+  for (let y = rect.y0; y <= rect.y1; y++) {
+    for (let x = rect.x0; x <= rect.x1; x++) {
+      if (!get(grid, x - grid.offsetX, y - grid.offsetY)) continue;
+      toClear.push([x, y]);
+      const dx = x - rect.x0;
+      const dy = y - rect.y0;
+      let ndx, ndy;
+      if (kind === 'flipH') {
+        ndx = width - 1 - dx;
+        ndy = dy;
+      } else if (kind === 'flipV') {
+        ndx = dx;
+        ndy = height - 1 - dy;
+      } else {
+        // rotate90 (90deg CW, matching rotatePixels90's direction)
+        ndx = height - 1 - dy;
+        ndy = dx;
+      }
+      toSet.push([rect.x0 + ndx, rect.y0 + ndy]);
+    }
+  }
+  if (toClear.length === 0) return false;
+  // Two-phase (collect, then clear, then set) so a pixel swapping places
+  // with another one in the same grid can't clear what an earlier set just
+  // wrote — every read happens before any write.
+  for (const [x, y] of toClear) set(grid, x - grid.offsetX, y - grid.offsetY, 0);
+  for (const [x, y] of toSet) {
+    growGridToInclude(grid, x, y);
+    set(grid, x - grid.offsetX, y - grid.offsetY, 1);
+  }
+  shrinkGridToFit(grid);
+  return true;
+}
+
 // --- Shape (Grid) — a styled, auto-cropped object within a Layer's frame ---
 
 /**

@@ -11,7 +11,25 @@
 // UI) is the actual styled, auto-cropped pixel content, one or more per
 // layer per frame.
 
-import { resizeAt, anchorOffset, ANCHOR_X_FRACS, ANCHOR_Y_FRACS, get, set, createShapeGrid, growGridToInclude, shrinkGridToFit, mergeGridDown as mergeGridInFrame, unionGridInto, stylesEqual, makeGridId, flipPixelsH, flipPixelsV, rotatePixels90 } from './Grid.js';
+import {
+  resizeAt,
+  anchorOffset,
+  ANCHOR_X_FRACS,
+  ANCHOR_Y_FRACS,
+  get,
+  set,
+  createShapeGrid,
+  growGridToInclude,
+  shrinkGridToFit,
+  mergeGridDown as mergeGridInFrame,
+  unionGridInto,
+  stylesEqual,
+  makeGridId,
+  flipPixelsH,
+  flipPixelsV,
+  rotatePixels90,
+  transformGridRegion,
+} from './Grid.js';
 import { paintSimpleCell } from './autoLayerSync.js';
 import { createLayer } from './Layer.js';
 import { normalizePalette } from './Palette.js';
@@ -785,6 +803,41 @@ export function flipCanvasFrameV(canvas, frameIndex) {
 /** Canvas-level: applies rotateLayerFrame90 to every layer for one frame. Does not swap canvas.width/height — see rotateLayerFrame90. */
 export function rotateCanvasFrame90(canvas, frameIndex) {
   for (const layer of canvas.layers) rotateLayerFrame90(canvas, layer.id, frameIndex);
+}
+
+/**
+ * Transform-menu "Selection" scope on advanced tier: resolves which Grids
+ * `selectionScope` puts in play, then flips/rotates each one's own pixels
+ * within `rect` in place (Grid.js's transformGridRegion) — a shape only
+ * partially covered by `rect` keeps the rest of itself untouched, and a
+ * shape entirely outside `rect` is never even visited. Every matching
+ * shape gets its *own* overlapping cells transformed independently, not
+ * just whichever one is topmost at each pixel (topGridAt-style "one winner
+ * per cell" doesn't apply here — see extractRectFromActiveLayer, which is
+ * what this replaces for advanced tier).
+ *
+ * @param {object} canvas
+ * @param {'activeShape'|'activeLayer'} selectionScope
+ * @param {{x0:number,y0:number,x1:number,y1:number}} rect
+ * @param {'flipH'|'flipV'|'rotate90'} kind
+ * @returns {boolean} whether anything actually changed
+ */
+export function transformSelectionRegion(canvas, selectionScope, rect, kind) {
+  const frameIndex = currentFrameIndex(canvas);
+  const layer = canvas.layers.find((l) => l.id === canvas.activeLayerId);
+  const frame = layer?.frames[frameIndex];
+  let grids;
+  if (selectionScope === 'activeShape') {
+    const grid = frame?.grids.find((g) => g.id === canvas.activeGridId);
+    grids = grid ? [grid] : [];
+  } else {
+    grids = frame?.visible ? frame.grids.filter((g) => g.visible && !g.locked) : [];
+  }
+  let changed = false;
+  for (const grid of grids) {
+    if (transformGridRegion(grid, rect, kind)) changed = true;
+  }
+  return changed;
 }
 
 /**

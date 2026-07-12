@@ -7,7 +7,6 @@ import {
   extractRectFromActiveLayer,
   extractRectFromActiveGrid,
   clearRect,
-  clearRectAllLayers,
   pasteCells,
   transformSelectionCells,
 } from '../../src/model/selection.js';
@@ -160,17 +159,3 @@ test('transformSelectionCells rotate90 matches Grid.js\'s rotatePixels90 directi
   assert.deepEqual(byColor(result), { A: { dx: 1, dy: 0 }, B: { dx: 1, dy: 2 }, C: { dx: 0, dy: 0 } });
 });
 
-test('clearRectAllLayers clears each cell from whichever layer actually owns it, not just the active layer', () => {
-  const canvas = createCanvas({ width: 2, height: 1 });
-  canvas.tier = 'advanced';
-  const bottom = addLayer(canvas, { name: 'bottom' });
-  canvas.activeLayerId = bottom.id;
-  paintCell(canvas, 0, 0, 'x');
-  const top = addLayer(canvas, { name: 'top' }); // becomes active
-  paintCell(canvas, 1, 0, 'x');
-  canvas.activeLayerId = top.id; // active layer only covers (1,0); (0,0) belongs to `bottom`
-
-  clearRectAllLayers(canvas, { x0: 0, y0: 0, x1: 1, y1: 0 });
-  assert.equal(colorAt(canvas, 0, 0), null); // bottom's cell cleared too, despite not being active
-  assert.equal(colorAt(canvas, 1, 0), null);
-});

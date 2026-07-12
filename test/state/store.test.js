@@ -253,6 +253,52 @@ test('rotateSelection180 swaps width/height twice, landing back on the original 
   assert.deepEqual(cellsByColor, { '#ff0000': 2, '#00ff00': 0 }, '180deg is still a real transform, not a no-op');
 });
 
+test('flipSelectionH on Shape tier transforms grid data directly -- no floating selection ever created, single commit, styles preserved on both shapes', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  store.setTier('advanced');
+  const layer = useStore.getState().canvas.layers[0];
+
+  store.paintCellLive(0, 0, '#ff0000');
+  store.commitStroke(); // shape A
+  const gridAId = useStore.getState().canvas.activeGridId;
+
+  store.addGrid(layer.id); // shape B, active, empty
+  store.paintCellLive(5, 0, '#0000ff');
+  store.commitStroke();
+  const gridBId = useStore.getState().canvas.activeGridId;
+  // Give shape B a non-solid style -- the whole point of the grid-preserving path is that this must survive.
+  store.updateGridStyle(layer.id, gridBId, { fill: { type: 'linear-gradient', angle: 0, stops: [{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }] } });
+
+  store.setSelectionScope('activeLayer');
+  store.startSelection(0, 0);
+  store.updateSelection(6, 0); // spans both shapes
+  const stackLengthBefore = useStore.getState().history.stack.length;
+
+  store.flipSelectionH();
+
+  assert.equal(useStore.getState().floatingSelection, null, 'Shape tier never lifts into a floating selection at all');
+  assert.equal(useStore.getState().selection !== null, true, 'the marquee selection itself stays put, showing the transformed content underneath');
+  assert.equal(useStore.getState().history.stack.length, stackLengthBefore + 1, 'exactly one commit for the whole transform, not per-shape');
+
+  const grids = useStore.getState().canvas.layers[0].frames[0].grids;
+  assert.equal(grids.length, 2, 'still exactly two independent shapes');
+  const gridA = grids.find((g) => g.id === gridAId);
+  const gridB = grids.find((g) => g.id === gridBId);
+  assert.ok(gridA && gridB, 'both original shapes survive by their original id -- neither got deleted-and-recreated nor merged');
+  assert.equal(gridA.style.fill, '#ff0000', "shape A's flat color is untouched");
+  assert.equal(typeof gridB.style.fill, 'object', "shape B's gradient style survived -- never flattened to a solid color");
+  assert.notEqual(gridA.offsetX, 0, 'shape A actually moved');
+  assert.notEqual(gridB.offsetX, 5, 'shape B actually moved too');
+
+  useStore.getState().undo();
+  const gridsAfterUndo = useStore.getState().canvas.layers[0].frames[0].grids;
+  assert.equal(gridsAfterUndo.find((g) => g.id === gridAId).offsetX, 0, 'undo reverts both shapes in one step');
+  assert.equal(gridsAfterUndo.find((g) => g.id === gridBId).offsetX, 5);
+
+  store.setSelectionScope('activeShape'); // selectionScope is working-session state, not reset by newProject -- restore the default so later tests aren't affected
+});
+
 test('selectionScope defaults to "activeShape"; copy honors it, excluding a different shape in the same layer', async () => {
   const store = useStore.getState();
   await store.newProject('draw');

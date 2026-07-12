@@ -1,6 +1,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createGrid, get, set, resize, clone, createShapeGrid, growGridToInclude, minimalBounds, shrinkGridToFit, mergeGridDown, stylesEqual, flipPixelsH, flipPixelsV, rotatePixels90, flipGridH, flipGridV, rotateGrid90 } from '../../src/model/Grid.js';
+import {
+  createGrid,
+  get,
+  set,
+  resize,
+  clone,
+  createShapeGrid,
+  growGridToInclude,
+  minimalBounds,
+  shrinkGridToFit,
+  mergeGridDown,
+  stylesEqual,
+  flipPixelsH,
+  flipPixelsV,
+  rotatePixels90,
+  flipGridH,
+  flipGridV,
+  rotateGrid90,
+  transformGridRegion,
+} from '../../src/model/Grid.js';
 
 function fill(grid, values) {
   grid.pixels.set(values);
@@ -302,4 +321,67 @@ test('rotateGrid90 swaps width/height and keeps the shape\'s own center fixed', 
   // old center = (10+2, 10+1) = (12, 11); new offset = center - newSize/2
   assert.equal(grid.offsetX, 11); // 12 - 1
   assert.equal(grid.offsetY, 9); // 11 - 2
+});
+
+// --- transformGridRegion (Checkpoint 2, revised): partial-region flip/rotate ---
+
+test('transformGridRegion flipH moves a single pixel to its mirrored position within rect, growing the grid to follow it', () => {
+  const grid = { offsetX: 1, offsetY: 0, width: 1, height: 1, pixels: new Uint8Array([1]) };
+  const changed = transformGridRegion(grid, { x0: 0, y0: 0, x1: 3, y1: 0 }, 'flipH');
+  assert.equal(changed, true);
+  assert.equal(grid.offsetX, 2); // dx=1 -> ndx=4-1-1=2
+  assert.equal(grid.offsetY, 0);
+  assert.equal(grid.width, 1);
+  assert.equal(grid.height, 1);
+  assert.deepEqual(Array.from(grid.pixels), [1]);
+});
+
+test('transformGridRegion only transforms the portion of the grid inside rect, leaving the rest of the same grid untouched', () => {
+  // A 4-wide row: x0..x3 = [1,1,0,1]. rect covers only x1..x2 (the middle two cells).
+  const grid = { offsetX: 0, offsetY: 0, width: 4, height: 1, pixels: new Uint8Array([1, 1, 0, 1]) };
+  const changed = transformGridRegion(grid, { x0: 1, y0: 0, x1: 2, y1: 0 }, 'flipH');
+  assert.equal(changed, true);
+  // x1 (set) mirrors to x2; x2 (unset) mirrors to x1 -- only x1's pixel actually moves.
+  // x0 and x3, outside rect, must be exactly as they started.
+  assert.deepEqual(Array.from(grid.pixels), [1, 0, 1, 1]);
+  assert.equal(grid.offsetX, 0);
+  assert.equal(grid.width, 4);
+});
+
+test('transformGridRegion is a no-op and returns false when the grid has no pixels inside rect', () => {
+  const grid = { offsetX: 10, offsetY: 10, width: 2, height: 2, pixels: new Uint8Array([1, 1, 1, 1]) };
+  const before = { ...grid, pixels: grid.pixels.slice() };
+  const changed = transformGridRegion(grid, { x0: 0, y0: 0, x1: 1, y1: 1 }, 'flipH');
+  assert.equal(changed, false);
+  assert.equal(grid.offsetX, before.offsetX);
+  assert.equal(grid.width, before.width);
+  assert.deepEqual(Array.from(grid.pixels), Array.from(before.pixels));
+});
+
+test('transformGridRegion rotate90 matches rotatePixels90\'s direction (90deg clockwise), remapped around rect', () => {
+  const grid = { offsetX: 2, offsetY: 0, width: 1, height: 1, pixels: new Uint8Array([1]) }; // single pixel at abs (2,0)
+  const changed = transformGridRegion(grid, { x0: 0, y0: 0, x1: 2, y1: 0 }, 'rotate90');
+  assert.equal(changed, true);
+  // dx=2,dy=0 in a 3-wide,1-tall rect -> ndx = height-1-dy = 0, ndy = dx = 2 -> abs (0,2)
+  assert.equal(grid.offsetX, 0);
+  assert.equal(grid.offsetY, 2);
+  assert.equal(grid.width, 1);
+  assert.equal(grid.height, 1);
+  assert.deepEqual(Array.from(grid.pixels), [1]);
+});
+
+test('transformGridRegion never touches non-geometry fields (style, id, ...) -- a pure buffer/offset operation', () => {
+  const grid = {
+    id: 'grid-abc',
+    style: { fill: { type: 'linear-gradient', angle: 0, stops: [] }, effects: [{ type: 'glow' }] },
+    offsetX: 0,
+    offsetY: 0,
+    width: 2,
+    height: 1,
+    pixels: new Uint8Array([1, 0]),
+  };
+  const styleBefore = grid.style;
+  transformGridRegion(grid, { x0: 0, y0: 0, x1: 1, y1: 0 }, 'flipH');
+  assert.equal(grid.id, 'grid-abc');
+  assert.equal(grid.style, styleBefore, 'style object reference must be untouched, not cloned/replaced/flattened');
 });
