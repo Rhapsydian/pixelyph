@@ -1041,6 +1041,14 @@ export const useStore = create((set, get) => {
     aboutModalOpen: false,
     setAboutModalOpen: (open) => set({ aboutModalOpen: open }),
 
+    // Set by File > New Project just before closeProject() below, so
+    // StartupScreen can skip its title screen and land directly on the
+    // wizard's Choose Mode step. StartupScreen reads and clears this on
+    // mount so it doesn't leak into a later, unrelated visit to the title
+    // screen (e.g. after "Continue Last Session").
+    skipToNewProjectWizard: false,
+    setSkipToNewProjectWizard: (skip) => set({ skipToNewProjectWizard: skip }),
+
     // Promise-based replacement for window.confirm — `confirmDialog` holds
     // the pending message + its resolver while a confirm modal is open, so
     // both React components and store actions (which can't use hooks) can
@@ -1126,7 +1134,7 @@ export const useStore = create((set, get) => {
     /** Called by the header "New Project" button after the user confirms discarding the current project. */
     closeProject: () => {
       stopPlaybackTimer();
-      set({ projectOpen: false, isPlaying: false });
+      set({ projectOpen: false, isPlaying: false, skipToNewProjectWizard: true });
     },
 
     // --- Glyph mode: GlyphSet operations ---

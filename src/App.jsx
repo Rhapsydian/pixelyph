@@ -149,8 +149,15 @@ function StartupScreen() {
   const checkAutosaveRecovery = useStore((s) => s.checkAutosaveRecovery);
   const resumeAutosave = useStore((s) => s.resumeAutosave);
   const openAnyProject = useStore((s) => s.openAnyProject);
+  const skipToNewProjectWizard = useStore((s) => s.skipToNewProjectWizard);
+  const setSkipToNewProjectWizard = useStore((s) => s.setSkipToNewProjectWizard);
   const [autosaveDoc, setAutosaveDoc] = useState(null);
-  const [screen, setScreen] = useState('main'); // 'main' | 'wizard'
+  const [screen, setScreen] = useState(() => (skipToNewProjectWizard ? 'wizard' : 'main')); // 'main' | 'wizard'
+
+  useEffect(() => {
+    if (skipToNewProjectWizard) setSkipToNewProjectWizard(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
