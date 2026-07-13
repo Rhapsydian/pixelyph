@@ -172,26 +172,34 @@ wants it.
 
 **To resolve:** discuss and scope properly before building anything.
 
-### Explore: publishing a downloadable Windows installer
+### Auto-update — deferred pending a local Windows packaging issue
 
-**Not scoped — a discussion topic, not a planned feature.** `electron-builder`
-already produces a working NSIS installer locally (`npm run dist:win`, see
-Phase 6), but nothing builds or hosts one anywhere a README link could point
-to — there's no CI workflow that runs `electron-builder` and no GitHub
-Release (or other host) it publishes to.
+**Blocked, not yet attempted.** Session 31 shipped Windows CI packaging
+(`.github/workflows/release.yml`, see Shipped below) and an in-app
+download link, but `npm run dist:win` fails locally with a consistent
+`EPERM: operation not permitted, rename ... win-unpacked.tmp ->
+win-unpacked` error — reproduced across multiple attempts, and survived
+both a Windows Defender exclusion on the `release/` folder and running
+from an elevated (Administrator) PowerShell session, so it isn't a plain
+permissions or antivirus cause. Root cause not identified; the user
+opted to backlog auto-update rather than keep chasing it mid-session.
 
-**What it would take:** a GitHub Actions workflow that runs on tag/push,
-builds via `electron-builder`, and attaches the `.exe` to a GitHub Release,
-then a README link to that release (mirroring the existing test-status
-badge pattern) rather than a raw file link.
+**Why this blocks auto-update specifically:** `electron-updater` needs a
+real, successfully-packaged installer to test the update-check/download/
+install flow against, and the CI workflow's own success on GitHub's
+hosted Windows runner hasn't been confirmed yet either (needs an actual
+`v*` tag push — GitHub's runners are clean VMs and may not even
+reproduce this machine's issue).
 
-**Main tradeoff to weigh whenever this gets picked up:** ongoing CI
-maintenance plus committing to a versioning/tagging cadence, versus the
-project's current "early development" status where "clone and
-`npm run dist:win` yourself" is a perfectly reasonable interim answer.
-
-**To resolve:** revisit once the project is far enough along that shipping
-installable builds to non-developers actually makes sense.
+**To resolve:**
+1. Push a `v*` tag and confirm `release.yml` actually succeeds on
+   GitHub's Windows runner.
+2. If the local `EPERM` failure is still worth chasing, Resource
+   Monitor's "Associated Handles" search for `win-unpacked` during a live
+   build attempt would show what's actually holding the lock.
+3. Once a real installer exists (locally or via CI), add
+   `electron-updater` plus a `build.publish: github` provider and wire up
+   the actual update-check/download/restart-to-install flow.
 
 ### Layer groups/folders — residual sliver after the Layer/Frame/Grid redesign
 
@@ -247,19 +255,41 @@ its own planning session, not a slice of a larger phase.
 **Not scoped.** Ship a few sample `.pixelyph` projects (draw and glyph) so
 new users have something to open and explore instead of a blank canvas.
 
-### Electron automated GitHub build setup
-
-**Not scoped.** CI (GitHub Actions) to build and publish Electron
-installers automatically on tag/release — overlaps with, and would likely
-subsume, the "publishing a downloadable Windows installer" item above.
-
-### App hosting website with user manual
-
-**Not scoped.** A hosted web build of the app, paired with a user manual /
-docs site, so people can try or use Pixelyph without cloning and running it
-locally.
-
 ## Shipped
+
+### DONE: Windows release CI + in-app download link
+
+Shipped session 31 (2026-07-12), commit `81f1511`. Resolves both the
+"publishing a downloadable Windows installer" and "Electron automated
+GitHub build setup" items that used to live here. New
+`.github/workflows/release.yml` packages the NSIS installer
+(`npm run dist:win`) on a `v*` tag push and publishes it to a GitHub
+Release, with a retry wrapper around the build step (see the Auto-update
+entry above for why); `workflow_dispatch` runs the same build without
+publishing, for testing packaging alone. Help menu gets a "Download for
+Windows" item linking to the latest release, plus a SmartScreen-warning
+note in the manual's Getting Started page, since the installer isn't
+code-signed. Actual success on GitHub's runner is unconfirmed until a
+real tag is pushed — see the Auto-update backlog entry above.
+
+### DONE: In-app User Manual
+
+Shipped session 31 (2026-07-12), commits `06ed856`, `5eadd6b`. Resolves
+the user-manual half of the old "App hosting website with user manual"
+item (the hosted-web-build half already existed — see the live demo link
+in `README.md`). Help > User Manual opens a near-fullscreen modal: a
+topic sidebar plus a `react-markdown`-rendered content pane, fetching
+plain `.md` files from `public/manual/` at runtime. Six topics (Getting
+Started, Draw Mode, Glyph Mode, Animation, Export, Keyboard Shortcuts);
+internal links switch topics in-app, last-viewed topic and scroll
+position persist to `localStorage` across restarts, and the same files
+are directly readable on GitHub (linked from the root README) since
+nothing about them is web-app-specific. Real screenshots are still
+outstanding — the image-rendering path works (any PNG dropped into a
+`public/manual/screenshots/` folder and referenced in the markdown as
+`![alt](screenshots/x.png)` renders immediately, in-app and on GitHub),
+but capturing actual app screenshots needs a different session setup
+than this one had.
 
 ### DONE: Selection system redesign (full 8-checkpoint plan)
 
