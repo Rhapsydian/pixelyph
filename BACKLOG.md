@@ -1,5 +1,23 @@
 # Backlog
 
+## Next session
+
+### Glyph mode unification (font/icon merge)
+
+**Flagged as the next `/dev-session` for this project.** Full design spec:
+[`docs/glyph-mode-unification-plan.md`](docs/glyph-mode-unification-plan.md)
+— produced by a dedicated planning/research-only session, not yet
+implemented. Merges Glyph mode's two locked-at-creation sub-modes
+(`kind: 'characters'`/`'icons'`) into one unified glyph type (no `kind`
+field, every glyph can freely have a real typed character, a name, both, or
+neither); also adds a "Bulk Add Glyphs" modal, incomplete-glyph caution
+badges, a Specimen Preview overhaul (multi-line real-font-metrics layout,
+per-glyph color locking), a Glyph-mode-only display-color control, a
+model-only (no UI yet) optional background/foreground layer pair on `Glyph`
+for a future multi-color icon-font export, and a Glyph-mode
+selection/transform parity check against Draw mode. 12 ordered checkpoints,
+sequencing and full rationale in the linked doc.
+
 ## Open
 
 Two kinds of deferred items live here: features that were built, then
