@@ -13,6 +13,7 @@ import { ExportModal } from './ui/ExportModal.jsx';
 import { ImportImageModal } from './ui/ImportImageModal.jsx';
 import { ReferenceImageModal } from './ui/ReferenceImageModal.jsx';
 import { AboutModal } from './ui/AboutModal.jsx';
+import { UserManualModal } from './ui/UserManualModal.jsx';
 import { ConfirmModal } from './ui/ConfirmModal.jsx';
 import { NamePromptModal } from './ui/NamePromptModal.jsx';
 import { PaletteImportModeModal } from './ui/PaletteImportModeModal.jsx';
@@ -260,6 +261,7 @@ export default function App() {
         )}
         <ExportModal />
         <AboutModal />
+        <UserManualModal />
         <ConfirmModal />
         <NamePromptModal />
       </div>

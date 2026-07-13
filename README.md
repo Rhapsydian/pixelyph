@@ -31,6 +31,19 @@ For a detailed history of what shipped when and why, see `BACKLOG.md`'s "DONE" e
 
 See [`docs/features.md`](./docs/features.md) for the full, detailed feature list.
 
+## User Manual
+
+Pixelyph has an in-app manual (Help → User Manual) that remembers which
+page and scroll position you were on when you close and reopen it. It's
+plain markdown, so it's just as readable straight from GitHub:
+
+- [Getting Started](./public/manual/getting-started.md)
+- [Draw Mode](./public/manual/draw-mode.md)
+- [Glyph Mode](./public/manual/glyph-mode.md)
+- [Animation](./public/manual/animation.md)
+- [Export](./public/manual/export.md)
+- [Keyboard Shortcuts](./public/manual/keyboard-shortcuts.md)
+
 ## Development
 
 ```sh

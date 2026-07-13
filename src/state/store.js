@@ -1041,6 +1041,8 @@ export const useStore = create((set, get) => {
     setReferenceImageModalOpen: (open) => set({ referenceImageModalOpen: open }),
     aboutModalOpen: false,
     setAboutModalOpen: (open) => set({ aboutModalOpen: open }),
+    userManualOpen: false,
+    setUserManualOpen: (open) => set({ userManualOpen: open }),
 
     // Set by File > New Project just before closeProject() below, so
     // StartupScreen can skip its title screen and land directly on the

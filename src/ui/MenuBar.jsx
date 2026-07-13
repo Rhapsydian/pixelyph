@@ -114,6 +114,7 @@ export function MenuBar() {
   const setImportImageModalOpen = useStore((s) => s.setImportImageModalOpen);
   const setReferenceImageModalOpen = useStore((s) => s.setReferenceImageModalOpen);
   const setAboutModalOpen = useStore((s) => s.setAboutModalOpen);
+  const setUserManualOpen = useStore((s) => s.setUserManualOpen);
   const requestConfirm = useStore((s) => s.requestConfirm);
 
   const canUndo = useStore((s) => s.canUndo);
@@ -341,6 +342,7 @@ export function MenuBar() {
       </Menu>
 
       <Menu id="help" label="Help" openMenu={openMenu} setOpenMenu={setOpenMenu}>
+        <MenuItem label="User Manual" onClick={runAndClose(() => setUserManualOpen(true))} />
         <MenuItem label="About Pixelyph" onClick={runAndClose(() => setAboutModalOpen(true))} />
         <MenuItem label="Visit on GitHub" onClick={runAndClose(() => openExternalUrl(REPO_URL))} />
       </Menu>
