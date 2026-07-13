@@ -70,14 +70,14 @@ function NewProjectWizard({ onBack }) {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2rem', padding: '3rem 2rem' }}>
         <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>New Project — Choose Mode</h2>
         <div style={{ display: 'flex', gap: '2rem' }}>
-          <div className="panel" style={{ alignItems: 'center', background: 'var(--chrome-bg-panel)', border: '1px solid var(--chrome-border)', borderRadius: 'var(--radius-lg)', padding: '1.5rem 2rem' }}>
+          <div className="panel" style={{ alignItems: 'center', width: 250, background: 'var(--chrome-bg-panel)', border: '1px solid var(--chrome-border)', borderRadius: 'var(--radius-lg)', padding: '1.5rem 2rem' }}>
             <strong>Draw</strong>
             <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-sm)', textAlign: 'center', maxWidth: 180 }}>Pixel art with SVG export. Multi-layer, advanced fills, effects.</span>
             <button className="btn btn-primary" onClick={handleDraw}>Create Draw Project</button>
           </div>
-          <div className="panel" style={{ alignItems: 'center', background: 'var(--chrome-bg-panel)', border: '1px solid var(--chrome-border)', borderRadius: 'var(--radius-lg)', padding: '1.5rem 2rem' }}>
+          <div className="panel" style={{ alignItems: 'center', width: 250, background: 'var(--chrome-bg-panel)', border: '1px solid var(--chrome-border)', borderRadius: 'var(--radius-lg)', padding: '1.5rem 2rem' }}>
             <strong>Glyph / Font</strong>
-            <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-sm)', textAlign: 'center', maxWidth: 180 }}>Design pixel fonts<br />or icon sets.<br />One grid per character.</span>
+            <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-sm)', textAlign: 'center', maxWidth: 180 }}>Design pixel fonts or icon sets. One grid per character.<br /><br /></span>
             <button className="btn btn-primary" onClick={handleGlyph}>Continue →</button>
           </div>
         </div>
