@@ -333,6 +333,16 @@ input[type="range"] {
   border-bottom-color: var(--chrome-accent);
 }
 
+.manual-content a {
+  color: var(--chrome-accent);
+  text-decoration: none;
+}
+
+.manual-content a:hover {
+  color: var(--chrome-accent-hover);
+  text-decoration: underline;
+}
+
 /* App shell layout */
 
 .app-shell {
