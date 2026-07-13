@@ -77,7 +77,7 @@ function NewProjectWizard({ onBack }) {
           </div>
           <div className="panel" style={{ alignItems: 'center', background: 'var(--chrome-bg-panel)', border: '1px solid var(--chrome-border)', borderRadius: 'var(--radius-lg)', padding: '1.5rem 2rem' }}>
             <strong>Glyph / Font</strong>
-            <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-sm)', textAlign: 'center', maxWidth: 180 }}>Design pixel fonts or icon sets. One grid per character.</span>
+            <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-sm)', textAlign: 'center', maxWidth: 180 }}>Design pixel fonts<br />or icon sets.<br />One grid per character.</span>
             <button className="btn btn-primary" onClick={handleGlyph}>Continue →</button>
           </div>
         </div>
