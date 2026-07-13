@@ -9,7 +9,7 @@ A pixel-art and pixel-font editor that outputs scalable SVG (and real font files
 
 ## Status
 
-Early development, but broadly functional. Draw mode (Pixel and Shape tiers, multi-layer, frame-based animation), Glyph mode, project management (startup screen, new-project wizard, autosave recovery), font compilation, the Electron desktop shell, a full visual design pass (real app layout, token-based dark theme, viewport minimap, resizable panels), and a functional Palette/Layers/Style review (a shared, exportable palette covering colors/gradients/saved styles, per-layer thumbnails, a custom-built HSV color picker, a Transform menu with a Canvas/Layer/Shape target picker, and on-canvas gradient handles) are all implemented — see "Features" below. SVG pattern fills were built and then deliberately removed, pending a real authoring UI (see `BACKLOG.md`).
+Early development, but broadly functional. Draw mode (Pixel and Shape tiers, multi-layer, frame-based animation, animated GIF/PNG export), Glyph mode, project management (startup screen, new-project wizard, autosave recovery), font compilation, an in-app User Manual, the Electron desktop shell (with a CI-built Windows installer available from the Help menu), a full visual design pass (real app layout, token-based dark theme, viewport minimap, resizable panels), and a functional Palette/Layers/Style review (a shared, exportable palette covering colors/gradients/saved styles, per-layer thumbnails, a custom-built HSV color picker, a Transform menu with a Canvas/Layer/Shape target picker, and on-canvas gradient handles) are all implemented — see "Features" below. SVG pattern fills were built and then deliberately removed, pending a real authoring UI; auto-update for the Windows build is scoped but deferred behind an unresolved local packaging issue (see `BACKLOG.md`).
 
 For a detailed history of what shipped when and why, see `BACKLOG.md`'s "DONE" entries and the per-session logs in [`docs/session-logs/`](./docs/session-logs/).
 
@@ -19,7 +19,7 @@ For a detailed history of what shipped when and why, see `BACKLOG.md`'s "DONE" e
 
 **Pixel tier** auto-manages one shape per color per layer; **Shape tier** adds full manual authoring — per-shape gradients, stroke, effects, and independent transforms — on top of the same Layers panel both tiers share.
 
-**Animation** gives every layer a uniform, per-frame timeline with onion skinning and an in-editor play/pause preview, exporting to animated SVG, sprite sheets, sprite archives, or animated GIF.
+**Animation** gives every layer a uniform, per-frame timeline with onion skinning and an in-editor play/pause preview, exporting to animated SVG, sprite sheets, sprite archives, animated GIF, or animated PNG (APNG).
 
 **Glyph mode** designs pixel fonts and icon sets on the same live pixel editor as Draw mode, one grid per glyph, with character-map and icon-tile workflows, a specimen preview, and per-glyph SVG export.
 
@@ -27,7 +27,7 @@ For a detailed history of what shipped when and why, see `BACKLOG.md`'s "DONE" e
 
 **Project management** greets you with a startup screen (New Project wizard, Existing Project, or Continue Last Session) instead of silently booting into Draw mode, and autosaves to recover from an unexpected close.
 
-**Electron desktop shell** packages the exact same web codebase as a Windows desktop app via `electron-vite`/`electron-builder`, with native save/open dialogs and file-based autosave in place of the browser APIs.
+**Electron desktop shell** packages the exact same web codebase as a Windows desktop app via `electron-vite`/`electron-builder`, with native save/open dialogs and file-based autosave in place of the browser APIs. CI (`.github/workflows/release.yml`) builds and publishes the Windows installer on a tagged release; **Help → Download for Windows** links to the latest one.
 
 See [`docs/features.md`](./docs/features.md) for the full, detailed feature list.
 
