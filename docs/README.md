@@ -2,6 +2,12 @@
 
 This directory holds Pixelyph's non-code documentation.
 
+## `features.md`
+
+The full, detailed feature list — the source `README.md`'s "Features"
+section summarizes and links back to. Update this first when a feature
+changes, then adjust the README's summary if it's now inaccurate.
+
 ## `data-model.md`
 
 The core artwork data model (Canvas → Layer → Frame → Grid): exact
