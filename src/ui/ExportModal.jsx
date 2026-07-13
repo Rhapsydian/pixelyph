@@ -31,7 +31,7 @@ const ANIMATED_CHECKBOX_ROWS = [
   { key: 'spriteSheet', label: 'Sprite Sheet (PNG + JSON)' },
 ];
 // spriteArchiveSvg is excluded — real per-frame SVG markup, no rasterization, so raster scale doesn't apply to it.
-const RASTER_KEYS = ['png', 'webp', 'spriteSheet', 'spriteArchivePng', 'gif'];
+const RASTER_KEYS = ['png', 'webp', 'spriteSheet', 'spriteArchivePng', 'gif', 'apng'];
 
 /** The "Advanced…" dialog: a custom uniform scale, or a specific resolution with an optional locked aspect ratio (unlocked stretches non-uniformly — vector art has no native resolution to distort). */
 function AdvancedRasterModal({ canvasWidth, canvasHeight, initialSize, onApply, onClose }) {
@@ -119,7 +119,7 @@ function DrawExportForm({ onClose }) {
   const isAnimated = canvas.frameCount > 1;
   const [selected, setSelected] = useState({
     svg: true, png: false, webp: false,
-    animatedSvg: false, spriteSheet: false, spriteArchivePng: false, spriteArchiveSvg: false, gif: false,
+    animatedSvg: false, spriteSheet: false, spriteArchivePng: false, spriteArchiveSvg: false, gif: false, apng: false,
   });
   const [presetScale, setPresetScale] = useState(4);
   const [customSize, setCustomSize] = useState(/** @type {{width:number,height:number}|null} */ (null));
@@ -193,6 +193,10 @@ function DrawExportForm({ onClose }) {
             <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <input type="checkbox" checked={selected.gif} onChange={() => toggle('gif')} />
               Animated GIF
+            </label>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input type="checkbox" checked={selected.apng} onChange={() => toggle('apng')} />
+              Animated PNG (APNG)
             </label>
           </>
         )}

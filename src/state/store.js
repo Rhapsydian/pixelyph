@@ -93,6 +93,7 @@ import { rasterizeFrame } from '../export/raster/rasterizeFrame.js';
 import { buildSpriteSheet } from '../export/raster/spriteSheet.js';
 import { buildSpriteArchive, buildSpriteArchiveSvg } from '../export/raster/spriteArchive.js';
 import { buildAnimatedGif } from '../export/raster/animatedRaster.js';
+import { buildAnimatedApng } from '../export/raster/animatedPng.js';
 import { copySvgToClipboard } from '../export/clipboard.js';
 import { serializeProject, deserializeProject, saveProjectToString, loadProjectFromString, serializeGlyphSetProject, deserializeGlyphSetProject, saveGlyphProjectToString, loadGlyphProjectFromString } from '../io/projectFile.js';
 import { saveFile, openFile } from '../io/platform.js';
@@ -1670,7 +1671,7 @@ export const useStore = create((set, get) => {
      * is only consulted by the raster-format rows — svg/animatedSvg/
      * spriteArchiveSvg are vector, so they ignore it.
      *
-     * @param {{svg?: boolean, png?: boolean, webp?: boolean, animatedSvg?: boolean, spriteSheet?: boolean, spriteArchivePng?: boolean, spriteArchiveSvg?: boolean, gif?: boolean}} selected
+     * @param {{svg?: boolean, png?: boolean, webp?: boolean, animatedSvg?: boolean, spriteSheet?: boolean, spriteArchivePng?: boolean, spriteArchiveSvg?: boolean, gif?: boolean, apng?: boolean}} selected
      * @param {{width: number, height: number}} size
      */
     exportDrawAssets: async (selected, size) => {
@@ -1711,6 +1712,10 @@ export const useStore = create((set, get) => {
       if (selected.gif) {
         const blob = await buildAnimatedGif(canvas, size);
         files.push({ name: 'animation.gif', data: new Uint8Array(await blob.arrayBuffer()), type: 'image/gif' });
+      }
+      if (selected.apng) {
+        const blob = await buildAnimatedApng(canvas, size);
+        files.push({ name: 'animation.png', data: new Uint8Array(await blob.arrayBuffer()), type: 'image/png' });
       }
 
       if (files.length > 1) {
