@@ -28,6 +28,7 @@ import { TransformResizeModal } from './TransformResizeModal.jsx';
 import { TransformScopeModal } from './TransformScopeModal.jsx';
 
 const REPO_URL = 'https://github.com/Rhapsydian/pixelyph';
+const LATEST_RELEASE_URL = 'https://github.com/Rhapsydian/pixelyph/releases/latest';
 
 function MenuItem({ label, shortcut, onClick, disabled }) {
   return (
@@ -345,6 +346,7 @@ export function MenuBar() {
         <MenuItem label="User Manual" onClick={runAndClose(() => setUserManualOpen(true))} />
         <MenuItem label="About Pixelyph" onClick={runAndClose(() => setAboutModalOpen(true))} />
         <MenuItem label="Visit on GitHub" onClick={runAndClose(() => openExternalUrl(REPO_URL))} />
+        <MenuItem label="Download for Windows" onClick={runAndClose(() => openExternalUrl(LATEST_RELEASE_URL))} />
       </Menu>
 
       {resizeModalOpen && <TransformResizeModal onClose={() => setResizeModalOpen(false)} />}

@@ -55,6 +55,15 @@ Pixelyph also autosaves continuously in the background — see "Continue
 Last Session" above — but a manual save is still the way to get a real
 file you can back up, move between machines, or hand to someone else.
 
+## Getting the Windows desktop app
+
+Pixelyph also runs as a Windows desktop app (Electron), separate from the
+web version. **Help → Download for Windows** takes you to the latest
+release on GitHub. The installer isn't code-signed, so Windows
+SmartScreen will show an "Unknown Publisher" warning the first time you
+run it — that's expected, not a sign anything's wrong. Click **More
+info → Run anyway** to proceed.
+
 ## Where to go next
 
 - [Draw Mode](draw-mode.md) — tools, layers, palette, and the Pixel/Shape
