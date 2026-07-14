@@ -108,6 +108,7 @@ test('addGlyph with a character key uses it as the literal codepoint', async () 
 test('addGlyph with no character auto-assigns a PUA codepoint', async () => {
   const store = useStore.getState();
   await store.newProject('glyph', { familyName: 'addGlyph Auto Test', initialPreset: 'none' });
+  store.removeGlyphAction(0xe000); // strip the project-init bare-glyph seed for a true blank slate
   store.addGlyph({ name: 'star' });
   const { glyphSet, activeCodepoint } = useStore.getState();
   assert.equal(activeCodepoint, 0xe000);
@@ -117,6 +118,7 @@ test('addGlyph with no character auto-assigns a PUA codepoint', async () => {
 test('addGlyph with neither character nor name creates a completely bare glyph', async () => {
   const store = useStore.getState();
   await store.newProject('glyph', { familyName: 'addGlyph Bare Test', initialPreset: 'none' });
+  store.removeGlyphAction(0xe000); // strip the project-init bare-glyph seed for a true blank slate
   store.addGlyph();
   const { glyphSet, activeCodepoint } = useStore.getState();
   assert.equal(activeCodepoint, 0xe000);
@@ -126,6 +128,7 @@ test('addGlyph with neither character nor name creates a completely bare glyph',
 test('addGlyphsFromPreset creates one empty glyph per codepoint, skipping ones that already exist', async () => {
   const store = useStore.getState();
   await store.newProject('glyph', { familyName: 'Preset Test', initialPreset: 'none' });
+  store.removeGlyphAction(0xe000); // strip the project-init bare-glyph seed for a true blank slate
   store.addGlyph({ character: 65, name: 'already here' });
   store.addGlyphsFromPreset([65, 66, 67]);
   const { glyphSet } = useStore.getState();

@@ -3,7 +3,7 @@
 // dependencies.
 
 import { createCanvas } from './Canvas.js';
-import { createGlyphSet, addGlyphsFromCodepoints } from './GlyphSet.js';
+import { createGlyphSet, addGlyphsFromCodepoints, createGlyph, setGlyph, nextAutoCodepoint } from './GlyphSet.js';
 import { mergedPresetCodepoints } from './charsetPresets.js';
 
 export const DEFAULT_WIDTH = 16;
@@ -68,9 +68,10 @@ export function buildDrawDocument() {
 /**
  * Choosing an initial preset eagerly creates one empty-grid Glyph per
  * codepoint in that preset, immediately — not deferred to first-open-of-
- * Glyph-tab browsing. 'none' (or any unregistered preset id) creates
- * nothing, per mergedPresetCodepoints' own "unknown ids contribute
- * nothing" behavior.
+ * Glyph-tab browsing. 'none' (or any unregistered preset id) instead seeds
+ * one bare glyph (auto-assigned codepoint, blank name) — a fresh project
+ * should never start with zero glyphs — mirroring exactly what the
+ * GlyphSetPanel "+" button produces via the store's addGlyph() action.
  *
  * @param {{ familyName?: string, initialPreset?: string,
  *           pixelsPerEm?: number, defaultGlyphWidth?: number|null }} [options]
@@ -89,6 +90,9 @@ export function buildGlyphDocument({
   const glyphSet = createGlyphSet({ meta: { familyName, pixelsPerEm, baselineRow, defaultGlyphWidth } });
   if (initialPreset && initialPreset !== 'none') {
     addGlyphsFromCodepoints(glyphSet, mergedPresetCodepoints([initialPreset]));
+  } else {
+    const width = defaultGlyphWidth ?? Math.max(1, Math.round(pixelsPerEm));
+    setGlyph(glyphSet, nextAutoCodepoint(glyphSet), createGlyph({ width, height: pixelsPerEm }));
   }
   return { glyphSet, initialPreset };
 }

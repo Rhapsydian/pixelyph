@@ -86,9 +86,12 @@ test('buildGlyphDocument defaults initialPreset to basic-latin', () => {
   assert.equal(initialPreset, 'basic-latin');
 });
 
-test('buildGlyphDocument starts with an empty glyphs map when initialPreset is none', () => {
+test('buildGlyphDocument seeds one bare glyph when initialPreset is none', () => {
   const { glyphSet } = buildGlyphDocument({ familyName: 'Test', initialPreset: 'none' });
-  assert.equal(glyphSet.glyphs.size, 0);
+  assert.equal(glyphSet.glyphs.size, 1);
+  const [[codepoint, glyph]] = glyphSet.glyphs.entries();
+  assert.equal(codepoint, 0xe000, 'seeded glyph gets the first auto-assigned PUA codepoint');
+  assert.equal(glyph.name, '');
 });
 
 test('buildGlyphDocument eagerly creates one empty-grid glyph per codepoint in the chosen initial preset', () => {

@@ -35,12 +35,6 @@ function parseUnicodeInput(text) {
   return undefined;
 }
 
-function unicodeDisplay(cp) {
-  if (cp == null) return null;
-  try { return `${String.fromCodePoint(cp)} (U+${cp.toString(16).toUpperCase().padStart(4, '0')})`; }
-  catch { return null; }
-}
-
 function hex(codepoint) {
   return `U+${codepoint.toString(16).toUpperCase()}`;
 }
@@ -83,10 +77,6 @@ export function GlyphSetPanel() {
   const [sortMode, setSortMode] = useState('codepoint'); // 'codepoint' | 'name'
   const [hoveredCodepoint, setHoveredCodepoint] = useState(null);
 
-  const [newCharacter, setNewCharacter] = useState('');
-  const [newCharacterError, setNewCharacterError] = useState(false);
-  const [newName, setNewName] = useState('');
-
   const [editName, setEditName] = useState('');
   const [editCharacter, setEditCharacter] = useState('');
   const [editCharacterError, setEditCharacterError] = useState(false);
@@ -114,19 +104,6 @@ export function GlyphSetPanel() {
 
   if (!glyphSet) return null;
 
-  async function handleCreate() {
-    const parsed = parseUnicodeInput(newCharacter);
-    if (parsed === undefined) { setNewCharacterError(true); return; }
-    setNewCharacterError(false);
-    if (parsed != null && wouldCollide(glyphSet, parsed)) {
-      const existing = glyphSet.glyphs.get(parsed);
-      if (!(await requestConfirm(`${glyphLabel(parsed, existing)} already has a glyph — replace it?`))) return;
-    }
-    addGlyph({ character: parsed, name: newName.trim() });
-    setNewCharacter('');
-    setNewName('');
-  }
-
   async function handleEditCharacterChange(text) {
     setEditCharacter(text);
     const parsed = parseUnicodeInput(text);
@@ -146,49 +123,58 @@ export function GlyphSetPanel() {
     <div className="panel">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <strong>Glyphs ({glyphSet.glyphs.size})</strong>
-        <div style={{ display: 'flex', border: '1px solid var(--chrome-border-strong)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
-          <button
-            onClick={() => setSortMode('codepoint')}
-            style={{
-              border: 'none', padding: '2px 6px', fontSize: 'var(--text-xs)',
-              background: sortMode === 'codepoint' ? 'var(--chrome-accent-soft)' : 'transparent',
-              color: sortMode === 'codepoint' ? 'var(--chrome-accent)' : 'var(--chrome-text-muted)',
-            }}
-          >
-            Codepoint
-          </button>
-          <button
-            onClick={() => setSortMode('name')}
-            style={{
-              border: 'none', borderLeft: '1px solid var(--chrome-border-strong)', padding: '2px 6px', fontSize: 'var(--text-xs)',
-              background: sortMode === 'name' ? 'var(--chrome-accent-soft)' : 'transparent',
-              color: sortMode === 'name' ? 'var(--chrome-accent)' : 'var(--chrome-text-muted)',
-            }}
-          >
-            Name
-          </button>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <button onClick={() => addGlyph()} title="Add glyph" style={{ width: 20, height: 20, padding: 0, lineHeight: '20px', fontSize: 'var(--text-xs)' }}>+</button>
+          <div style={{ display: 'flex', border: '1px solid var(--chrome-border-strong)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+            <button
+              onClick={() => setSortMode('codepoint')}
+              style={{
+                border: 'none', padding: '2px 6px', fontSize: 'var(--text-xs)',
+                background: sortMode === 'codepoint' ? 'var(--chrome-accent-soft)' : 'transparent',
+                color: sortMode === 'codepoint' ? 'var(--chrome-accent)' : 'var(--chrome-text-muted)',
+              }}
+            >
+              Codepoint
+            </button>
+            <button
+              onClick={() => setSortMode('name')}
+              style={{
+                border: 'none', borderLeft: '1px solid var(--chrome-border-strong)', padding: '2px 6px', fontSize: 'var(--text-xs)',
+                background: sortMode === 'name' ? 'var(--chrome-accent-soft)' : 'transparent',
+                color: sortMode === 'name' ? 'var(--chrome-accent)' : 'var(--chrome-text-muted)',
+              }}
+            >
+              Name
+            </button>
+          </div>
         </div>
       </div>
       <input placeholder="Search..." value={query} onChange={(e) => setQuery(e.target.value)} style={{ width: '100%' }} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <div style={{ display: 'flex', gap: 4 }}>
-          <input
-            placeholder="Character"
-            title="Optional — paste a character, or type U+xxxx, &hearts;, or &#x2764;"
-            value={newCharacter}
-            onChange={(e) => {
-              setNewCharacter(e.target.value);
-              setNewCharacterError(e.target.value.trim() !== '' && parseUnicodeInput(e.target.value) === undefined);
-            }}
-            style={{ flex: 1, minWidth: 0, borderColor: newCharacterError ? 'var(--chrome-danger)' : undefined }}
-          />
-          <input placeholder="Name" value={newName} onChange={(e) => setNewName(e.target.value)} style={{ flex: 1, minWidth: 0 }} />
-          <button onClick={handleCreate} style={{ flexShrink: 0 }}>Create</button>
-        </div>
-        {newCharacterError && <span style={{ color: 'var(--chrome-danger)', fontSize: 'var(--text-xs)' }}>Not a recognized character, U+xxxx, HTML entity, or &#xNNNN;</span>}
-        {!newCharacterError && (() => { const p = parseUnicodeInput(newCharacter); return p != null ? <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>{unicodeDisplay(p)}</span> : null; })()}
-        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--chrome-text-faint)' }}>Both optional — leave blank for a bare glyph, an auto-keyed name-only icon, or a plain typed character.</span>
+        <input
+          placeholder="Name"
+          value={editName}
+          disabled={!activeGlyph}
+          onChange={(e) => {
+            setEditName(e.target.value);
+            updateGlyphMeta(activeCodepoint, { name: e.target.value });
+          }}
+        />
+        <input
+          placeholder="Character"
+          title="Optional — paste a character, or type U+xxxx, &hearts;, or &#x2764;"
+          value={editCharacter}
+          disabled={!activeGlyph}
+          onChange={(e) => handleEditCharacterChange(e.target.value)}
+          style={{ borderColor: editCharacterError ? 'var(--chrome-danger)' : undefined }}
+        />
+        {editCharacterError && <span style={{ color: 'var(--chrome-danger)', fontSize: 'var(--text-xs)' }}>Not a recognized character, U+xxxx, HTML entity, or &#xNNNN;</span>}
       </div>
+      {activeGlyph && hasIssue(activeCodepoint, activeGlyph) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--chrome-warning-soft, rgba(245,166,35,0.12))', border: '1px solid var(--chrome-warning)', borderRadius: 'var(--radius-sm)', padding: '4px 8px', fontSize: 'var(--text-xs)', color: 'var(--chrome-warning)' }}>
+          Glyph missing codepoint, name, or content.
+        </div>
+      )}
       {/* Opens the Bulk-Add modal — wired up in the next checkpoint once CharacterMapPanel.jsx becomes that modal. */}
       <button style={{ alignSelf: 'flex-start' }}>Bulk Add…</button>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxHeight: 320, overflow: 'auto' }}>
@@ -244,32 +230,6 @@ export function GlyphSetPanel() {
         ))}
         {entries.length === 0 && <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No glyphs yet.</span>}
       </div>
-      {activeGlyph && hasIssue(activeCodepoint, activeGlyph) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--chrome-warning-soft, rgba(245,166,35,0.12))', border: '1px solid var(--chrome-warning)', borderRadius: 'var(--radius-sm)', padding: '4px 8px', fontSize: 'var(--text-xs)', color: 'var(--chrome-warning)' }}>
-          Glyph missing codepoint, name, or content.
-        </div>
-      )}
-      {activeGlyph && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, borderTop: '1px solid var(--chrome-border)', paddingTop: 6 }}>
-          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--chrome-text-muted)' }}>Edit selected glyph</span>
-          <input
-            placeholder="Name"
-            value={editName}
-            onChange={(e) => {
-              setEditName(e.target.value);
-              updateGlyphMeta(activeCodepoint, { name: e.target.value });
-            }}
-          />
-          <input
-            placeholder="Character"
-            title="Optional — paste a character, or type U+xxxx, &hearts;, or &#x2764;"
-            value={editCharacter}
-            onChange={(e) => handleEditCharacterChange(e.target.value)}
-            style={{ borderColor: editCharacterError ? 'var(--chrome-danger)' : undefined }}
-          />
-          {editCharacterError && <span style={{ color: 'var(--chrome-danger)', fontSize: 'var(--text-xs)' }}>Not a recognized character, U+xxxx, HTML entity, or &#xNNNN;</span>}
-        </div>
-      )}
     </div>
   );
 }
