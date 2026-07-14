@@ -17,6 +17,7 @@ import { UserManualModal } from './ui/UserManualModal.jsx';
 import { ConfirmModal } from './ui/ConfirmModal.jsx';
 import { NamePromptModal } from './ui/NamePromptModal.jsx';
 import { PaletteImportModeModal } from './ui/PaletteImportModeModal.jsx';
+import { BulkAddGlyphsModal } from './ui/glyph/BulkAddGlyphsModal.jsx';
 import { IconButton } from './ui/IconButton.jsx';
 import { FullscreenIcon, FullscreenExitIcon, UndoIcon, RedoIcon } from './ui/icons.jsx';
 import { useFullscreen } from './ui/useFullscreen.js';
@@ -247,6 +248,7 @@ export default function App() {
             <PaletteImportModeModal />
           </>
         )}
+        {mode === 'glyph' && <BulkAddGlyphsModal />}
         <ExportModal />
         <AboutModal />
         <UserManualModal />

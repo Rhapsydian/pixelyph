@@ -72,6 +72,7 @@ export function GlyphSetPanel() {
   const addGlyph = useStore((s) => s.addGlyph);
   const reassignGlyphCodepoint = useStore((s) => s.reassignGlyphCodepoint);
   const updateGlyphMeta = useStore((s) => s.updateGlyphMeta);
+  const setBulkAddModalOpen = useStore((s) => s.setBulkAddModalOpen);
 
   const [query, setQuery] = useState('');
   const [sortMode, setSortMode] = useState('codepoint'); // 'codepoint' | 'name'
@@ -175,8 +176,7 @@ export function GlyphSetPanel() {
           Glyph missing codepoint, name, or content.
         </div>
       )}
-      {/* Opens the Bulk-Add modal — wired up in the next checkpoint once CharacterMapPanel.jsx becomes that modal. */}
-      <button style={{ alignSelf: 'flex-start' }}>Bulk Add…</button>
+      <button onClick={() => setBulkAddModalOpen(true)} style={{ alignSelf: 'flex-start' }}>Bulk Add…</button>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxHeight: 320, overflow: 'auto' }}>
         {entries.map(({ codepoint, glyph }) => (
           <div

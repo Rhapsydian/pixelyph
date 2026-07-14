@@ -13,7 +13,6 @@ import { PalettePanel } from './draw/PalettePanel.jsx';
 import { TilePreviewPanel } from './draw/TilePreviewPanel.jsx';
 import { LayersPanel } from './draw/LayersPanel.jsx';
 import { LayerStylePanel } from './draw/LayerStylePanel.jsx';
-import { CharacterMapPanel } from './glyph/CharacterMapPanel.jsx';
 import { GlyphSetPanel } from './glyph/GlyphSetPanel.jsx';
 import { FontMetadataPanel } from './glyph/FontMetadataPanel.jsx';
 
@@ -30,20 +29,18 @@ function drawTabs(tier) {
   return tabs;
 }
 
-function glyphTabs(kind) {
-  const tabs = [];
-  if (kind === 'characters') tabs.push({ id: 'characters', label: 'Characters', Content: CharacterMapPanel });
-  tabs.push({ id: 'glyphs', label: 'Glyphs', Content: GlyphSetPanel });
-  tabs.push({ id: 'font', label: 'Font', Content: FontMetadataPanel });
-  return tabs;
+function glyphTabs() {
+  return [
+    { id: 'glyphs', label: 'Glyphs', Content: GlyphSetPanel },
+    { id: 'font', label: 'Font', Content: FontMetadataPanel },
+  ];
 }
 
 export function SidePanel() {
   const mode = useStore((s) => s.mode);
   const tier = useStore((s) => s.canvas.tier);
-  const glyphKind = useStore((s) => s.glyphSet?.kind);
 
-  const tabs = mode === 'draw' ? drawTabs(tier) : glyphTabs(glyphKind);
+  const tabs = mode === 'draw' ? drawTabs(tier) : glyphTabs();
   // Lifted to the store (not local state) so SvgPixelEditor can gate the
   // on-canvas gradient-angle handle on "the Style tab is actually visible".
   const activeTab = useStore((s) => s.sidePanelTab);
@@ -58,7 +55,7 @@ export function SidePanel() {
   useEffect(() => {
     if (!tabs.some((t) => t.id === activeTab)) setActiveTab(tabs[0]?.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, tier, glyphKind]);
+  }, [mode, tier]);
 
   const active = tabs.find((t) => t.id === activeTab) ?? tabs[0];
 

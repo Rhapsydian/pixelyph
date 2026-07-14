@@ -1039,6 +1039,8 @@ export const useStore = create((set, get) => {
     // (Help menu).
     exportModalOpen: false,
     setExportModalOpen: (open) => set({ exportModalOpen: open }),
+    bulkAddModalOpen: false,
+    setBulkAddModalOpen: (open) => set({ bulkAddModalOpen: open }),
     importImageModalOpen: false,
     setImportImageModalOpen: (open) => set({ importImageModalOpen: open }),
     referenceImageModalOpen: false,
