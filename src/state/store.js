@@ -98,7 +98,7 @@ import { copySvgToClipboard } from '../export/clipboard.js';
 import { serializeProject, deserializeProject, saveProjectToString, loadProjectFromString, serializeGlyphSetProject, deserializeGlyphSetProject, saveGlyphProjectToString, loadGlyphProjectFromString } from '../io/projectFile.js';
 import { saveFile, openFile } from '../io/platform.js';
 import { readAutosave, clearAutosave, createAutosaveScheduler } from '../io/autosave.js';
-import { createGlyphSet, createGlyph, setGlyph as setGlyphModel, removeGlyph as removeGlyphModel, nextAutoCodepoint, addGlyphsFromCodepoints as addGlyphsFromCodepointsModel, resizeGlyphSet as resizeGlyphSetModel, glyphToCanvas, canvasToGlyphPixels, flipGlyphH, flipGlyphV, rotateGlyph90 as rotateGlyph90Model } from '../model/GlyphSet.js';
+import { createGlyphSet, createGlyph, setGlyph as setGlyphModel, removeGlyph as removeGlyphModel, nextAutoCodepoint, addGlyphsFromCodepoints as addGlyphsFromCodepointsModel, resizeGlyphSet as resizeGlyphSetModel, glyphToCanvas, canvasToGlyphPixels, flipGlyphH, flipGlyphV, rotateGlyph90 as rotateGlyph90Model, GLYPH_FILL } from '../model/GlyphSet.js';
 import { resize as resizeGrid, flipGridH, flipGridV, rotateGrid90 } from '../model/Grid.js';
 import { glyphToSvg } from '../export/svg/glyphSvg.js';
 import { buildDrawDocument, buildGlyphDocument, DEFAULT_INITIAL_CHARSET_PRESET } from '../model/projectFactory.js';
@@ -245,6 +245,11 @@ export const useStore = create((set, get) => {
   /** Swaps in a fresh `canvas` reference so subscribers re-render, without cloning the (already-mutated) nested content. */
   function touchCanvas() {
     set({ canvas: { ...get().canvas } });
+  }
+
+  /** Rebuilds a glyph's pseudo-Canvas for editing, tinted with the transient glyphDisplayColor UI preference if one is set (falls back to glyphToCanvas's own black default otherwise) — a canvas-rendering convenience, not document data. */
+  function buildGlyphCanvas(glyph) {
+    return glyphToCanvas(glyph, get().glyphDisplayColor || undefined);
   }
 
   // --- Animation playback (Phase 7 follow-on) ---
@@ -409,7 +414,7 @@ export const useStore = create((set, get) => {
       for (let t = 0; t < times; t++) rotateGlyph90Model(glyphSet, glyph);
       glyph.advanceWidth = glyph.width;
       pushSnapshot(history, glyphContentSnapshot(glyphSet));
-      set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), glyphCanvas: glyphToCanvas(glyph) });
+      set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), glyphCanvas: buildGlyphCanvas(glyph) });
       autosaveScheduler(serializeGlyphSetProject(glyphSet));
     };
   }
@@ -531,11 +536,17 @@ export const useStore = create((set, get) => {
 
     /** Mirror-aware per-cell paint — the hot pointer-drag path. */
     paintCellLive: (x, y, color) => {
-      const { mode, glyphCanvas } = get();
+      const { mode, glyphCanvas, glyphDisplayColor } = get();
       if (mode === 'glyph') {
         if (!glyphCanvas) return;
+        // Glyph pixels are a boolean on/off bitmap underneath (see
+        // canvasToGlyphPixels) — the hex actually painted here is purely a
+        // canvas-rendering choice, so it always follows glyphDisplayColor
+        // (falling back to GLYPH_FILL) rather than the shared Draw-mode
+        // activeColor a tool might otherwise pass in.
+        const glyphColor = color == null ? null : (glyphDisplayColor || GLYPH_FILL);
         for (const p of mirrorPoints(glyphCanvas.width, glyphCanvas.height, x, y, glyphCanvas.symmetryMode)) {
-          paintCanvasCell(glyphCanvas, p.x, p.y, color);
+          paintCanvasCell(glyphCanvas, p.x, p.y, glyphColor);
         }
         return;
       }
@@ -897,7 +908,7 @@ export const useStore = create((set, get) => {
         set({
           glyphSet: { ...glyphSet },
           history: { ...history },
-          glyphCanvas: activeGlyph ? glyphToCanvas(activeGlyph) : null,
+          glyphCanvas: activeGlyph ? buildGlyphCanvas(activeGlyph) : null,
           canUndo: historyCanUndo(history),
           canRedo: historyCanRedo(history),
         });
@@ -918,7 +929,7 @@ export const useStore = create((set, get) => {
         set({
           glyphSet: { ...glyphSet },
           history: { ...history },
-          glyphCanvas: activeGlyph ? glyphToCanvas(activeGlyph) : null,
+          glyphCanvas: activeGlyph ? buildGlyphCanvas(activeGlyph) : null,
           canUndo: historyCanUndo(history),
           canRedo: historyCanRedo(history),
         });
@@ -1113,7 +1124,7 @@ export const useStore = create((set, get) => {
           initialCharsetPreset: initialPreset,
           canvas: buildDrawDocument(),
           glyphSet,
-          glyphCanvas: seededGlyph ? glyphToCanvas(seededGlyph) : null,
+          glyphCanvas: seededGlyph ? buildGlyphCanvas(seededGlyph) : null,
           activeCodepoint: seededCodepoint,
           history: h,
           canUndo: false,
@@ -1161,7 +1172,7 @@ export const useStore = create((set, get) => {
     selectGlyph: (codepoint) => {
       const { glyphSet } = get();
       const glyph = glyphSet.glyphs.get(codepoint);
-      set({ activeCodepoint: codepoint, glyphCanvas: glyph ? glyphToCanvas(glyph) : null, selection: null, floatingSelection: null, floatingGridSelection: null });
+      set({ activeCodepoint: codepoint, glyphCanvas: glyph ? buildGlyphCanvas(glyph) : null, selection: null, floatingSelection: null, floatingGridSelection: null });
     },
     /**
      * Unified glyph-creation action, replacing the old assignCodepoint/
@@ -1184,7 +1195,7 @@ export const useStore = create((set, get) => {
       const glyph = createGlyph({ width, height: glyphSet.meta.pixelsPerEm, name });
       setGlyphModel(glyphSet, codepoint, glyph);
       pushSnapshot(history, glyphContentSnapshot(glyphSet));
-      set({ glyphSet: { ...glyphSet }, history: { ...history }, activeCodepoint: codepoint, glyphCanvas: glyphToCanvas(glyph), canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), selection: null, floatingSelection: null, floatingGridSelection: null });
+      set({ glyphSet: { ...glyphSet }, history: { ...history }, activeCodepoint: codepoint, glyphCanvas: buildGlyphCanvas(glyph), canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), selection: null, floatingSelection: null, floatingGridSelection: null });
       autosaveScheduler(serializeGlyphSetProject(glyphSet));
     },
     /**
@@ -1259,7 +1270,7 @@ export const useStore = create((set, get) => {
       resizeGlyphSetModel(glyphSet, newPixelsPerEm, anchor);
       pushSnapshot(history, glyphContentSnapshot(glyphSet));
       const activeGlyph = activeCodepoint != null ? glyphSet.glyphs.get(activeCodepoint) : null;
-      set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), glyphCanvas: activeGlyph ? glyphToCanvas(activeGlyph) : null });
+      set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), glyphCanvas: activeGlyph ? buildGlyphCanvas(activeGlyph) : null });
       autosaveScheduler(serializeGlyphSetProject(glyphSet));
     },
     resizeActiveGlyph: (newWidth, anchor = 'top-left') => {
@@ -1271,7 +1282,7 @@ export const useStore = create((set, get) => {
       glyph.width = newWidth;
       glyph.advanceWidth = newWidth;
       pushSnapshot(history, glyphContentSnapshot(glyphSet));
-      set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), glyphCanvas: glyphToCanvas(glyph) });
+      set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), glyphCanvas: buildGlyphCanvas(glyph) });
       autosaveScheduler(serializeGlyphSetProject(glyphSet));
     },
 
@@ -1291,7 +1302,7 @@ export const useStore = create((set, get) => {
       if (!glyph) return;
       flipGlyphH(glyph);
       pushSnapshot(history, glyphContentSnapshot(glyphSet));
-      set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), glyphCanvas: glyphToCanvas(glyph) });
+      set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), glyphCanvas: buildGlyphCanvas(glyph) });
       autosaveScheduler(serializeGlyphSetProject(glyphSet));
     },
     flipActiveGlyphV: () => {
@@ -1301,7 +1312,7 @@ export const useStore = create((set, get) => {
       if (!glyph) return;
       flipGlyphV(glyph);
       pushSnapshot(history, glyphContentSnapshot(glyphSet));
-      set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), glyphCanvas: glyphToCanvas(glyph) });
+      set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), glyphCanvas: buildGlyphCanvas(glyph) });
       autosaveScheduler(serializeGlyphSetProject(glyphSet));
     },
     rotateActiveGlyph90: rotateActiveGlyphNTimes(1),
@@ -1498,7 +1509,7 @@ export const useStore = create((set, get) => {
       if (mode === 'glyph') {
         applyGlyphContentSnapshot(glyphSet, history.stack[history.index]);
         const activeGlyph = activeCodepoint != null ? glyphSet.glyphs.get(activeCodepoint) : null;
-        set({ glyphSet: { ...glyphSet }, glyphCanvas: activeGlyph ? glyphToCanvas(activeGlyph) : null, selection: null, floatingSelection: null, floatingGridSelection: null });
+        set({ glyphSet: { ...glyphSet }, glyphCanvas: activeGlyph ? buildGlyphCanvas(activeGlyph) : null, selection: null, floatingSelection: null, floatingGridSelection: null });
         return;
       }
       applyContentSnapshot(canvas, history.stack[history.index]);

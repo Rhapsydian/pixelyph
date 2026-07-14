@@ -9,7 +9,9 @@
 
 import { useStore } from '../../state/store.js';
 import { IconButton } from '../IconButton.jsx';
+import { ColorAlphaInput } from '../ColorAlphaInput.jsx';
 import { GridIcon, HorizontalSymmetryIcon, VerticalSymmetryIcon } from '../icons.jsx';
+import { GLYPH_FILL } from '../../model/GlyphSet.js';
 
 // Display-only: `canvas.tier` keeps its stored 'simple'/'advanced' values
 // everywhere (no save-format bump, no migration) — these two maps are the
@@ -59,6 +61,8 @@ export function ContextBar() {
   const setSymmetryMode = useStore((s) => s.setSymmetryMode);
   const showGrid = useStore((s) => s.showGrid);
   const toggleGrid = useStore((s) => s.toggleGrid);
+  const glyphDisplayColor = useStore((s) => s.glyphDisplayColor);
+  const setGlyphDisplayColor = useStore((s) => s.setGlyphDisplayColor);
   const tileGridSize = useStore((s) => s.tileGridSize);
   const setTileGridSize = useStore((s) => s.setTileGridSize);
   const tier = useStore((s) => s.canvas.tier);
@@ -137,6 +141,13 @@ export function ContextBar() {
                 onClick={() => setSymmetryMode(symmetryModeFromAxes(xOn, !yOn))}
               />
               <IconButton icon={<GridIcon />} label="Toggle grid" active={showGrid} onClick={toggleGrid} />
+              {isGlyphMode && (
+                <ColorAlphaInput
+                  value={glyphDisplayColor || GLYPH_FILL}
+                  onChange={setGlyphDisplayColor}
+                  title="Glyph display color — changes how pixels render on this canvas only; not saved, exported, or part of undo history"
+                />
+              )}
               <label style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="A heavier guide line every N cells, e.g. for tileset/tile-boundary work — independent of the plain per-cell grid">
                 <input
                   type="checkbox"

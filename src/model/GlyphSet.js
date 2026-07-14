@@ -19,7 +19,7 @@
 import { createCanvas, paintCell as paintCanvasCell } from './Canvas.js';
 import { resize as resizeGrid, flipPixelsH, flipPixelsV, rotatePixels90 } from './Grid.js';
 
-const GLYPH_FILL = '#000000';
+export const GLYPH_FILL = '#000000';
 
 let nextId = 1;
 function makeId() {
@@ -278,13 +278,14 @@ export function rotateGlyph90(glyphSet, glyph) {
  * erase then repaint) with a brand new Uint8Array.
  *
  * @param {object} glyph
+ * @param {string} [fillColor] Canvas-rendering color override (the transient glyphDisplayColor UI preference) — defaults to GLYPH_FILL, the same color canvasToGlyphPixels/export always treat as "painted" regardless of what's actually rendered here.
  * @returns {object} Canvas
  */
-export function glyphToCanvas(glyph) {
-  const canvas = createCanvas({ width: glyph.width, height: glyph.height, palette: [GLYPH_FILL] });
+export function glyphToCanvas(glyph, fillColor = GLYPH_FILL) {
+  const canvas = createCanvas({ width: glyph.width, height: glyph.height, palette: [fillColor] });
   for (let y = 0; y < glyph.height; y++) {
     for (let x = 0; x < glyph.width; x++) {
-      if (glyph.pixels[y * glyph.width + x]) paintCanvasCell(canvas, x, y, GLYPH_FILL);
+      if (glyph.pixels[y * glyph.width + x]) paintCanvasCell(canvas, x, y, fillColor);
     }
   }
   return canvas;
