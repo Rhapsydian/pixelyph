@@ -64,10 +64,10 @@ test('cross-glyph copy-paste: selecting in glyph A, switching to glyph B, and pa
   const store = useStore.getState();
   await store.newProject('glyph', { kind: 'characters', familyName: 'Cross Glyph Test' });
 
-  store.assignCodepoint(65, {}); // glyph A, active
+  store.addGlyph({ character: 65 }); // glyph A, active
   paintColumn(0, useStore.getState().glyphSet.meta.pixelsPerEm, '#000000'); // a "stem" at x=0
 
-  store.assignCodepoint(66, {}); // glyph B, active, blank
+  store.addGlyph({ character: 66 }); // glyph B, active, blank
 
   store.selectGlyph(65); // back to A to select its stem
   const height = useStore.getState().glyphSet.meta.pixelsPerEm;
@@ -91,6 +91,69 @@ test('cross-glyph copy-paste: selecting in glyph A, switching to glyph B, and pa
 
   assert.ok(onlyColumnFilled(glyphA, 0), "glyph A's pixels are untouched by the paste into B");
   assert.ok(columnIsFilled(glyphB, 0), 'glyph B received the pasted stem at its original x=0 -- paste-in-place, not centered, since both glyphs are the same size');
+});
+
+// --- Checkpoint 2: unified addGlyph / addGlyphsFromPreset / reassignGlyphCodepoint ---
+
+test('addGlyph with a character key uses it as the literal codepoint', async () => {
+  const store = useStore.getState();
+  await store.newProject('glyph', { familyName: 'addGlyph Test' });
+  store.addGlyph({ character: 65, name: 'Cap A' });
+  const { glyphSet, activeCodepoint } = useStore.getState();
+  assert.equal(activeCodepoint, 65);
+  assert.ok(glyphSet.glyphs.has(65));
+  assert.equal(glyphSet.glyphs.get(65).name, 'Cap A');
+});
+
+test('addGlyph with no character auto-assigns a PUA codepoint', async () => {
+  const store = useStore.getState();
+  await store.newProject('glyph', { familyName: 'addGlyph Auto Test' });
+  store.addGlyph({ name: 'star' });
+  const { glyphSet, activeCodepoint } = useStore.getState();
+  assert.equal(activeCodepoint, 0xe000);
+  assert.equal(glyphSet.glyphs.get(0xe000).name, 'star');
+});
+
+test('addGlyph with neither character nor name creates a completely bare glyph', async () => {
+  const store = useStore.getState();
+  await store.newProject('glyph', { familyName: 'addGlyph Bare Test' });
+  store.addGlyph();
+  const { glyphSet, activeCodepoint } = useStore.getState();
+  assert.equal(activeCodepoint, 0xe000);
+  assert.equal(glyphSet.glyphs.get(0xe000).name, '');
+});
+
+test('addGlyphsFromPreset creates one empty glyph per codepoint, skipping ones that already exist', async () => {
+  const store = useStore.getState();
+  await store.newProject('glyph', { familyName: 'Preset Test' });
+  store.addGlyph({ character: 65, name: 'already here' });
+  store.addGlyphsFromPreset([65, 66, 67]);
+  const { glyphSet } = useStore.getState();
+  assert.equal(glyphSet.glyphs.size, 3);
+  assert.equal(glyphSet.glyphs.get(65).name, 'already here', 'existing glyph at 65 is not overwritten');
+  assert.equal(glyphSet.glyphs.get(66).name, '');
+  assert.equal(glyphSet.glyphs.get(67).name, '');
+});
+
+test('addGlyphsFromPreset is a no-op when every codepoint already exists', async () => {
+  const store = useStore.getState();
+  await store.newProject('glyph', { familyName: 'Preset Noop Test' });
+  store.addGlyph({ character: 65 });
+  const canUndoBefore = useStore.getState().canUndo;
+  store.addGlyphsFromPreset([65]);
+  assert.equal(useStore.getState().canUndo, canUndoBefore, 'no new history entry pushed when nothing was created');
+});
+
+test('reassignGlyphCodepoint moves the Map entry and follows activeCodepoint', async () => {
+  const store = useStore.getState();
+  await store.newProject('glyph', { familyName: 'Reassign Test' });
+  store.addGlyph({ character: 65, name: 'Cap A' });
+  store.reassignGlyphCodepoint(65, 66);
+  const { glyphSet, activeCodepoint } = useStore.getState();
+  assert.equal(glyphSet.glyphs.has(65), false);
+  assert.ok(glyphSet.glyphs.has(66));
+  assert.equal(glyphSet.glyphs.get(66).name, 'Cap A');
+  assert.equal(activeCodepoint, 66, 'activeCodepoint follows the glyph to its new key');
 });
 
 test('palette actions (add/remove/reorder/clear) are undo-tracked, same as any other structural edit', async () => {
@@ -814,7 +877,7 @@ test('rotateCanvasCCW90 is the exact inverse of rotateCanvas90', async () => {
 test('rotateActiveGlyph180/CCW90 round-trip exactly on a square (non-lossy) glyph', async () => {
   const store = useStore.getState();
   await store.newProject('glyph', { kind: 'characters', familyName: 'Rotate N Times Test' });
-  store.assignCodepoint(65, {});
+  store.addGlyph({ character: 65 });
   const pixelsPerEm = useStore.getState().glyphSet.meta.pixelsPerEm;
   store.resizeActiveGlyph(pixelsPerEm); // force width === pixelsPerEm === height — a new glyph's default advance width isn't necessarily square
   paintColumn(1, pixelsPerEm, '#000000'); // no recrop ever triggers on a genuinely square glyph
@@ -833,7 +896,7 @@ test('rotateActiveGlyph180/CCW90 round-trip exactly on a square (non-lossy) glyp
 test('rotateActiveGlyphCCW90 only prompts requestConfirm once for the whole multi-step rotation, not once per internal 90-degree pass', async () => {
   const store = useStore.getState();
   await store.newProject('glyph', { kind: 'characters', familyName: 'Confirm Count Test' });
-  store.assignCodepoint(65, {});
+  store.addGlyph({ character: 65 });
   const pixelsPerEm = useStore.getState().glyphSet.meta.pixelsPerEm;
   store.resizeActiveGlyph(pixelsPerEm + 4); // non-square — the first internal rotation needs a lossy recrop, so this should confirm
   paintColumn(1, pixelsPerEm, '#000000');

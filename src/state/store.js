@@ -449,6 +449,10 @@ export const useStore = create((set, get) => {
     pan: { x: 0, y: 0 },
     viewportSize: { width: 0, height: 0 },
     showGrid: false,
+    // Glyph-mode-only canvas display preference (like showGrid): what color
+    // a glyph's pixels render as on the editing canvas. null = use the
+    // default hardcoded fill. Not exported, not saved, not undo-tracked.
+    glyphDisplayColor: null,
     tileGridSize: 0, // 0 = off; a positive integer = tile guide size in cells
     flipRotateAllFrames: false, // frame-scope choice for layer/canvas-level flip/rotate — this frame only (false) or every frame (true)
     sidePanelTab: 'palette', // which SidePanel.jsx tab is showing — lifted to the store (not local component state) so SvgPixelEditor can gate the gradient-angle handle on "Style tab is visible"
@@ -491,6 +495,7 @@ export const useStore = create((set, get) => {
     setPan: (pan) => set({ pan }),
     setViewportSize: (viewportSize) => set({ viewportSize }),
     toggleGrid: () => set((s) => ({ showGrid: !s.showGrid })),
+    setGlyphDisplayColor: (color) => set({ glyphDisplayColor: color }),
     setTileGridSize: (size) => set({ tileGridSize: Math.max(0, Math.round(Number(size) || 0)) }),
     setFlipRotateAllFrames: (allFrames) => set({ flipRotateAllFrames: allFrames }),
     setSidePanelTab: (tab) => set({ sidePanelTab: tab }),
@@ -1155,29 +1160,75 @@ export const useStore = create((set, get) => {
       const glyph = glyphSet.glyphs.get(codepoint);
       set({ activeCodepoint: codepoint, glyphCanvas: glyph ? glyphToCanvas(glyph) : null, selection: null, floatingSelection: null, floatingGridSelection: null });
     },
-    /** Creates a new blank glyph at `codepoint` (replacing any existing one). Callers confirm before replacing. */
-    assignCodepoint: (codepoint, { name } = {}) => {
+    /**
+     * Unified glyph-creation action, replacing the old assignCodepoint/
+     * addIconGlyph split. `character` (a real codepoint) is used as the
+     * literal Map key when given; otherwise one is auto-assigned from the
+     * Private Use Area. `name` is attached regardless. Calling with both
+     * fields empty/absent is valid — it's the "add a completely bare empty
+     * glyph" action. Collision confirmation (GlyphSet.wouldCollide) is a UI
+     * concern, same as the old actions — this always just performs the
+     * write, replacing any existing glyph at that codepoint.
+     */
+    addGlyph: ({ character, name = '' } = {}) => {
       const { glyphSet, history } = get();
+      const codepoint = character ?? nextAutoCodepoint(glyphSet);
       const width = glyphSet.meta.defaultGlyphWidth != null
         ? glyphSet.meta.defaultGlyphWidth
-        : Math.max(1, Math.round(glyphSet.meta.pixelsPerEm * 0.75));
-      const glyph = createGlyph({ width, height: glyphSet.meta.pixelsPerEm, name: name ?? '' });
+        : character != null
+          ? Math.max(1, Math.round(glyphSet.meta.pixelsPerEm * 0.75))
+          : Math.max(1, Math.round(glyphSet.meta.pixelsPerEm));
+      const glyph = createGlyph({ width, height: glyphSet.meta.pixelsPerEm, name });
       setGlyphModel(glyphSet, codepoint, glyph);
       pushSnapshot(history, glyphContentSnapshot(glyphSet));
       set({ glyphSet: { ...glyphSet }, history: { ...history }, activeCodepoint: codepoint, glyphCanvas: glyphToCanvas(glyph), canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), selection: null, floatingSelection: null, floatingGridSelection: null });
       autosaveScheduler(serializeGlyphSetProject(glyphSet));
     },
-    /** Icon-kind sets: codepoint is auto-assigned (PUA); only the name is user-facing. */
-    addIconGlyph: ({ name = '', unicode = null } = {}) => {
+    /**
+     * Bulk-creation entry point (Bulk-Add modal / New Project wizard's
+     * initial preset): creates an empty-grid glyph at every codepoint in
+     * `codepoints` that doesn't already exist, skipping any that do — no
+     * destructive overwrite in a bulk operation, unlike single-glyph
+     * addGlyph. No-op (no snapshot pushed) if every codepoint already exists.
+     */
+    addGlyphsFromPreset: (codepoints) => {
       const { glyphSet, history } = get();
-      const codepoint = nextAutoCodepoint(glyphSet);
-      const size = glyphSet.meta.defaultGlyphWidth != null
+      const width = glyphSet.meta.defaultGlyphWidth != null
         ? glyphSet.meta.defaultGlyphWidth
-        : Math.max(1, Math.round(glyphSet.meta.pixelsPerEm));
-      const glyph = createGlyph({ width: size, height: glyphSet.meta.pixelsPerEm, name, unicode });
-      setGlyphModel(glyphSet, codepoint, glyph);
+        : Math.max(1, Math.round(glyphSet.meta.pixelsPerEm * 0.75));
+      let createdAny = false;
+      for (const codepoint of codepoints) {
+        if (glyphSet.glyphs.has(codepoint)) continue;
+        setGlyphModel(glyphSet, codepoint, createGlyph({ width, height: glyphSet.meta.pixelsPerEm }));
+        createdAny = true;
+      }
+      if (!createdAny) return;
       pushSnapshot(history, glyphContentSnapshot(glyphSet));
-      set({ glyphSet: { ...glyphSet }, history: { ...history }, activeCodepoint: codepoint, glyphCanvas: glyphToCanvas(glyph), canUndo: historyCanUndo(history), canRedo: historyCanRedo(history), selection: null, floatingSelection: null, floatingGridSelection: null });
+      set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history) });
+      autosaveScheduler(serializeGlyphSetProject(glyphSet));
+    },
+    /**
+     * Re-keys an existing glyph to a new codepoint (delete + re-insert —
+     * under the unified model, a real assigned character is the Map key
+     * itself, not a decorative side field, so "edit selected glyph's
+     * character" has to move the entry). Collision confirmation is a UI
+     * concern, same as addGlyph. activeCodepoint follows the glyph to its
+     * new key if it was the active one.
+     */
+    reassignGlyphCodepoint: (oldCodepoint, newCodepoint) => {
+      const { glyphSet, history, activeCodepoint } = get();
+      const glyph = glyphSet.glyphs.get(oldCodepoint);
+      if (!glyph || oldCodepoint === newCodepoint) return;
+      removeGlyphModel(glyphSet, oldCodepoint);
+      setGlyphModel(glyphSet, newCodepoint, glyph);
+      pushSnapshot(history, glyphContentSnapshot(glyphSet));
+      set({
+        glyphSet: { ...glyphSet },
+        history: { ...history },
+        canUndo: historyCanUndo(history),
+        canRedo: historyCanRedo(history),
+        ...(activeCodepoint === oldCodepoint ? { activeCodepoint: newCodepoint } : {}),
+      });
       autosaveScheduler(serializeGlyphSetProject(glyphSet));
     },
     removeGlyphAction: (codepoint) => {
@@ -1198,7 +1249,6 @@ export const useStore = create((set, get) => {
       const glyph = glyphSet.glyphs.get(codepoint);
       if (!glyph) return;
       if ('name' in patch) glyph.name = patch.name;
-      if ('unicode' in patch) glyph.unicode = patch.unicode;
       pushSnapshot(history, glyphContentSnapshot(glyphSet));
       set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history) });
       autosaveScheduler(serializeGlyphSetProject(glyphSet));
