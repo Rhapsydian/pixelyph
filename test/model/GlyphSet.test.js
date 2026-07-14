@@ -8,7 +8,15 @@ import {
   setGlyph,
   removeGlyph,
   wouldCollide,
-  nextIconCodepoint,
+  nextAutoCodepoint,
+  isAutoAssignedCodepoint,
+  isDisplayableChar,
+  nonDisplayableLabel,
+  isEmptyGlyph,
+  addBackgroundLayer,
+  removeBackgroundLayer,
+  addForegroundLayer,
+  removeForegroundLayer,
   resizeGlyphSet,
   glyphToCanvas,
   canvasToGlyphPixels,
@@ -17,9 +25,9 @@ import {
   rotateGlyph90,
 } from '../../src/model/GlyphSet.js';
 
-test('createGlyphSet defaults to character kind with default FontMeta', () => {
+test('createGlyphSet has no kind field, defaults to default FontMeta', () => {
   const glyphSet = createGlyphSet({});
-  assert.equal(glyphSet.kind, 'characters');
+  assert.equal('kind' in glyphSet, false);
   assert.equal(glyphSet.meta.pixelsPerEm, 16);
   assert.equal(glyphSet.glyphs.size, 0);
 });
@@ -32,7 +40,7 @@ test('createFontMeta overrides merge over the defaults', () => {
 });
 
 test('glyph CRUD: set/get/remove round-trip', () => {
-  const glyphSet = createGlyphSet({ kind: 'characters' });
+  const glyphSet = createGlyphSet({});
   const glyph = createGlyph({ width: 5, height: 16, name: 'A' });
   setGlyph(glyphSet, 65, glyph);
   assert.equal(getGlyph(glyphSet, 65), glyph);
@@ -49,19 +57,87 @@ test('wouldCollide is true only for an already-assigned codepoint', () => {
   assert.equal(wouldCollide(glyphSet, 66), false);
 });
 
-test('nextIconCodepoint starts at U+E000 on an empty set', () => {
-  const glyphSet = createGlyphSet({ kind: 'icons' });
-  assert.equal(nextIconCodepoint(glyphSet), 0xe000);
+test('nextAutoCodepoint starts at U+E000 on an empty set', () => {
+  const glyphSet = createGlyphSet({});
+  assert.equal(nextAutoCodepoint(glyphSet), 0xe000);
 });
 
-test('nextIconCodepoint skips already-used values', () => {
-  const glyphSet = createGlyphSet({ kind: 'icons' });
+test('nextAutoCodepoint skips already-used values', () => {
+  const glyphSet = createGlyphSet({});
   setGlyph(glyphSet, 0xe000, createGlyph({ width: 16, height: 16, name: 'star' }));
   setGlyph(glyphSet, 0xe001, createGlyph({ width: 16, height: 16, name: 'heart' }));
-  assert.equal(nextIconCodepoint(glyphSet), 0xe002);
+  assert.equal(nextAutoCodepoint(glyphSet), 0xe002);
   // a gap should be reused rather than always advancing past the highest used value
   removeGlyph(glyphSet, 0xe000);
-  assert.equal(nextIconCodepoint(glyphSet), 0xe000);
+  assert.equal(nextAutoCodepoint(glyphSet), 0xe000);
+});
+
+test('isAutoAssignedCodepoint is true only within the Private Use Area', () => {
+  assert.equal(isAutoAssignedCodepoint(0xe000), true);
+  assert.equal(isAutoAssignedCodepoint(0xf8ff), true);
+  assert.equal(isAutoAssignedCodepoint(0xe500), true);
+  assert.equal(isAutoAssignedCodepoint(0xdfff), false); // just below PUA
+  assert.equal(isAutoAssignedCodepoint(0xf900), false); // just above PUA
+  assert.equal(isAutoAssignedCodepoint(65), false); // 'A'
+});
+
+test('isDisplayableChar is false for control/whitespace characters, true otherwise', () => {
+  assert.equal(isDisplayableChar(0x20), false); // space
+  assert.equal(isDisplayableChar(0x09), false); // tab
+  assert.equal(isDisplayableChar(0x0a), false); // line feed
+  assert.equal(isDisplayableChar(0x0d), false); // carriage return
+  assert.equal(isDisplayableChar(0x7f), false); // DEL
+  assert.equal(isDisplayableChar(0x85), false); // C1 control
+  assert.equal(isDisplayableChar(65), true); // 'A'
+  assert.equal(isDisplayableChar(0x2764), true); // heart
+});
+
+test('nonDisplayableLabel returns a human label for known codepoints, null otherwise', () => {
+  assert.equal(nonDisplayableLabel(0x20), 'Space');
+  assert.equal(nonDisplayableLabel(0x09), 'Tab');
+  assert.equal(nonDisplayableLabel(0x0a), 'Line Feed');
+  assert.equal(nonDisplayableLabel(0x0d), 'Carriage Return');
+  assert.equal(nonDisplayableLabel(0x01), null); // unlabeled control char
+});
+
+test('isEmptyGlyph is true only when every present buffer is all-zero', () => {
+  const glyph = createGlyph({ width: 2, height: 2 });
+  assert.equal(isEmptyGlyph(glyph), true);
+
+  glyph.pixels[0] = 1;
+  assert.equal(isEmptyGlyph(glyph), false);
+  glyph.pixels[0] = 0;
+
+  addBackgroundLayer(glyph);
+  assert.equal(isEmptyGlyph(glyph), true); // new layer is blank
+  glyph.backgroundPixels[0] = 1;
+  assert.equal(isEmptyGlyph(glyph), false);
+  removeBackgroundLayer(glyph);
+  assert.equal(isEmptyGlyph(glyph), true);
+
+  addForegroundLayer(glyph);
+  glyph.foregroundPixels[3] = 1;
+  assert.equal(isEmptyGlyph(glyph), false);
+  removeForegroundLayer(glyph);
+  assert.equal(isEmptyGlyph(glyph), true);
+});
+
+test('addBackgroundLayer/addForegroundLayer allocate blank same-size buffers; remove clears them', () => {
+  const glyph = createGlyph({ width: 3, height: 4 });
+  assert.equal(glyph.backgroundPixels, undefined);
+  assert.equal(glyph.foregroundPixels, undefined);
+
+  addBackgroundLayer(glyph);
+  assert.equal(glyph.backgroundPixels.length, 12);
+  assert.deepEqual(Array.from(glyph.backgroundPixels), new Array(12).fill(0));
+
+  addForegroundLayer(glyph);
+  assert.equal(glyph.foregroundPixels.length, 12);
+
+  removeBackgroundLayer(glyph);
+  assert.equal(glyph.backgroundPixels, undefined);
+  removeForegroundLayer(glyph);
+  assert.equal(glyph.foregroundPixels, undefined);
 });
 
 test('resizeGlyphSet pads/crops every glyph height uniformly, leaving width untouched', () => {

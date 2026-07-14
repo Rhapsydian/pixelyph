@@ -60,14 +60,9 @@ test('every default style has an effects array (Layer.js\'s LayerStyle shape req
 
 // --- buildGlyphDocument ---
 
-test('buildGlyphDocument defaults to character kind', () => {
+test('buildGlyphDocument produces a GlyphSet with no kind field', () => {
   const { glyphSet } = buildGlyphDocument();
-  assert.equal(glyphSet.kind, 'characters');
-});
-
-test('buildGlyphDocument threads kind through to the GlyphSet', () => {
-  const { glyphSet } = buildGlyphDocument({ kind: 'icons' });
-  assert.equal(glyphSet.kind, 'icons');
+  assert.equal('kind' in glyphSet, false);
 });
 
 test('buildGlyphDocument threads familyName through to FontMeta', () => {
@@ -92,7 +87,7 @@ test('buildGlyphDocument defaults initialPreset to basic-latin', () => {
 });
 
 test('buildGlyphDocument starts with an empty glyphs map', () => {
-  const { glyphSet } = buildGlyphDocument({ kind: 'characters', familyName: 'Test' });
+  const { glyphSet } = buildGlyphDocument({ familyName: 'Test' });
   assert.equal(glyphSet.glyphs.size, 0);
 });
 

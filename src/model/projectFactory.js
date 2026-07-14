@@ -65,12 +65,11 @@ export function buildDrawDocument() {
 }
 
 /**
- * @param {{ kind?: 'characters'|'icons', familyName?: string, initialPreset?: string,
+ * @param {{ familyName?: string, initialPreset?: string,
  *           pixelsPerEm?: number, defaultGlyphWidth?: number|null }} [options]
  * @returns {{ glyphSet: object, initialPreset: string }}
  */
 export function buildGlyphDocument({
-  kind = 'characters',
   familyName = 'Untitled',
   initialPreset = DEFAULT_INITIAL_CHARSET_PRESET,
   pixelsPerEm = 16,
@@ -81,7 +80,7 @@ export function buildGlyphDocument({
   // createFontMeta default (which assumes pixelsPerEm === 16).
   const baselineRow = Math.max(1, Math.round(pixelsPerEm * 0.75));
   return {
-    glyphSet: createGlyphSet({ kind, meta: { familyName, pixelsPerEm, baselineRow, defaultGlyphWidth } }),
+    glyphSet: createGlyphSet({ meta: { familyName, pixelsPerEm, baselineRow, defaultGlyphWidth } }),
     initialPreset,
   };
 }

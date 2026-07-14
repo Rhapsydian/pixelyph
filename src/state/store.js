@@ -98,7 +98,7 @@ import { copySvgToClipboard } from '../export/clipboard.js';
 import { serializeProject, deserializeProject, saveProjectToString, loadProjectFromString, serializeGlyphSetProject, deserializeGlyphSetProject, saveGlyphProjectToString, loadGlyphProjectFromString } from '../io/projectFile.js';
 import { saveFile, openFile } from '../io/platform.js';
 import { readAutosave, clearAutosave, createAutosaveScheduler } from '../io/autosave.js';
-import { createGlyphSet, createGlyph, setGlyph as setGlyphModel, removeGlyph as removeGlyphModel, nextIconCodepoint, resizeGlyphSet as resizeGlyphSetModel, glyphToCanvas, canvasToGlyphPixels, flipGlyphH, flipGlyphV, rotateGlyph90 as rotateGlyph90Model } from '../model/GlyphSet.js';
+import { createGlyphSet, createGlyph, setGlyph as setGlyphModel, removeGlyph as removeGlyphModel, nextAutoCodepoint, resizeGlyphSet as resizeGlyphSetModel, glyphToCanvas, canvasToGlyphPixels, flipGlyphH, flipGlyphV, rotateGlyph90 as rotateGlyph90Model } from '../model/GlyphSet.js';
 import { resize as resizeGrid, flipGridH, flipGridV, rotateGrid90 } from '../model/Grid.js';
 import { glyphToSvg } from '../export/svg/glyphSvg.js';
 import { buildDrawDocument, buildGlyphDocument, DEFAULT_INITIAL_CHARSET_PRESET } from '../model/projectFactory.js';
@@ -151,11 +151,10 @@ function applyContentSnapshot(canvas, snapshot) {
 }
 
 function glyphContentSnapshot(glyphSet) {
-  return { kind: glyphSet.kind, meta: glyphSet.meta, glyphs: Array.from(glyphSet.glyphs.entries()) };
+  return { meta: glyphSet.meta, glyphs: Array.from(glyphSet.glyphs.entries()) };
 }
 
 function applyGlyphContentSnapshot(glyphSet, snapshot) {
-  glyphSet.kind = snapshot.kind;
   glyphSet.meta = snapshot.meta;
   glyphSet.glyphs = new Map(snapshot.glyphs);
 }
@@ -1171,7 +1170,7 @@ export const useStore = create((set, get) => {
     /** Icon-kind sets: codepoint is auto-assigned (PUA); only the name is user-facing. */
     addIconGlyph: ({ name = '', unicode = null } = {}) => {
       const { glyphSet, history } = get();
-      const codepoint = nextIconCodepoint(glyphSet);
+      const codepoint = nextAutoCodepoint(glyphSet);
       const size = glyphSet.meta.defaultGlyphWidth != null
         ? glyphSet.meta.defaultGlyphWidth
         : Math.max(1, Math.round(glyphSet.meta.pixelsPerEm));

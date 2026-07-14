@@ -1,8 +1,11 @@
 // Glyph mode's document. Much simpler data model than Draw mode's Canvas:
 // one boolean grid per glyph (no color, no layers, no style) keyed by
-// Unicode codepoint. Character-kind sets map codepoints to real characters
-// (via CharacterMapPanel); icon-kind sets use codepoints purely as internal
-// Private Use Area slots the user never types (see nextIconCodepoint).
+// Unicode codepoint. Every glyph can freely have a real typed character
+// (as its Map key), a free-form name, both, or neither — there is no
+// project-level lock between "character" and "icon" glyphs. A glyph with
+// no typed character gets an auto-assigned Private Use Area codepoint (see
+// nextAutoCodepoint/isAutoAssignedCodepoint) purely as an internal slot the
+// user never types.
 //
 // Editing reuses Draw mode's Canvas/Layer/autoLayerSync machinery rather
 // than a separate paint path: glyphToCanvas wraps one glyph as a
@@ -46,13 +49,12 @@ export function createFontMeta(overrides = {}) {
 }
 
 /**
- * @param {{kind: 'characters'|'icons', meta?: object}} options
+ * @param {{meta?: object}} options
  * @returns {object} GlyphSet
  */
-export function createGlyphSet({ kind, meta } = {}) {
+export function createGlyphSet({ meta } = {}) {
   return {
     id: makeId(),
-    kind: kind ?? 'characters',
     meta: createFontMeta(meta),
     glyphs: new Map(),
   };
@@ -62,7 +64,7 @@ export function createGlyphSet({ kind, meta } = {}) {
  * @param {{width: number, height: number, advanceWidth?: number, leftSideBearing?: number, name?: string}} options
  * @returns {object} Glyph
  */
-export function createGlyph({ width, height, advanceWidth, leftSideBearing = 0, name = '', unicode = null }) {
+export function createGlyph({ width, height, advanceWidth, leftSideBearing = 0, name = '' }) {
   return {
     width,
     height,
@@ -70,7 +72,6 @@ export function createGlyph({ width, height, advanceWidth, leftSideBearing = 0, 
     advanceWidth: advanceWidth ?? width,
     leftSideBearing,
     name,
-    unicode,
   };
 }
 
@@ -92,18 +93,82 @@ export function wouldCollide(glyphSet, codepoint) {
   return glyphSet.glyphs.has(codepoint);
 }
 
+const PUA_START = 0xe000;
+const PUA_END = 0xf8ff;
+
 /**
  * The smallest unused codepoint >= U+E000 (start of the Private Use Area),
  * computed fresh from the current glyph set rather than tracked as a
- * separate counter — icon-kind sets never expose codepoints to the user, so
+ * separate counter — auto-assigned codepoints are never user-facing, so
  * there's nothing to keep in sync if a glyph is later removed.
  *
  * @returns {number}
  */
-export function nextIconCodepoint(glyphSet) {
-  let cp = 0xe000;
+export function nextAutoCodepoint(glyphSet) {
+  let cp = PUA_START;
   while (glyphSet.glyphs.has(cp)) cp++;
   return cp;
+}
+
+/** @returns {boolean} whether `codepoint` sits in the Private Use Area — i.e. was auto-assigned rather than a real typed/pasted character. */
+export function isAutoAssignedCodepoint(codepoint) {
+  return codepoint >= PUA_START && codepoint <= PUA_END;
+}
+
+const NON_DISPLAYABLE_LABELS = {
+  0x20: 'Space',
+  0x09: 'Tab',
+  0x0a: 'Line Feed',
+  0x0d: 'Carriage Return',
+};
+
+/** @returns {boolean} false for C0/C1 control characters and whitespace/separator characters; true otherwise. Drives label fallback logic in the glyph panel. */
+export function isDisplayableChar(codepoint) {
+  if (codepoint <= 0x1f) return false; // C0 controls (includes tab, LF, CR)
+  if (codepoint === 0x20) return false; // space
+  if (codepoint === 0x7f) return false; // DEL
+  if (codepoint >= 0x80 && codepoint <= 0x9f) return false; // C1 controls
+  return true;
+}
+
+/** @returns {string|null} a human label for a common non-displayable codepoint (e.g. 'Space', 'Tab'), or null if none is known. */
+export function nonDisplayableLabel(codepoint) {
+  return NON_DISPLAYABLE_LABELS[codepoint] ?? null;
+}
+
+function isPixelBufferEmpty(pixels) {
+  if (!pixels) return true;
+  for (let i = 0; i < pixels.length; i++) {
+    if (pixels[i]) return false;
+  }
+  return true;
+}
+
+/** @returns {boolean} true iff every pixel in every present buffer (base, and background/foreground if added) is unset. */
+export function isEmptyGlyph(glyph) {
+  return isPixelBufferEmpty(glyph.pixels)
+    && isPixelBufferEmpty(glyph.backgroundPixels)
+    && isPixelBufferEmpty(glyph.foregroundPixels);
+}
+
+/** Adds a blank optional background layer (same size as the base glyph), behind/underneath it. Model-only — no UI or export reads this yet. */
+export function addBackgroundLayer(glyph) {
+  glyph.backgroundPixels = new Uint8Array(glyph.width * glyph.height);
+}
+
+/** Removes the optional background layer, if present. */
+export function removeBackgroundLayer(glyph) {
+  delete glyph.backgroundPixels;
+}
+
+/** Adds a blank optional foreground layer (same size as the base glyph), on top of/overlaid on it. Model-only — no UI or export reads this yet. */
+export function addForegroundLayer(glyph) {
+  glyph.foregroundPixels = new Uint8Array(glyph.width * glyph.height);
+}
+
+/** Removes the optional foreground layer, if present. */
+export function removeForegroundLayer(glyph) {
+  delete glyph.foregroundPixels;
 }
 
 /**
