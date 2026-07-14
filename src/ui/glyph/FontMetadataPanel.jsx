@@ -1,5 +1,5 @@
 // Form for FontMeta: familyName/styleName/unitsPerEm/ascender/descender/
-// baselineRow/iconTilePadding are safe to edit anytime (they only affect
+// baselineRow/horizontalPadding are safe to edit anytime (they only affect
 // export-time scaling math, not stored pixel data). pixelsPerEm is the one
 // exception — changing it crops or pads every existing glyph's grid
 // (GlyphSet.resizeGlyphSet), so it gets its own confirm-before-destructive
@@ -15,7 +15,7 @@ const FIELDS = [
   { key: 'ascender', label: 'Ascender', type: 'number' },
   { key: 'descender', label: 'Descender', type: 'number' },
   { key: 'baselineRow', label: 'Baseline Row', type: 'number' },
-  { key: 'iconTilePadding', label: 'Icon Tile Padding', type: 'number' },
+  { key: 'horizontalPadding', label: 'Horizontal Padding', type: 'number' },
 ];
 
 function FieldInput({ type, value, onCommit }) {

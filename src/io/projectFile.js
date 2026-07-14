@@ -375,9 +375,17 @@ export function deserializeGlyphSetProject(doc) {
   // (old icon glyphs were always PUA-keyed; old character glyphs are
   // real-Unicode-keyed), so isAutoAssignedCodepoint reproduces the same
   // per-glyph behavior those fields used to gate, with no backfill needed.
+  // `iconTilePadding` was renamed `horizontalPadding` once it started
+  // applying to every glyph, not just auto-assigned ones — a save carrying
+  // the old key gets it copied across so a previously-set padding value
+  // survives the rename instead of silently reverting to 0.
+  const meta =
+    gs.meta.horizontalPadding === undefined && gs.meta.iconTilePadding !== undefined
+      ? { ...gs.meta, horizontalPadding: gs.meta.iconTilePadding }
+      : gs.meta;
   return {
     id: gs.id,
-    meta: gs.meta,
+    meta,
     glyphs: new Map(gs.glyphs.map(([codepoint, glyph]) => [codepoint, deserializeGlyph(glyph, doc.pixelyphVersion ?? 1)])),
   };
 }

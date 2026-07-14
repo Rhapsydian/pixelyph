@@ -7,7 +7,7 @@
 // glyphs keep their own locked-in color until "Apply to all" overrides
 // every one in a single action. Each row lays out left-to-right using the
 // same glyphMetrics formula compileFont.js uses for real export, so
-// "gapless tiling" is a font-metadata property (iconTilePadding/bearings
+// "gapless tiling" is a font-metadata property (horizontalPadding/bearings
 // set to 0), not a separate preview mode.
 
 import { useState } from 'react';

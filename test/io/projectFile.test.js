@@ -309,6 +309,7 @@ test('deserializeGlyphSetProject loads a pre-merge legacy save (glyphSet.kind + 
   };
   const restoredChar = deserializeGlyphSetProject(legacyCharacterDoc);
   assert.equal('kind' in restoredChar, false);
+  assert.equal(restoredChar.meta.horizontalPadding, 0); // migrated from the old iconTilePadding key
   const charGlyph = restoredChar.glyphs.get(65);
   assert.equal('unicode' in charGlyph, false);
   assert.equal(charGlyph.name, 'A');
@@ -326,6 +327,7 @@ test('deserializeGlyphSetProject loads a pre-merge legacy save (glyphSet.kind + 
   };
   const restoredIcon = deserializeGlyphSetProject(legacyIconDoc);
   assert.equal('kind' in restoredIcon, false);
+  assert.equal(restoredIcon.meta.horizontalPadding, 2); // migrated from the old iconTilePadding key
   const iconGlyph = restoredIcon.glyphs.get(0xe000);
   assert.equal('unicode' in iconGlyph, false);
   assert.equal(iconGlyph.name, 'star');

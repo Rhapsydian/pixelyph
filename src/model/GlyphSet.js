@@ -28,7 +28,7 @@ function makeId() {
 
 /**
  * @param {Partial<{familyName:string, styleName:string, unitsPerEm:number, ascender:number,
- *   descender:number, pixelsPerEm:number, baselineRow:number, iconTilePadding:number}>} [overrides]
+ *   descender:number, pixelsPerEm:number, baselineRow:number, horizontalPadding:number}>} [overrides]
  * @returns {object} FontMeta
  */
 export function createFontMeta(overrides = {}) {
@@ -40,7 +40,7 @@ export function createFontMeta(overrides = {}) {
     descender: -200,
     pixelsPerEm: 16,
     baselineRow: 12,
-    iconTilePadding: 0,
+    horizontalPadding: 0,
     // null = derive from pixelsPerEm at glyph-creation time (see store.js's
     // assignCodepoint/addIconGlyph). Non-null overrides that derivation.
     defaultGlyphWidth: null,
@@ -143,20 +143,21 @@ export function isAutoAssignedCodepoint(codepoint) {
 /**
  * One glyph's horizontal metrics, in the same grid units as `meta`/`glyph`
  * (before any unitsPerEm scaling — callers scale both fields by their own
- * scale factor). Auto-assigned codepoints use the seamless-tiling formula
- * (bearing = iconTilePadding, advance = width + 2*padding); real typed
- * codepoints use the glyph's own stored bearing/advance. Shared by
- * compileFont.js (actual export) and SpecimenPreviewPanel.jsx (preview
- * layout) so both agree on spacing exactly.
+ * scale factor). `meta.horizontalPadding` applies uniformly to every
+ * glyph, real or auto-assigned — added on each side of whichever base
+ * bearing/advance applies: auto-assigned codepoints have no bearing of
+ * their own (flush/width-only), real typed codepoints use the glyph's own
+ * stored bearing/advance. Shared by compileFont.js (actual export) and
+ * SpecimenPreviewPanel.jsx (preview layout) so both agree on spacing
+ * exactly.
  *
  * @returns {{offsetX: number, advanceWidth: number}}
  */
 export function glyphMetrics(meta, codepoint, glyph) {
-  if (isAutoAssignedCodepoint(codepoint)) {
-    const padding = meta.iconTilePadding ?? 0;
-    return { offsetX: padding, advanceWidth: glyph.width + 2 * padding };
-  }
-  return { offsetX: glyph.leftSideBearing ?? 0, advanceWidth: glyph.advanceWidth ?? glyph.width };
+  const padding = meta.horizontalPadding ?? 0;
+  const baseOffsetX = isAutoAssignedCodepoint(codepoint) ? 0 : (glyph.leftSideBearing ?? 0);
+  const baseAdvance = isAutoAssignedCodepoint(codepoint) ? glyph.width : (glyph.advanceWidth ?? glyph.width);
+  return { offsetX: baseOffsetX + padding, advanceWidth: baseAdvance + 2 * padding };
 }
 
 const NON_DISPLAYABLE_LABELS = {

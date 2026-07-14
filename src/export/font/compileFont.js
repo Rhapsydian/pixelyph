@@ -5,12 +5,13 @@
 // derived from this compiled buffer afterward (see woff.js).
 //
 // Auto-assigned (Private Use Area) codepoints use the seamless-tiling
-// formula for spacing (leftSideBearing = iconTilePadding, advanceWidth =
+// formula for spacing (leftSideBearing = horizontalPadding, advanceWidth =
 // width + 2*padding, both in grid units before scaling); real typed
-// codepoints use each Glyph's own stored advanceWidth/leftSideBearing (both
-// authored in grid units, like `width`, and scaled here along with
-// everything else) — see GlyphSet.js's glyphMetrics, shared with the
-// Specimen Preview panel so both agree on spacing exactly.
+// codepoints use each Glyph's own stored advanceWidth/leftSideBearing, with
+// horizontalPadding added on top the same way (both authored in grid units,
+// like `width`, and scaled here along with everything else) — see
+// GlyphSet.js's glyphMetrics, shared with the Specimen Preview panel so
+// both agree on spacing exactly.
 
 import { gridToGlyphPath } from './gridToGlyphPath.js';
 import { slugify } from '../slugify.js';

@@ -34,7 +34,7 @@
 // insert into the same live preview, so PUA-keyed glyphs can be composed/
 // tested without knowing raw escapes. A tiling test strip (several copies
 // of one auto-assigned glyph in a row, for visually checking
-// iconTilePadding) only renders if the set actually has at least one
+// horizontalPadding) only renders if the set actually has at least one
 // auto-assigned glyph — nothing to usefully tile otherwise.
 //
 // Relies on a global `Buffer` for base64-encoding — available natively
