@@ -56,11 +56,13 @@ function glyphLabel(codepoint, glyph) {
   return `(unnamed) (${hex(codepoint)})`;
 }
 
-// Drives both the caution badge and the selection alert — an
-// auto-assigned codepoint, a missing name, or an empty grid all count,
-// independently of each other.
+// Drives both the caution badge and the selection alert — a real
+// codepoint or a name is enough identity on its own, so the badge only
+// fires when *neither* is present, or independently, whenever the grid is
+// empty (having an identity doesn't excuse a blank glyph).
 function hasIssue(codepoint, glyph) {
-  return isAutoAssignedCodepoint(codepoint) || !glyph.name || isEmptyGlyph(glyph);
+  const hasIdentity = !isAutoAssignedCodepoint(codepoint) || !!glyph.name;
+  return !hasIdentity || isEmptyGlyph(glyph);
 }
 
 export function GlyphSetPanel() {

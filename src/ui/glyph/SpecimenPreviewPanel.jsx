@@ -166,7 +166,7 @@ export function SpecimenPreviewPanel() {
               rows={2}
               style={{ width: '100%', resize: 'vertical', flexShrink: 0 }}
             />
-            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', alignContent: 'flex-start', gap: 4, maxHeight: INSERT_ROW_MAX_HEIGHT, overflowY: 'auto', flexShrink: 0 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', alignContent: 'flex-start', gap: 4, maxHeight: INSERT_ROW_MAX_HEIGHT, overflowY: 'auto', flex: '0 1 auto', minHeight: 0 }}>
               <span style={{ fontSize: 'var(--text-xs)', color: 'var(--chrome-text-muted)' }}>Insert glyph:</span>
               {sortedGlyphs.map(([codepoint, glyph]) => (
                 <button
@@ -189,7 +189,7 @@ export function SpecimenPreviewPanel() {
                 Apply to all
               </button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: 4, background: 'var(--chrome-bg-app)', border: '1px solid var(--chrome-border)', overflow: 'auto', flex: 1, minHeight: 0 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: 4, background: 'var(--chrome-bg-app)', border: '1px solid var(--chrome-border)', overflow: 'auto', flex: 1, minHeight: PREVIEW_HEIGHT + 8 }}>
               {text.length === 0 && <span style={{ color: 'var(--chrome-text-faint)' }}>Preview will appear here.</span>}
               {text.length > 0 && rows.map((row, i) => (
                 <div key={i} style={{ position: 'relative', height: PREVIEW_HEIGHT, width: Math.max(row.width, 1), flexShrink: 0 }}>

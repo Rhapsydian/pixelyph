@@ -500,7 +500,12 @@ export const useStore = create((set, get) => {
     setPan: (pan) => set({ pan }),
     setViewportSize: (viewportSize) => set({ viewportSize }),
     toggleGrid: () => set((s) => ({ showGrid: !s.showGrid })),
-    setGlyphDisplayColor: (color) => set({ glyphDisplayColor: color }),
+    /** Immediately recolors the currently-displayed glyphCanvas too, not just future rebuilds -- otherwise the active glyph would keep showing its old color until the next paint/selection/undo happened to rebuild it. */
+    setGlyphDisplayColor: (color) => {
+      const { glyphSet, activeCodepoint } = get();
+      const activeGlyph = activeCodepoint != null ? glyphSet?.glyphs.get(activeCodepoint) : null;
+      set({ glyphDisplayColor: color, ...(activeGlyph ? { glyphCanvas: glyphToCanvas(activeGlyph, color || undefined) } : {}) });
+    },
     setTileGridSize: (size) => set({ tileGridSize: Math.max(0, Math.round(Number(size) || 0)) }),
     setFlipRotateAllFrames: (allFrames) => set({ flipRotateAllFrames: allFrames }),
     setSidePanelTab: (tab) => set({ sidePanelTab: tab }),
