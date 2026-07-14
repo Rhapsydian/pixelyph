@@ -9,8 +9,8 @@ function glyph(name) {
   return g;
 }
 
-test('generateDemoHtml embeds @font-face with base64 matching the given WOFF2 bytes, and one specimen entry per glyph', () => {
-  const glyphSet = createGlyphSet({ kind: 'characters', meta: { familyName: 'Demo Font' } });
+test('generateDemoHtml embeds @font-face with base64 matching the given WOFF2 bytes, and one swatch per glyph', () => {
+  const glyphSet = createGlyphSet({ meta: { familyName: 'Demo Font' } });
   setGlyph(glyphSet, 'A'.codePointAt(0), glyph());
   setGlyph(glyphSet, 'B'.codePointAt(0), glyph());
   const woff2Bytes = new Uint8Array([1, 2, 3, 4, 5]);
@@ -19,12 +19,12 @@ test('generateDemoHtml embeds @font-face with base64 matching the given WOFF2 by
 
   assert.ok(html.includes('@font-face'));
   assert.ok(html.includes(Buffer.from(woff2Bytes).toString('base64')));
-  assert.equal((html.match(/class="specimen-entry"/g) ?? []).length, 2);
+  assert.equal((html.match(/class="icon-swatch"/g) ?? []).length, 2);
   assert.ok(html.includes('<textarea id="preview-text"'));
 });
 
 test('generateDemoHtml includes a WOFF fallback source when woffBytes is provided', () => {
-  const glyphSet = createGlyphSet({ kind: 'characters' });
+  const glyphSet = createGlyphSet({});
   setGlyph(glyphSet, 65, glyph());
   const woff2Bytes = new Uint8Array([9, 9]);
   const woffBytes = new Uint8Array([7, 7, 7]);
@@ -34,7 +34,7 @@ test('generateDemoHtml includes a WOFF fallback source when woffBytes is provide
 });
 
 test('generateDemoHtml falls back to WOFF-only when woff2Bytes is omitted (WOFF2 export failed/timed out)', () => {
-  const glyphSet = createGlyphSet({ kind: 'characters' });
+  const glyphSet = createGlyphSet({});
   setGlyph(glyphSet, 65, glyph());
   const woffBytes = new Uint8Array([3, 1, 4]);
   const html = generateDemoHtml(glyphSet, undefined, woffBytes);
@@ -43,8 +43,8 @@ test('generateDemoHtml falls back to WOFF-only when woff2Bytes is omitted (WOFF2
   assert.ok(html.includes(Buffer.from(woffBytes).toString('base64')));
 });
 
-test('generateDemoHtml for an icon-kind set renders one clickable swatch per icon plus a tiling test strip', () => {
-  const glyphSet = createGlyphSet({ kind: 'icons', meta: { familyName: 'Icon Set' } });
+test('generateDemoHtml renders one clickable swatch per glyph plus a tiling test strip when at least one glyph is auto-assigned', () => {
+  const glyphSet = createGlyphSet({ meta: { familyName: 'Icon Set' } });
   setGlyph(glyphSet, 0xe000, glyph('Star'));
   setGlyph(glyphSet, 0xe001, glyph('Heart'));
   const html = generateDemoHtml(glyphSet, new Uint8Array([1]));
@@ -53,11 +53,29 @@ test('generateDemoHtml for an icon-kind set renders one clickable swatch per ico
   assert.ok(html.includes('id="tiling-strip"'));
   assert.ok(html.includes('Star'));
   assert.ok(html.includes('Heart'));
-  assert.ok(!html.includes('class="specimen-entry"'));
+});
+
+test('generateDemoHtml omits the tiling test strip when every glyph has a real typed codepoint', () => {
+  const glyphSet = createGlyphSet({ meta: { familyName: 'Character Set' } });
+  setGlyph(glyphSet, 65, glyph());
+  setGlyph(glyphSet, 66, glyph());
+  const html = generateDemoHtml(glyphSet, new Uint8Array([1]));
+
+  assert.ok(!html.includes('id="tiling-strip"'));
+});
+
+test('generateDemoHtml seeds the preview textarea with typed glyphs only, excluding auto-assigned codepoints', () => {
+  const glyphSet = createGlyphSet({ meta: { familyName: 'Mixed Set' } });
+  setGlyph(glyphSet, 65, glyph()); // 'A', typed
+  setGlyph(glyphSet, 0xe000, glyph('Star')); // auto-assigned
+  const html = generateDemoHtml(glyphSet, new Uint8Array([1]));
+
+  const textareaMatch = /<textarea id="preview-text"[^>]*>([^<]*)<\/textarea>/.exec(html);
+  assert.equal(textareaMatch[1], 'A');
 });
 
 test('generateDemoHtml includes a Pixelyph branding footer linking to the GitHub Pages demo', () => {
-  const glyphSet = createGlyphSet({ kind: 'characters' });
+  const glyphSet = createGlyphSet({});
   setGlyph(glyphSet, 65, glyph());
   const html = generateDemoHtml(glyphSet, new Uint8Array([1]));
 

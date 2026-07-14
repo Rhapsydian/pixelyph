@@ -115,6 +115,25 @@ export function isAutoAssignedCodepoint(codepoint) {
   return codepoint >= PUA_START && codepoint <= PUA_END;
 }
 
+/**
+ * One glyph's horizontal metrics, in the same grid units as `meta`/`glyph`
+ * (before any unitsPerEm scaling — callers scale both fields by their own
+ * scale factor). Auto-assigned codepoints use the seamless-tiling formula
+ * (bearing = iconTilePadding, advance = width + 2*padding); real typed
+ * codepoints use the glyph's own stored bearing/advance. Shared by
+ * compileFont.js (actual export) and SpecimenPreviewPanel.jsx (preview
+ * layout) so both agree on spacing exactly.
+ *
+ * @returns {{offsetX: number, advanceWidth: number}}
+ */
+export function glyphMetrics(meta, codepoint, glyph) {
+  if (isAutoAssignedCodepoint(codepoint)) {
+    const padding = meta.iconTilePadding ?? 0;
+    return { offsetX: padding, advanceWidth: glyph.width + 2 * padding };
+  }
+  return { offsetX: glyph.leftSideBearing ?? 0, advanceWidth: glyph.advanceWidth ?? glyph.width };
+}
+
 const NON_DISPLAYABLE_LABELS = {
   0x20: 'Space',
   0x09: 'Tab',

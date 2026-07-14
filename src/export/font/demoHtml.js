@@ -26,12 +26,16 @@
 // below is always null for now; the WOFF2-preferred fallback chain in
 // fontFaceRule is left in place for when that's re-enabled.)
 //
-// Character fonts get a live <textarea> preview (defaulted to a sample
-// string covering every designed glyph) plus a full specimen grid below.
-// Icon fonts get a grid of clickable swatches that insert into the same
-// live preview, so icons can be composed/tested without knowing raw PUA
-// escapes — plus a tiling test strip (several copies of one icon in a row)
-// for visually checking iconTilePadding.
+// One unified body for every glyph set, regardless of what mix of typed
+// and auto-assigned glyphs it has: a live <textarea> preview seeded with
+// every *typed* glyph's character (auto-assigned/PUA codepoints have no
+// natural keystroke, so they're left out of the seed text), plus a grid of
+// clickable swatches — one per glyph, typed or auto-assigned alike — that
+// insert into the same live preview, so PUA-keyed glyphs can be composed/
+// tested without knowing raw escapes. A tiling test strip (several copies
+// of one auto-assigned glyph in a row, for visually checking
+// iconTilePadding) only renders if the set actually has at least one
+// auto-assigned glyph — nothing to usefully tile otherwise.
 //
 // Relies on a global `Buffer` for base64-encoding — available natively
 // under `node --test`, and in the browser/Electron renderer via the
@@ -47,6 +51,8 @@
 // design pass (see the plan's phased roadmap) is scoped to cover this demo
 // output too when it reskins the rest of the app, not just leave it as
 // today's placeholder styling forever.
+
+import { isAutoAssignedCodepoint } from '../../model/GlyphSet.js';
 
 // The one hardcoded URL in this file — update it if Pixelyph ever gets an
 // official domain name, in place of the GitHub Pages project site.
@@ -73,45 +79,37 @@ function sortedGlyphEntries(glyphSet) {
   return Array.from(glyphSet.glyphs.entries()).sort((a, b) => a[0] - b[0]);
 }
 
+// Auto-assigned (PUA) codepoints have no natural keystroke, so they're left
+// out of the seed text — only real typed characters go in by default.
 function defaultSampleString(entries) {
-  return entries.map(([codepoint]) => String.fromCodePoint(codepoint)).join('');
+  return entries
+    .filter(([codepoint]) => !isAutoAssignedCodepoint(codepoint))
+    .map(([codepoint]) => String.fromCodePoint(codepoint))
+    .join('');
 }
 
-function characterFontBody(glyphSet, entries) {
-  const specimenEntries = entries
-    .map(([codepoint]) => {
+function glyphBody(entries) {
+  const hasAutoAssigned = entries.some(([codepoint]) => isAutoAssignedCodepoint(codepoint));
+  const swatches = entries
+    .map(([codepoint, glyph]) => {
+      const isAuto = isAutoAssignedCodepoint(codepoint);
       const char = String.fromCodePoint(codepoint);
-      const label = `U+${codepoint.toString(16).toUpperCase()}`;
-      return `<div class="specimen-entry" data-codepoint="${codepoint}"><span class="glyph">${escapeHtml(char)}</span><span class="label">${escapeHtml(label)}</span></div>`;
+      const hex = `U+${codepoint.toString(16).toUpperCase()}`;
+      const label = glyph.name || (isAuto ? '(unnamed)' : hex);
+      const title = `${label} (${hex})`;
+      return `<button type="button" class="icon-swatch"${isAuto ? ' data-auto="1"' : ''} data-codepoint="${codepoint}" data-char="${escapeHtml(char)}" title="${escapeHtml(title)}"><span class="glyph">${escapeHtml(char)}</span><span class="label">${escapeHtml(label)}</span></button>`;
     })
     .join('\n');
   return `
 <textarea id="preview-text" rows="3">${escapeHtml(defaultSampleString(entries))}</textarea>
 <div id="preview" class="preview"></div>
+<p>Click a glyph to insert it above:</p>
 <h2>Specimen</h2>
 <div id="specimen-grid">
-${specimenEntries}
-</div>`;
-}
-
-function iconFontBody(glyphSet, entries) {
-  const swatches = entries
-    .map(([codepoint, glyph]) => {
-      const char = String.fromCodePoint(codepoint);
-      const label = glyph.name || '(unnamed)';
-      const title = `${label} (U+${codepoint.toString(16).toUpperCase()})`;
-      return `<button type="button" class="icon-swatch" data-codepoint="${codepoint}" data-char="${escapeHtml(char)}" title="${escapeHtml(title)}"><span class="glyph">${escapeHtml(char)}</span><span class="label">${escapeHtml(label)}</span></button>`;
-    })
-    .join('\n');
-  return `
-<div id="icon-grid">
 ${swatches}
-</div>
-<p>Click an icon to insert it below:</p>
-<textarea id="preview-text" rows="2"></textarea>
-<div id="preview" class="preview"></div>
+</div>${hasAutoAssigned ? `
 <h2>Tiling test</h2>
-<div id="tiling-strip" class="preview"></div>`;
+<div id="tiling-strip" class="preview"></div>` : ''}`;
 }
 
 const DEMO_SCRIPT = `
@@ -125,9 +123,9 @@ Array.prototype.forEach.call(document.querySelectorAll('.icon-swatch'), function
     syncPreview();
   });
 });
-var firstSwatch = document.querySelector('.icon-swatch');
+var firstAutoSwatch = document.querySelector('.icon-swatch[data-auto="1"]');
 var tilingStrip = document.getElementById('tiling-strip');
-if (firstSwatch && tilingStrip) tilingStrip.textContent = firstSwatch.dataset.char.repeat(8);
+if (firstAutoSwatch && tilingStrip) tilingStrip.textContent = firstAutoSwatch.dataset.char.repeat(8);
 `;
 
 /**
@@ -137,9 +135,9 @@ if (firstSwatch && tilingStrip) tilingStrip.textContent = firstSwatch.dataset.ch
  * @returns {string} a standalone, double-click-openable .html document
  */
 export function generateDemoHtml(glyphSet, woff2Bytes, woffBytes) {
-  const { meta, kind } = glyphSet;
+  const { meta } = glyphSet;
   const entries = sortedGlyphEntries(glyphSet);
-  const body = kind === 'icons' ? iconFontBody(glyphSet, entries) : characterFontBody(glyphSet, entries);
+  const body = glyphBody(entries);
 
   return `<!doctype html>
 <html>
@@ -178,18 +176,18 @@ textarea:focus-visible, button:focus-visible { outline: none; box-shadow: 0 0 0 
   border-radius: var(--radius-md); background: var(--chrome-bg-panel);
   margin: var(--space-4) 0; word-break: break-all;
 }
-#specimen-grid, #icon-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-.specimen-entry, .icon-swatch {
+#specimen-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.icon-swatch {
   display: flex; flex-direction: column; align-items: center; gap: 4px;
   border: 1px solid var(--chrome-border); border-radius: var(--radius-sm);
   padding: var(--space-2); min-width: 40px; background: var(--chrome-bg-panel); color: var(--chrome-text);
   transition: border-color 0.1s ease, background-color 0.1s ease;
+  cursor: pointer;
 }
-.icon-swatch { cursor: pointer; }
 .icon-swatch:hover { background: var(--chrome-bg-raised); border-color: var(--chrome-accent); }
 .icon-swatch:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--chrome-accent); }
-.specimen-entry .glyph, .icon-swatch .glyph { font-family: "${escapeHtml(meta.familyName)}"; font-size: 1.6rem; }
-.specimen-entry .label, .icon-swatch .label { font-size: 0.65rem; color: var(--chrome-text-muted); }
+.icon-swatch .glyph { font-family: "${escapeHtml(meta.familyName)}"; font-size: 1.6rem; }
+.icon-swatch .label { font-size: 0.65rem; color: var(--chrome-text-muted); }
 footer {
   margin-top: var(--space-6); padding-top: var(--space-4);
   border-top: 1px solid var(--chrome-border); font-size: var(--text-xs);

@@ -1331,9 +1331,9 @@ export const useStore = create((set, get) => {
      * Compiles the current GlyphSet into whichever font file(s) are
      * selected, compiling the font and deriving WOFF/WOFF2 buffers at most
      * once regardless of how many formats are checked. `demoHtml` and
-     * `cssManifest` (icon-kind only) are separate boolean options rather
-     * than a `format` string, since FontExportPanel lets several be
-     * exported together in one click.
+     * `cssManifest` are separate boolean options rather than a `format`
+     * string, since FontExportPanel lets several be exported together in
+     * one click.
      *
      * WOFF2 (toWoff2, woff.js) can time out — see that file's KNOWN ISSUE
      * comment and BACKLOG.md — so it's disabled entirely for now
@@ -1386,7 +1386,7 @@ export const useStore = create((set, get) => {
         const html = generateDemoHtml(glyphSet, woff2Bytes, woffBytes);
         files.push({ name: `${baseName}-demo.html`, data: textEncoder.encode(html), type: 'text/html' });
       }
-      if (cssManifest && glyphSet.kind === 'icons') {
+      if (cssManifest) {
         // Reference only the format(s) actually being exported alongside
         // this CSS (woff2 excluded — see WOFF2_EXPORT_ENABLED above), so
         // the generated @font-face src never points at a file that isn't

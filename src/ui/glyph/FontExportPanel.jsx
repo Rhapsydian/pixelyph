@@ -1,10 +1,11 @@
-// Export options branch on GlyphSet.kind (per the plan's "Icon fonts as a
-// second Glyph-mode target" note): character fonts get OTF/WOFF + demo
-// HTML; icon fonts get those plus CSS + JSON manifest. There's no real
-// "TTF" option — opentype.js only ever produces CFF-flavored OpenType
-// output when building a font from scratch (see compileFont.js), so OTF is
-// the one binary format offered rather than presenting a second button that
-// would just save the identical bytes under a misleading .ttf name.
+// Every glyph set gets the same export options — OTF/WOFF, demo HTML, and
+// CSS + JSON manifest — since there's no longer a project-level discriminant
+// to gate the CSS/manifest option on (any glyph can freely have a real
+// character, a name, both, or neither). There's no real "TTF" option —
+// opentype.js only ever produces CFF-flavored OpenType output when building
+// a font from scratch (see compileFont.js), so OTF is the one binary format
+// offered rather than presenting a second button that would just save the
+// identical bytes under a misleading .ttf name.
 //
 // WOFF2 is hidden for now — see BACKLOG.md and state/store.js's
 // WOFF2_EXPORT_ENABLED — it reliably times out rather than compiling in a
@@ -18,6 +19,7 @@ const CHECKBOX_ROWS = [
   { key: 'otf', label: 'OTF font file' },
   { key: 'woff', label: 'WOFF' },
   { key: 'demoHtml', label: 'Demo HTML (specimen preview)' },
+  { key: 'cssManifest', label: 'CSS + JSON manifest' },
 ];
 
 export function FontExportPanel() {
@@ -29,8 +31,6 @@ export function FontExportPanel() {
 
   if (!glyphSet) return null;
 
-  const isIconFont = glyphSet.kind === 'icons';
-  const rows = isIconFont ? [...CHECKBOX_ROWS, { key: 'cssManifest', label: 'CSS + JSON manifest' }] : CHECKBOX_ROWS;
   const anySelected = Object.values(selected).some(Boolean);
   // The generated CSS's @font-face only references formats actually
   // included in the export (see iconFontCss.js) — without OTF or WOFF
@@ -57,7 +57,7 @@ export function FontExportPanel() {
       <strong>Export Font</strong>
       {glyphSet.glyphs.size === 0 && <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>Draw at least one glyph before exporting.</span>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {rows.map(({ key, label }) => (
+        {CHECKBOX_ROWS.map(({ key, label }) => (
           <label key={key} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <input type="checkbox" checked={Boolean(selected[key])} onChange={() => toggle(key)} />
             {label}

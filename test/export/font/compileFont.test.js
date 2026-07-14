@@ -12,7 +12,6 @@ function filledGlyph(width, height) {
 
 test('compileFont compiles a small character font and round-trips through opentype.parse', () => {
   const glyphSet = createGlyphSet({
-    kind: 'characters',
     meta: { familyName: 'Test Font', styleName: 'Regular', unitsPerEm: 1000, pixelsPerEm: 10, baselineRow: 8, ascender: 800, descender: -200 },
   });
   setGlyph(glyphSet, 'A'.codePointAt(0), filledGlyph(8, 10));
@@ -32,15 +31,15 @@ test('compileFont compiles a small character font and round-trips through openty
 });
 
 test('compileFont always produces CFF-flavored OpenType output (OTTO signature)', () => {
-  const glyphSet = createGlyphSet({ kind: 'characters' });
+  const glyphSet = createGlyphSet({});
   setGlyph(glyphSet, 65, filledGlyph(8, 16));
   const buffer = fontToArrayBuffer(compileFont(glyphSet));
   const signature = String.fromCharCode(...new Uint8Array(buffer.slice(0, 4)));
   assert.equal(signature, 'OTTO');
 });
 
-test('compileFont gives icon glyphs unique, slugified names based on their user-entered name', () => {
-  const glyphSet = createGlyphSet({ kind: 'icons' });
+test('compileFont gives any named glyph a unique, slugified name — regardless of whether its codepoint is typed or auto-assigned', () => {
+  const glyphSet = createGlyphSet({});
   const star = filledGlyph(12, 16);
   star.name = 'My Star!';
   setGlyph(glyphSet, 0xe000, star);
@@ -48,12 +47,19 @@ test('compileFont gives icon glyphs unique, slugified names based on their user-
   assert.equal(font.glyphs.get(1).name, 'icon-my-star');
 });
 
-test('iconTilePadding of 0 makes two equal-width icon glyphs touch with zero gap', () => {
-  const glyphSet = createGlyphSet({ kind: 'icons', meta: { unitsPerEm: 1000, pixelsPerEm: 16, iconTilePadding: 0 } });
+test('compileFont falls back to a hex glyph name when a glyph has no name', () => {
+  const glyphSet = createGlyphSet({});
+  setGlyph(glyphSet, 65, filledGlyph(8, 16)); // no name set
+  const font = compileFont(glyphSet);
+  assert.equal(font.glyphs.get(1).name, 'uni0041');
+});
+
+test('iconTilePadding of 0 makes two equal-width auto-assigned glyphs touch with zero gap', () => {
+  const glyphSet = createGlyphSet({ meta: { unitsPerEm: 1000, pixelsPerEm: 16, iconTilePadding: 0 } });
   setGlyph(glyphSet, 0xe000, filledGlyph(10, 16));
   setGlyph(glyphSet, 0xe001, filledGlyph(10, 16));
   const font = compileFont(glyphSet);
-  const a = font.glyphs.get(1); // .notdef, iconA, iconB
+  const a = font.glyphs.get(1); // .notdef, a, b
   const b = font.glyphs.get(2);
   const scale = 1000 / 16;
   const inkEndA = a.leftSideBearing + 10 * scale; // measured from A's own origin
@@ -62,9 +68,9 @@ test('iconTilePadding of 0 makes two equal-width icon glyphs touch with zero gap
   assert.equal(inkStartB - inkEndA, 0);
 });
 
-test('a positive iconTilePadding inserts the same exact gap between any pair of equal-width icon glyphs', () => {
+test('a positive iconTilePadding inserts the same exact gap between any pair of equal-width auto-assigned glyphs', () => {
   const padding = 2;
-  const glyphSet = createGlyphSet({ kind: 'icons', meta: { unitsPerEm: 1000, pixelsPerEm: 16, iconTilePadding: padding } });
+  const glyphSet = createGlyphSet({ meta: { unitsPerEm: 1000, pixelsPerEm: 16, iconTilePadding: padding } });
   setGlyph(glyphSet, 0xe000, filledGlyph(10, 16));
   setGlyph(glyphSet, 0xe001, filledGlyph(10, 16));
   const font = compileFont(glyphSet);
@@ -74,4 +80,40 @@ test('a positive iconTilePadding inserts the same exact gap between any pair of 
   const inkEndA = a.leftSideBearing + 10 * scale;
   const inkStartB = a.advanceWidth + b.leftSideBearing;
   assert.equal(inkStartB - inkEndA, 2 * padding * scale);
+});
+
+test('compileFont handles a mixed set: typed-named, auto-assigned-named, and bare (unnamed typed) glyphs together', () => {
+  const glyphSet = createGlyphSet({ meta: { familyName: 'Mixed Font', unitsPerEm: 1000, pixelsPerEm: 16, iconTilePadding: 1 } });
+
+  const typedNamed = filledGlyph(10, 16);
+  typedNamed.name = 'Cap A';
+  typedNamed.leftSideBearing = 1;
+  typedNamed.advanceWidth = 12;
+  setGlyph(glyphSet, 65, typedNamed); // real typed codepoint, named, own stored bearing/advance
+
+  const bare = filledGlyph(6, 16); // real typed codepoint, no name, no stored overrides
+  setGlyph(glyphSet, 66, bare);
+
+  const autoNamed = filledGlyph(8, 16);
+  autoNamed.name = 'Star';
+  setGlyph(glyphSet, 0xe000, autoNamed); // auto-assigned codepoint, named
+
+  const font = compileFont(glyphSet);
+  const scale = 1000 / 16;
+  // Sorted by codepoint: .notdef, 65 ('A'), 66 ('B'), 0xe000 (star)
+  const a = font.glyphs.get(1);
+  const b = font.glyphs.get(2);
+  const star = font.glyphs.get(3);
+
+  assert.equal(a.name, 'icon-cap-a'); // named -> icon- prefix regardless of typed/auto origin
+  assert.equal(a.advanceWidth, 12 * scale); // typed: uses the glyph's own stored advanceWidth
+  assert.equal(a.leftSideBearing, 1 * scale); // typed: uses the glyph's own stored leftSideBearing
+
+  assert.equal(b.name, 'uni0042'); // no name -> hex fallback
+  assert.equal(b.advanceWidth, 6 * scale); // typed, no stored advanceWidth override -> falls back to width
+  assert.equal(b.leftSideBearing, 0);
+
+  assert.equal(star.name, 'icon-star');
+  assert.equal(star.advanceWidth, 8 * scale + 2 * 1 * scale); // auto-assigned: tiling formula with padding=1
+  assert.equal(star.leftSideBearing, 1 * scale); // auto-assigned: padding
 });

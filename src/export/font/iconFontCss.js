@@ -18,8 +18,11 @@ import { slugify } from '../slugify.js';
 
 function uniqueSlugFactory() {
   const used = new Set();
-  return (name) => {
-    const base = slugify(name ?? '') || 'icon';
+  // Falls back to the glyph's own hex codepoint (not a generic 'icon')
+  // when the name is empty or entirely unslugifiable, so bulk-generated
+  // CSS classes stay distinguishable from each other.
+  return (name, codepoint) => {
+    const base = slugify(name ?? '') || codepoint.toString(16);
     let candidate = base;
     let n = 2;
     while (used.has(candidate)) candidate = `${base}-${n++}`;
@@ -37,7 +40,7 @@ const FORMAT_SOURCES = [
 ];
 
 /**
- * @param {object} glyphSet GlyphSet (icon-kind)
+ * @param {object} glyphSet GlyphSet
  * @param {{formats?: {woff2?: boolean, woff?: boolean, otf?: boolean}}} [options]
  *   which sibling font file(s) will actually be exported alongside this
  *   CSS — only those appear in the `src` list. Defaults to `{otf: true}`,
@@ -54,7 +57,7 @@ export function generateIconFontCss(glyphSet, { formats = { otf: true } } = {}) 
 
   const sortedEntries = Array.from(glyphSet.glyphs.entries()).sort((a, b) => a[0] - b[0]);
   for (const [codepoint, glyph] of sortedEntries) {
-    const slug = nextSlug(glyph.name);
+    const slug = nextSlug(glyph.name, codepoint);
     const hex = codepoint.toString(16);
     manifest[slug] = hex;
     rules.push(`.icon-${slug}::before {\n  content: "\\${hex}";\n}`);

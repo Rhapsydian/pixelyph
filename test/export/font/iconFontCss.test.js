@@ -10,7 +10,7 @@ function iconGlyph(name) {
 }
 
 test('generateIconFontCss emits a @font-face and one rule + manifest entry per glyph', () => {
-  const glyphSet = createGlyphSet({ kind: 'icons', meta: { familyName: 'My Icons' } });
+  const glyphSet = createGlyphSet({ meta: { familyName: 'My Icons' } });
   setGlyph(glyphSet, 0xe000, iconGlyph('Star'));
   setGlyph(glyphSet, 0xe001, iconGlyph('Heart'));
 
@@ -25,17 +25,32 @@ test('generateIconFontCss emits a @font-face and one rule + manifest entry per g
 });
 
 test('generateIconFontCss slugifies names and de-duplicates collisions', () => {
-  const glyphSet = createGlyphSet({ kind: 'icons', meta: { familyName: 'Icons' } });
+  const glyphSet = createGlyphSet({ meta: { familyName: 'Icons' } });
   setGlyph(glyphSet, 0xe000, iconGlyph('My Star!'));
   setGlyph(glyphSet, 0xe001, iconGlyph('My Star!'));
   setGlyph(glyphSet, 0xe002, iconGlyph(''));
 
   const { manifest } = generateIconFontCss(glyphSet);
-  assert.deepEqual(manifest, { 'my-star': 'e000', 'my-star-2': 'e001', icon: 'e002' });
+  // An empty/unslugifiable name falls back to the glyph's own hex codepoint
+  // (not a generic 'icon') so bulk-generated classes stay distinguishable.
+  assert.deepEqual(manifest, { 'my-star': 'e000', 'my-star-2': 'e001', e002: 'e002' });
+});
+
+test('generateIconFontCss works across a mixed set of typed, auto-assigned, and unnamed glyphs', () => {
+  const glyphSet = createGlyphSet({ meta: { familyName: 'Mixed' } });
+  setGlyph(glyphSet, 65, iconGlyph('Cap A')); // typed, named
+  setGlyph(glyphSet, 0xe000, iconGlyph('Star')); // auto-assigned, named
+  setGlyph(glyphSet, 66, iconGlyph('')); // typed, unnamed -> hex fallback
+
+  const { css, manifest } = generateIconFontCss(glyphSet);
+  assert.deepEqual(manifest, { 'cap-a': '41', star: 'e000', '42': '42' });
+  assert.ok(css.includes('.icon-cap-a::before'));
+  assert.ok(css.includes('.icon-star::before'));
+  assert.ok(css.includes('.icon-42::before'));
 });
 
 test('generateIconFontCss only references formats actually passed in — never a file that will not exist', () => {
-  const glyphSet = createGlyphSet({ kind: 'icons', meta: { familyName: 'Icons' } });
+  const glyphSet = createGlyphSet({ meta: { familyName: 'Icons' } });
   setGlyph(glyphSet, 0xe000, iconGlyph('Star'));
 
   const otfOnly = generateIconFontCss(glyphSet, { formats: { otf: true } });
@@ -49,14 +64,14 @@ test('generateIconFontCss only references formats actually passed in — never a
 });
 
 test('generateIconFontCss defaults to referencing OTF when no formats option is given', () => {
-  const glyphSet = createGlyphSet({ kind: 'icons', meta: { familyName: 'Icons' } });
+  const glyphSet = createGlyphSet({ meta: { familyName: 'Icons' } });
   setGlyph(glyphSet, 0xe000, iconGlyph('Star'));
   const { css } = generateIconFontCss(glyphSet);
   assert.ok(css.includes('url("icons.otf") format("opentype")'));
 });
 
 test('generateIconFontCss omits the src list rather than referencing a nonexistent file when no format is selected', () => {
-  const glyphSet = createGlyphSet({ kind: 'icons', meta: { familyName: 'Icons' } });
+  const glyphSet = createGlyphSet({ meta: { familyName: 'Icons' } });
   setGlyph(glyphSet, 0xe000, iconGlyph('Star'));
   const { css } = generateIconFontCss(glyphSet, { formats: {} });
   assert.ok(!css.includes('src:'));
