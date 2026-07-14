@@ -1,127 +1,158 @@
 # Draw Mode
 
-Draw mode is a live SVG pixel editor, not a Canvas2D approximation — the
-editing surface is the same markup that gets exported (gradients, stroke,
-and filters included), so what you see while drawing is exactly what you
-get.
+Draw mode is where you make pixel art: illustrations, sprites, tilesets,
+and animations. Under the hood, Pixelyph draws with real SVG shapes rather
+than a raster grid, so what you see while drawing — gradients, strokes,
+filters and all — is exactly what you'll get when you export.
 
-## Tools
+This page walks through the main things you'll do in Draw mode. For
+frame-by-frame animation specifically, see [Animation](animation.md).
 
-The tool rail (left edge) holds: pencil, eraser, bucket fill, eyedropper,
-line, rectangle, ellipse (outline or filled), a rectangular marquee
-selection, and a dedicated **Move** tool.
+## Drawing your first pixels
 
-- **Right-click erases** instead of paints for pencil, bucket fill, line,
-  rectangle, and ellipse — a quick correction mid-stroke without switching
-  tools.
-- **Brush width** (1–8px) applies to pencil/eraser/line; pencil also has a
-  dithering (checkerboard texture) option and pixel-perfect corner
-  correction.
-- **Bucket fill** has a color-tolerance slider and a global (non-contiguous,
-  whole-canvas) mode.
-- **Symmetry/mirror drawing** (horizontal, vertical, or both) applies
-  uniformly across every tool.
+The tool rail on the left edge holds your drawing tools: **pencil**,
+**eraser**, **bucket fill**, **eyedropper** (pick a color off the canvas),
+**line**, **rectangle**, **ellipse**, a rectangular **marquee** selection
+tool, and a dedicated **Move** tool.
 
-## Selection, copy, and paste
+Pick a color from the Palette panel (see "Building your palette" below),
+select the pencil, then click and drag on the canvas to draw. A few things
+worth knowing right away:
 
-The marquee tool selects a rectangular region. Enter commits a move in
-place; Escape cancels it as a true no-op — nothing touches the real
-document until you commit. Ctrl+A/C/X/V select-all/copy/cut/paste using an
-app-internal clipboard; pasting something just copied or cut from the same
-project lands back at its original position instead of re-centering.
+- **Right-click paints with the eraser** instead of the current tool, for
+  pencil, bucket fill, line, rectangle, and ellipse — handy for a quick
+  correction mid-stroke without switching tools.
+- **Brush width** (1–8px) is available for pencil, eraser, and line, along
+  with a dithering (checkerboard texture) option and pixel-perfect corner
+  correction for the pencil.
+- **Bucket fill** has a color-tolerance slider, plus a "global" mode that
+  fills every matching pixel on the canvas instead of just the connected
+  region you clicked.
+- **Symmetry/mirror drawing** (horizontal, vertical, or both) mirrors
+  every stroke automatically, for any tool — useful for characters, icons,
+  or anything meant to be symmetrical.
 
-Pasting an image from another app (a screenshot, etc.) lands it as a
-floating selection too, downsampled to fit if the source is larger than
-the canvas. On Shape tier, a multi-color external paste additionally asks
-**Paste as: Multiple shapes (by color)** (full color fidelity) or
-**Single shape** (unions it into one paintable shape — useful for
-importing a silhouette or mask).
+## Selecting, copying, and moving
+
+Use the marquee tool to draw a rectangular selection. Once you have a
+selection:
+
+- Drag it (or use the Move tool) to reposition it — nothing is actually
+  changed in your project until you commit the move.
+- **Enter** commits the move in place; **Escape** cancels it completely,
+  leaving the canvas exactly as it was.
+- **Ctrl+A / Ctrl+C / Ctrl+X / Ctrl+V** select all, copy, cut, and paste,
+  using a clipboard that's shared across the whole app — you can copy from
+  one project or glyph and paste into another. Pasting something you just
+  copied or cut from the same project puts it back at its original spot
+  instead of centering it.
+
+You can also paste an image copied from another app (a screenshot, for
+example) — it lands as a selection you can position, shrinking to fit if
+it's larger than your canvas. If you're on Shape tier and paste a
+multi-color image, Pixelyph asks whether to bring it in as **multiple
+shapes** (one per color, full fidelity) or a **single shape** (everything
+merged into one paintable shape — handy for a silhouette or mask).
 
 ## The Move tool
 
-Click a shape directly (Shape tier) to select and drag it — or, with
-"Select from: Active layer," every shape in that shape's layer moves
-together. On Pixel tier or in Glyph mode, drag anywhere to shift the whole
-active layer's content. Each drag is a single undo step regardless of
-length. Arrow keys nudge too (Shift for a 10px step instead of 1px) — see
-[Keyboard Shortcuts](keyboard-shortcuts.md).
+On **Shape tier**, click a shape directly to select and drag just that
+shape — or switch "Select from" to "Active layer" to drag every shape in
+that layer together. On **Pixel tier**, or in Glyph mode, dragging
+anywhere moves the whole active layer's content. However far you drag, it
+counts as one undo step. Arrow keys nudge the same target by 1px (hold
+Shift for 10px) — see [Keyboard Shortcuts](keyboard-shortcuts.md) for the
+full picture of what nudge affects.
 
-## Pixel tier vs. Shape tier
+## Working with layers
 
-**Pixel tier** auto-manages one shape per color per layer — paint and the
-bookkeeping happens for you, no manual shape authoring needed. **Shape
-tier** additionally exposes manual shape/style authoring: each layer
-expands to show its individual Shapes as indented sub-rows in the Layers
-panel, each with its own fill, stroke, and effects.
+Every Draw-mode project has one or more **layers** — think of them like
+stacked transparent sheets, each with its own content, that combine to
+form the final image. The Layers panel (in the side panel) shows a live
+thumbnail of each layer, with controls to add, remove, reorder, duplicate,
+and merge layers down into the one below. Each layer also has a lock
+toggle and an opacity slider, and the eyedropper can activate a layer
+instead of sampling a color.
 
-Switching Pixel → Shape is always safe. Switching Shape → Pixel asks for
-confirmation, since it collapses each layer's shapes down to its topmost
-visible color per cell — gradients, stroke, effects, and multiple shapes
-per layer don't survive the trip (layer count/order/names/lock/opacity
-do).
+One thing to know: a layer's visibility (its eye icon) is per-frame, not
+global — hiding a layer only affects whichever frame you're currently
+looking at, so different frames of an animation can each show a different
+combination of layers.
 
-## Layers panel
+## Pixel tier vs. Shape tier — which do I need
 
-Both tiers share one Layers panel: a live thumbnail per layer,
-add/remove/reorder/duplicate/merge-down, a lock toggle, opacity, and an
-eyedropper that activates a layer instead of sampling a color. On Shape
-tier, each layer expands to its Shapes with the same set of per-row
-controls, plus their own add/reorder/duplicate/merge-down/delete toolbar.
+Every Draw-mode project uses one of two tiers, and you can see which by
+checking the Layers panel:
 
-Visibility is per-frame, not per-layer — the eye toggle only hides a layer
-in whichever frame is currently active, so different frames of the same
-animation can each hide different layers.
+- **Pixel tier** is the simpler option: paint with a color, and Pixelyph
+  automatically keeps track of the shapes behind the scenes — there's
+  nothing to manage manually. Good for straightforward pixel art.
+- **Shape tier** unlocks manual control: each layer expands to show its
+  individual shapes as indented rows underneath it, and each shape gets
+  its own fill, stroke, and effects (see the next section).
 
-On Shape tier, a **Selection scope** toggle controls whether marquee
-select/copy/cut/transform and the Move tool's click-to-drag act on just
-the active shape (the default) or every shape in the active layer
-together.
+You can switch from Pixel to Shape tier at any time with no downside. Going
+the other way — Shape back to Pixel — asks you to confirm first, because
+it flattens each layer down to whatever color is on top in each cell:
+gradients, strokes, effects, and multiple shapes per layer don't survive
+the trip (your layer count, order, names, lock state, and opacity all do).
 
-## Fill, stroke, and effects (Shape tier)
+## Giving a shape fill, stroke, and effects (Shape tier)
 
-Each shape's fill can be solid or a gradient (linear or radial) via the
-Gradient Editor — a draggable stop bar with live preview, plus on-canvas
-handles for rotation/endpoints (linear) or center/radius/focal-point
-(radial). Shapes also get an independent stroke (color, width, join, dash
-array) and effects (drop-shadow, blur, or a glow preset). Any fill or a
-layer's whole style can be saved to the shared palette and reapplied
-elsewhere.
+On Shape tier, each shape can have:
 
-Color inputs throughout use one consistent swatch-and-popover: a hex field
-(3/4/6/8-digit shorthand), R/G/B/A sliders, and a custom saturation/value +
-hue picker with a real screen-sampling eyedropper.
+- A **fill** — solid or a gradient (linear or radial), adjustable in the
+  Gradient Editor with a draggable stop bar and on-canvas handles for
+  rotating or repositioning it.
+- A **stroke** — its own color, width, corner join style, and dash
+  pattern.
+- **Effects** — drop-shadow, blur, or a glow preset.
 
-## Palette
+Any fill you like, or a layer's whole combination of fill + stroke +
+effects, can be saved to the palette as a reusable style (see below) and
+applied elsewhere later.
 
-The Palette panel holds three groups: **Colors**, **Gradients**, and saved
-**Styles** (a whole fill+stroke+effects combination). New projects start
-with the PICO-8 16-color palette plus a few starter gradients and styles.
-Import accepts a Lospec `.hex` file, a previously-exported Pixelyph
-palette, or a palette generated from any image. The whole palette can be
-exported back out for reuse across projects.
+Wherever you pick a color in Pixelyph, you get the same color picker: a
+hex field (3/4/6/8-digit shorthand), R/G/B/A sliders, and a
+saturation/value + hue picker with a real screen-sampling eyedropper.
 
-## Transform
+## Building your palette
 
-The **Transform** menu offers **Resize…** (width/height plus a 3×3
-anchor-grid picker for crop/pad direction) and **Flip**/**Rotate**
-(90° clockwise, 90° counter-clockwise, 180°), each targeting **Canvas**,
-**Layer**, or **Shape** (Shape only in Shape tier, once a shape is
-active). When a marquee selection is active, Flip/Rotate instead act
-directly on the selection's contents and stay pending — composable with a
-drag-move, finalized with Enter or a click outside, cancelable with
-Escape.
+The Palette panel holds three sections: **Colors**, **Gradients**, and
+saved **Styles** (a complete fill + stroke + effects combination you can
+reapply). Every new project starts with the 16-color PICO-8 palette plus a
+few starter gradients and styles to get you going.
 
-## Viewport and canvas
+You can import a palette from a Lospec `.hex` file, from a `.pixelyph`
+palette file you exported earlier, or generate one directly from an image.
+The whole palette can also be exported for reuse in another project.
 
-Scroll wheel over the canvas zooms in/out directly. A viewport minimap
-above the side panel's tabs shows a full-canvas thumbnail with a draggable
-pan rectangle once you're zoomed in past what's visible. A toggleable grid
-overlay and an independent tile/sub-grid guide (a heavier line every N
-cells) help with tileset work. A checkerboard backdrop keeps an unpainted
-cell from being confused with one painted white.
+## Resizing, flipping, and rotating
+
+The **Transform** menu offers **Resize…** (set a new width/height, with a
+3×3 grid to pick which direction the canvas grows or shrinks from) and
+**Flip**/**Rotate** (90° clockwise, 90° counter-clockwise, or 180°). Each
+of these targets the **Canvas**, a **Layer**, or (on Shape tier, with a
+shape selected) a single **Shape**. If you have an active selection
+instead, Flip/Rotate acts directly on just the selected pixels, and stays
+adjustable — you can drag it around before finalizing with Enter or a
+click outside, or cancel with Escape.
+
+## Navigating the canvas
+
+Scroll your mouse wheel over the canvas to zoom in and out. Once you're
+zoomed in far enough that the whole canvas doesn't fit on screen, a
+minimap above the side panel's tabs shows the full canvas with a
+draggable rectangle marking your current view. A toggleable grid overlay,
+plus an independent heavier line every few cells, help line things up —
+useful for tileset work in particular. A checkerboard pattern shows
+through anywhere nothing has been painted, so you can always tell an
+empty pixel from one painted white.
 
 ## Import
 
-**File → Import Image…** downsamples and quantizes a PNG/JPEG/etc. into
-editable pixel layers. **File → Reference Image…** adds a display-only
-underlay for trace-over work — it's never exported.
+**File → Import Image…** brings in a PNG, JPEG, or similar image,
+shrinking and simplifying its colors so it becomes editable pixel layers.
+**File → Reference Image…** instead adds a picture as a visual guide you
+can trace over — it's shown on the canvas but never included in anything
+you export.

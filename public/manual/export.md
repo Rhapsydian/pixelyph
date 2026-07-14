@@ -1,64 +1,66 @@
 # Export
 
-Export lives in one place: **File → Export…**. It opens a modal with the
-actual export settings rather than a menu crowded with dropdowns, and it's
-mode-aware — Draw mode and Glyph mode each show a different form.
+Every export option lives in one place: **File → Export…**. It opens a
+modal with the actual settings for whatever you're exporting, and it
+adapts to your project — Draw mode and Glyph mode each show a different
+set of options.
 
-## Draw mode export
+## Exporting from Draw mode
 
-Check any combination of formats and export them all at once:
+Check any combination of the formats below, then export — checking more
+than one bundles everything into a single `.zip`; checking just one saves
+that file directly.
 
-- **SVG** — the active frame's real, editable vector markup. Exported
-  layers get a CSS-selectable `id` derived from the layer name.
-- **PNG** / **WebP** — the active frame, rasterized.
-- **Animated SVG** *(multi-frame projects)* — a self-contained, looping
-  file where each frame can run at its own speed.
-- **Sprite Sheet** *(multi-frame)* — one tiled PNG plus a JSON metadata
-  sidecar (TexturePacker/Aseprite-style: `{frames:[{x,y,w,h,duration}]}`).
-- **Sprite Archive** *(multi-frame)* — each frame as its own file, PNG,
-  SVG, or both, plus a duration-metadata sidecar.
-- **Animated GIF** *(multi-frame)* — real GIF transparency for fully-
+- **SVG** — your active frame's real, editable vector artwork. Each
+  layer gets its own CSS-selectable `id`, based on the layer's name.
+- **PNG** / **WebP** — your active frame, rendered as a raster image.
+- **Animated SVG** *(if your project has more than one frame)* — a single
+  self-contained, looping file, with each frame able to run at its own
+  speed.
+- **Sprite Sheet** *(multi-frame)* — one tiled PNG plus a JSON file
+  describing each frame's position (TexturePacker/Aseprite-style).
+- **Sprite Archive** *(multi-frame)* — each frame saved as its own file,
+  PNG, SVG, or both, plus a small file listing each frame's duration.
+- **Animated GIF** *(multi-frame)* — real transparency for fully
   transparent pixels.
-- **Animated PNG (APNG)** *(multi-frame)* — lossless, full alpha
-  transparency, natively supported by every current browser.
+- **Animated PNG (APNG)** *(multi-frame)* — lossless, with full
+  transparency, supported natively by every current browser.
 
-Checking more than one format bundles the result into a single `.zip`; a
-single checked format saves directly.
+### Understanding raster scale
 
-### Raster scale
+PNG, WebP, Sprite Sheet, Sprite Archive (PNG), and GIF/APNG exports all
+share one **Raster Scale** setting, with quick presets for 1x/4x/8x/16x.
+The **Advanced…** option lets you set an exact scale multiplier instead,
+or a specific pixel resolution — optionally with the aspect ratio locked
+(unlocking it stretches non-uniformly, since vector art has no native
+resolution to be distorted from).
 
-PNG, WebP, Sprite Sheet, Sprite Archive (PNG), and GIF/APNG all share one
-**Raster Scale** control — the usual 1x/4x/8x/16x presets. The
-**Advanced…** dialog offers a custom scale multiplier, or a specific
-target resolution with an optional locked aspect ratio (unlocked stretches
-non-uniformly, since vector art has no native resolution to distort).
+## Exporting from Glyph mode
 
-## Glyph mode export
+**Export Active Glyph SVG** exports just the one glyph you currently have
+open, as a plain SVG with no layering involved (glyphs are simple grids,
+not layered artwork like Draw mode).
 
-**Export Active Glyph SVG** exports just the glyph currently open for
-editing, with no layering/style pipeline involved (glyphs are plain
-grids, not layered artwork).
-
-Below that, the same panel compiles the whole GlyphSet into a real,
+Below that, the same panel can compile your entire glyph set into a real,
 installable font:
 
-- **OTF** (CFF-flavored OpenType) plus derived **WOFF**.
-- Icon sets additionally export **CSS + a JSON manifest** (`@font-face`
-  and one `.icon-{name}::before` rule per glyph), with an icon-tile-padding
-  option so equal-width icons tile edge-to-edge.
-- Every export also produces a self-contained **demo HTML** file — a
-  live specimen preview with the font embedded inline, double-click-
-  openable with no separate asset to keep track of.
-- **WOFF2** export is currently disabled — it reliably hangs in a real
-  browser/Electron environment rather than compiling. See the project's
-  `BACKLOG.md` for status.
+- **OTF** (a CFF-flavored OpenType font) plus a derived **WOFF** file.
+- If your set is being used as icons, you can also export **CSS plus a
+  JSON manifest** — an `@font-face` rule and one `.icon-{name}::before`
+  rule per glyph — with an option to pad each icon so equal-width icons
+  tile edge-to-edge.
+- Every export also produces a self-contained **demo HTML** file: a live
+  specimen preview with your font embedded directly inside it, so you can
+  just double-click it to open and check your work with no separate files
+  to keep track of.
 
-Checking more than one format bundles the results into a single `.zip`,
-same as Draw mode.
+As with Draw mode, checking more than one format bundles everything into
+a single `.zip`.
 
-## Project files
+## Project files vs. exports
 
-`.pixelyph` project save/load lives off the **File** menu directly (Save
-Project / Open Project…), separate from the Export modal — a `.pixelyph`
-file is Pixelyph's own re-editable project format, not an export target
-for use elsewhere.
+A `.pixelyph` file is different from anything above — it's Pixelyph's own
+project format, meant to be reopened and kept editable, not a format for
+using your art elsewhere. Saving and opening `.pixelyph` files lives
+directly on the **File** menu (Save Project / Open Project…), separate
+from the Export modal.
