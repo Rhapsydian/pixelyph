@@ -31,11 +31,23 @@
 // every *typed* glyph's character (auto-assigned/PUA codepoints have no
 // natural keystroke, so they're left out of the seed text), plus a grid of
 // clickable swatches — one per glyph, typed or auto-assigned alike — that
-// insert into the same live preview, so PUA-keyed glyphs can be composed/
-// tested without knowing raw escapes. A tiling test strip (several copies
-// of one auto-assigned glyph in a row, for visually checking
-// horizontalPadding) only renders if the set actually has at least one
-// auto-assigned glyph — nothing to usefully tile otherwise.
+// insert into the live preview at the textarea's current cursor position
+// (not always appended at the end), so PUA-keyed glyphs can be composed/
+// tested without knowing raw escapes. Mirrors the in-app Specimen Preview
+// panel's hybrid color model: a native color picker sets the color
+// newly-inserted/typed characters are stamped with (each character gets
+// its own `<span style="color:...">`, tracked in a parallel `colors`
+// array the same common-prefix/suffix diff the in-app panel uses), and an
+// "Apply to all" button force-recolors every character already in the
+// preview. Unlike the in-app panel (which lays out plain-pixel SVG paths
+// manually via glyphMetrics, since no compiled font exists yet at edit
+// time), this preview renders through the real embedded `@font-face` —
+// the browser's own text layout already produces exactly the spacing the
+// shipped font will have, multi-line included (`white-space: pre-wrap`),
+// no manual metrics math needed here. Swatch-click focus uses
+// `{ preventScroll: true }` so returning focus to the (likely
+// higher-up-the-page) textarea after a click doesn't yank the viewport
+// back up away from the swatch grid the user is actively clicking through.
 //
 // Relies on a global `Buffer` for base64-encoding — available natively
 // under `node --test`, and in the browser/Electron renderer via the
@@ -89,7 +101,6 @@ function defaultSampleString(entries) {
 }
 
 function glyphBody(entries) {
-  const hasAutoAssigned = entries.some(([codepoint]) => isAutoAssignedCodepoint(codepoint));
   const swatches = entries
     .map(([codepoint, glyph]) => {
       const isAuto = isAutoAssignedCodepoint(codepoint);
@@ -97,35 +108,95 @@ function glyphBody(entries) {
       const hex = `U+${codepoint.toString(16).toUpperCase()}`;
       const label = glyph.name || (isAuto ? '(unnamed)' : hex);
       const title = `${label} (${hex})`;
-      return `<button type="button" class="icon-swatch"${isAuto ? ' data-auto="1"' : ''} data-codepoint="${codepoint}" data-char="${escapeHtml(char)}" title="${escapeHtml(title)}"><span class="glyph">${escapeHtml(char)}</span><span class="label">${escapeHtml(label)}</span></button>`;
+      return `<button type="button" class="icon-swatch" data-codepoint="${codepoint}" data-char="${escapeHtml(char)}" title="${escapeHtml(title)}"><span class="glyph">${escapeHtml(char)}</span><span class="label">${escapeHtml(label)}</span></button>`;
     })
     .join('\n');
   return `
 <textarea id="preview-text" rows="3">${escapeHtml(defaultSampleString(entries))}</textarea>
+<div class="preview-color-row">
+  <label>Preview color: <input type="color" id="preview-color" value="#eeeeee"></label>
+  <button type="button" id="apply-to-all">Apply to all</button>
+</div>
 <div id="preview" class="preview"></div>
-<p>Click a glyph to insert it above:</p>
+<p>Click a glyph to insert it at the cursor:</p>
 <h2>Specimen</h2>
 <div id="specimen-grid">
 ${swatches}
-</div>${hasAutoAssigned ? `
-<h2>Tiling test</h2>
-<div id="tiling-strip" class="preview"></div>` : ''}`;
+</div>`;
 }
 
 const DEMO_SCRIPT = `
 var textArea = document.getElementById('preview-text');
 var preview = document.getElementById('preview');
-function syncPreview() { preview.textContent = textArea.value; }
-if (textArea) { textArea.addEventListener('input', syncPreview); syncPreview(); }
-Array.prototype.forEach.call(document.querySelectorAll('.icon-swatch'), function (btn) {
-  btn.addEventListener('click', function () {
-    textArea.value += btn.dataset.char;
+var colorInput = document.getElementById('preview-color');
+var applyToAllBtn = document.getElementById('apply-to-all');
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+// Same common-prefix/common-suffix diff the in-app Specimen Preview panel
+// uses: the unchanged head/tail of the text keep their existing colors,
+// whatever changed in between becomes fresh copies of the current color.
+function diffColors(oldChars, newChars, oldColors, fillColor) {
+  var prefix = 0;
+  var maxPrefix = Math.min(oldChars.length, newChars.length);
+  while (prefix < maxPrefix && oldChars[prefix] === newChars[prefix]) prefix++;
+  var suffix = 0;
+  var maxSuffix = Math.min(oldChars.length - prefix, newChars.length - prefix);
+  while (suffix < maxSuffix && oldChars[oldChars.length - 1 - suffix] === newChars[newChars.length - 1 - suffix]) suffix++;
+  var insertedCount = newChars.length - prefix - suffix;
+  var next = oldColors.slice(0, prefix);
+  for (var i = 0; i < insertedCount; i++) next.push(fillColor);
+  if (suffix > 0) next = next.concat(oldColors.slice(oldColors.length - suffix));
+  return next;
+}
+
+var colors = [];
+if (textArea) colors = Array.from(textArea.value).map(function () { return colorInput.value; });
+
+function syncPreview() {
+  if (!preview) return;
+  var chars = Array.from(textArea.value);
+  var html = '';
+  for (var i = 0; i < chars.length; i++) {
+    html += chars[i] === '\\n' ? '\\n' : '<span style="color:' + (colors[i] || colorInput.value) + '">' + escapeHtml(chars[i]) + '</span>';
+  }
+  preview.innerHTML = html;
+}
+
+function updateText(nextValue) {
+  var oldChars = Array.from(textArea.value);
+  var newChars = Array.from(nextValue);
+  colors = diffColors(oldChars, newChars, colors, colorInput.value);
+  textArea.value = nextValue;
+  syncPreview();
+}
+
+if (textArea) {
+  textArea.addEventListener('input', function () { updateText(textArea.value); });
+  syncPreview();
+}
+if (applyToAllBtn) {
+  applyToAllBtn.addEventListener('click', function () {
+    colors = colors.map(function () { return colorInput.value; });
     syncPreview();
   });
+}
+Array.prototype.forEach.call(document.querySelectorAll('.icon-swatch'), function (btn) {
+  btn.addEventListener('click', function () {
+    var start = textArea.selectionStart;
+    var end = textArea.selectionEnd;
+    var char = btn.dataset.char;
+    var nextValue = textArea.value.slice(0, start) + char + textArea.value.slice(end);
+    updateText(nextValue);
+    var pos = start + char.length;
+    textArea.focus({ preventScroll: true });
+    textArea.setSelectionRange(pos, pos);
+  });
 });
-var firstAutoSwatch = document.querySelector('.icon-swatch[data-auto="1"]');
-var tilingStrip = document.getElementById('tiling-strip');
-if (firstAutoSwatch && tilingStrip) tilingStrip.textContent = firstAutoSwatch.dataset.char.repeat(8);
 `;
 
 /**
@@ -170,11 +241,16 @@ textarea, button {
 textarea { width: 100%; font-size: 1.2rem; padding: var(--space-3); }
 textarea:hover, button:hover { border-color: var(--chrome-border-strong); }
 textarea:focus-visible, button:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--chrome-accent); border-color: var(--chrome-accent); }
+.preview-color-row { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-3); font-size: var(--text-sm); }
+.preview-color-row input[type="color"] {
+  width: 28px; height: 28px; padding: 2px; background: var(--chrome-bg-raised);
+  border: 1px solid var(--chrome-border); border-radius: var(--radius-sm); cursor: pointer;
+}
 .preview {
   font-family: "${escapeHtml(meta.familyName)}"; font-size: 2.5rem;
   min-height: 3rem; padding: var(--space-3); border: 1px solid var(--chrome-border);
   border-radius: var(--radius-md); background: var(--chrome-bg-panel);
-  margin: var(--space-4) 0; word-break: break-all;
+  margin: var(--space-4) 0; word-break: break-all; white-space: pre-wrap;
 }
 #specimen-grid { display: flex; flex-wrap: wrap; gap: 8px; }
 .icon-swatch {

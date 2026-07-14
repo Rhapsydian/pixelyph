@@ -43,25 +43,15 @@ test('generateDemoHtml falls back to WOFF-only when woff2Bytes is omitted (WOFF2
   assert.ok(html.includes(Buffer.from(woffBytes).toString('base64')));
 });
 
-test('generateDemoHtml renders one clickable swatch per glyph plus a tiling test strip when at least one glyph is auto-assigned', () => {
+test('generateDemoHtml renders one clickable swatch per glyph, auto-assigned or typed alike', () => {
   const glyphSet = createGlyphSet({ meta: { familyName: 'Icon Set' } });
   setGlyph(glyphSet, 0xe000, glyph('Star'));
   setGlyph(glyphSet, 0xe001, glyph('Heart'));
   const html = generateDemoHtml(glyphSet, new Uint8Array([1]));
 
   assert.equal((html.match(/class="icon-swatch"/g) ?? []).length, 2);
-  assert.ok(html.includes('id="tiling-strip"'));
   assert.ok(html.includes('Star'));
   assert.ok(html.includes('Heart'));
-});
-
-test('generateDemoHtml omits the tiling test strip when every glyph has a real typed codepoint', () => {
-  const glyphSet = createGlyphSet({ meta: { familyName: 'Character Set' } });
-  setGlyph(glyphSet, 65, glyph());
-  setGlyph(glyphSet, 66, glyph());
-  const html = generateDemoHtml(glyphSet, new Uint8Array([1]));
-
-  assert.ok(!html.includes('id="tiling-strip"'));
 });
 
 test('generateDemoHtml seeds the preview textarea with typed glyphs only, excluding auto-assigned codepoints', () => {
@@ -72,6 +62,26 @@ test('generateDemoHtml seeds the preview textarea with typed glyphs only, exclud
 
   const textareaMatch = /<textarea id="preview-text"[^>]*>([^<]*)<\/textarea>/.exec(html);
   assert.equal(textareaMatch[1], 'A');
+});
+
+test('generateDemoHtml includes the preview color picker and Apply to all button', () => {
+  const glyphSet = createGlyphSet({});
+  setGlyph(glyphSet, 65, glyph());
+  const html = generateDemoHtml(glyphSet, new Uint8Array([1]));
+
+  assert.ok(html.includes('id="preview-color"'));
+  assert.ok(html.includes('type="color"'));
+  assert.ok(html.includes('id="apply-to-all"'));
+});
+
+test('generateDemoHtml wires swatch clicks to insert at the cursor position, not always append', () => {
+  const glyphSet = createGlyphSet({});
+  setGlyph(glyphSet, 65, glyph());
+  const html = generateDemoHtml(glyphSet, new Uint8Array([1]));
+
+  assert.ok(html.includes('selectionStart'));
+  assert.ok(html.includes('setSelectionRange'));
+  assert.ok(!html.includes('textArea.value += btn.dataset.char'));
 });
 
 test('generateDemoHtml includes a Pixelyph branding footer linking to the GitHub Pages demo', () => {
