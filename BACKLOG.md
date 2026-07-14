@@ -360,6 +360,22 @@ yet (see its own Open entry above).
 Suite is green: 490/490 (`node --test`), all manually verified via the
 Browser pane per checkpoint.
 
+**Follow-up polish, same session, after checkpoint 12 shipped:** the
+glyph-editor empty-state placeholder text still described the pre-Part-A
+Create-button flow — fixed. Specimen Preview's insert-glyph swatches now
+insert at the textarea's actual cursor/selection position instead of
+always appending (the existing `diffColors()` common-prefix/suffix diff
+already handled a mid-string insertion correctly, so only the insertion
+point itself needed fixing). `demoHtml.js`'s bundled specimen preview was
+brought to parity with the in-app panel — insert-at-cursor swatches and
+the same hybrid per-character color model (a native color picker plus
+"Apply to all"), rendered through the real embedded `@font-face` font
+rather than an approximation, so multi-line is just `white-space:
+pre-wrap` with no manual metrics math needed; its `preventScroll: true`
+focus call keeps a swatch click from yanking the page back up to the
+textarea. The old tiling-test strip was dropped from the demo HTML
+entirely per user feedback. Suite: 491/491.
+
 ### DONE: Windows release CI + in-app download link
 
 Shipped session 31 (2026-07-12), commit `81f1511`. Resolves both the

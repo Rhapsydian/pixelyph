@@ -23,7 +23,7 @@ For a detailed history of what shipped when and why, see `BACKLOG.md`'s "DONE" e
 
 **Glyph mode** designs pixel fonts and icon sets on the same live pixel editor as Draw mode, one grid per glyph. A glyph can freely have a real typed character, a name, both, or neither — no more locked-at-creation character-font/icon-font split — with a unified glyph browser (caution badges for incomplete glyphs, codepoint/name sorting, a `+` button to add a bare glyph), a Bulk Add modal for eagerly creating a whole charset preset at once, a Glyph-mode-only canvas display-color control, and a Specimen Preview with real-font-metrics multi-line layout and a hybrid per-glyph color model.
 
-**Font compilation** turns a GlyphSet into a real, installable font (OTF/WOFF, plus an optional CSS + JSON manifest for any glyph set) via [opentype.js](https://github.com/opentypejs/opentype.js), with a self-contained demo HTML file bundled into every export.
+**Font compilation** turns a GlyphSet into a real, installable font (OTF/WOFF, plus an optional CSS + JSON manifest for any glyph set) via [opentype.js](https://github.com/opentypejs/opentype.js), with a self-contained demo HTML file bundled into every export — its specimen preview mirrors the in-app one (insert-at-cursor glyph swatches, the same hybrid per-character color model), rendered through the real embedded font instead of an approximation.
 
 **Project management** greets you with a startup screen (New Project wizard, Existing Project, or Continue Last Session) instead of silently booting into Draw mode, and autosaves to recover from an unexpected close.
 
