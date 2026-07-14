@@ -1,71 +1,167 @@
-// Live specimen preview for both GlyphSet kinds — no font compile exists
-// yet (that's Phase 4's compileFont.js/demoHtml.js), so this renders
-// directly from each glyph's grid via pixelloom's gridToPath, the same
-// tracing GlyphThumbnail uses. Character sets get a live text-entry
-// preview; icon sets get clickable swatches that insert into the same
-// preview row, so icons can be spot-checked without typing raw PUA escapes.
+// Live specimen preview: a single, always-shown multi-line textarea (no
+// more kind-gated textarea/icon-swatch split — every glyph, typed or
+// auto-assigned, gets a click-to-insert swatch, matching demoHtml.js's own
+// "every glyph gets a swatch, auto-assigned codepoints have no natural
+// keystroke" convention) plus a hybrid preview-color model: one picker
+// sets the color newly-inserted glyphs are stamped with; already-placed
+// glyphs keep their own locked-in color until "Apply to all" overrides
+// every one in a single action. Each row lays out left-to-right using the
+// same glyphMetrics formula compileFont.js uses for real export, so
+// "gapless tiling" is a font-metadata property (iconTilePadding/bearings
+// set to 0), not a separate preview mode.
 
 import { useState } from 'react';
 import { useStore } from '../../state/store.js';
 import { gridToPath } from 'pixelloom';
+import { glyphMetrics } from '../../model/GlyphSet.js';
 import { IconButton } from '../IconButton.jsx';
+import { ColorAlphaInput } from '../ColorAlphaInput.jsx';
 import { TrashIcon } from '../icons.jsx';
 
 const PREVIEW_HEIGHT = 48;
+const SWATCH_HEIGHT = 24;
+const DEFAULT_PREVIEW_COLOR = '#eeeeee';
 
-function PreviewGlyph({ glyph, height }) {
+function PreviewGlyph({ glyph, height, color = '#eee' }) {
   const scale = height / glyph.height;
   const width = glyph.width * scale;
   const d = gridToPath(glyph.pixels, glyph.width, glyph.height);
   return (
     <svg width={width} height={height} viewBox={`0 0 ${glyph.width} ${glyph.height}`} style={{ display: 'block', flexShrink: 0 }}>
-      {d && <path d={d} fill="#eee" fillRule="evenodd" />}
+      {d && <path d={d} fill={color} fillRule="evenodd" />}
     </svg>
   );
+}
+
+/** Common-prefix/common-suffix diff: the unchanged head/tail of `text` keep their existing colors; whatever changed in between (typed, pasted, or deleted) becomes `insertedCount` fresh copies of `fillColor`. */
+function diffColors(oldChars, newChars, oldColors, fillColor) {
+  let prefix = 0;
+  const maxPrefix = Math.min(oldChars.length, newChars.length);
+  while (prefix < maxPrefix && oldChars[prefix] === newChars[prefix]) prefix++;
+  let suffix = 0;
+  const maxSuffix = Math.min(oldChars.length - prefix, newChars.length - prefix);
+  while (suffix < maxSuffix && oldChars[oldChars.length - 1 - suffix] === newChars[newChars.length - 1 - suffix]) suffix++;
+  const insertedCount = newChars.length - prefix - suffix;
+  return [
+    ...oldColors.slice(0, prefix),
+    ...Array(insertedCount).fill(fillColor),
+    ...(suffix > 0 ? oldColors.slice(oldColors.length - suffix) : []),
+  ];
+}
+
+/** Splits `chars`/`colors` (already zipped) into rows on '\n', then lays each row out left-to-right in scaled pixel units via glyphMetrics — absolute pen-position math, not flexbox gap, so a font whose bearings/padding are 0 actually renders with touching glyphs. */
+function layoutRows(chars, colors, glyphSet, scale) {
+  const rows = [[]];
+  for (let i = 0; i < chars.length; i++) {
+    if (chars[i] === '\n') { rows.push([]); continue; }
+    rows[rows.length - 1].push({ char: chars[i], color: colors[i] });
+  }
+  return rows.map((row) => {
+    let penX = 0;
+    const items = row.map(({ char, color }) => {
+      const codepoint = char.codePointAt(0);
+      const glyph = glyphSet.glyphs.get(codepoint);
+      if (glyph) {
+        const { offsetX, advanceWidth } = glyphMetrics(glyphSet.meta, codepoint, glyph);
+        const item = { key: `${codepoint}-${penX}`, glyph, color, x: (penX + offsetX) * scale };
+        penX += advanceWidth;
+        return item;
+      }
+      const fallbackAdvance = glyphSet.meta.pixelsPerEm * 0.5;
+      const item = { key: `?-${penX}`, glyph: null, char, x: penX * scale, width: fallbackAdvance * scale };
+      penX += fallbackAdvance;
+      return item;
+    });
+    return { items, width: penX * scale };
+  });
+}
+
+function glyphLabel(glyph, codepoint) {
+  if (glyph.name) return glyph.name;
+  return `U+${codepoint.toString(16).toUpperCase()}`;
 }
 
 export function SpecimenPreviewPanel() {
   const glyphSet = useStore((s) => s.glyphSet);
   const [text, setText] = useState('');
+  const [colors, setColors] = useState(/** @type {string[]} */ ([]));
+  const [previewColor, setPreviewColor] = useState(DEFAULT_PREVIEW_COLOR);
 
   if (!glyphSet) return null;
+
+  function updateText(nextText) {
+    const oldChars = Array.from(text);
+    const newChars = Array.from(nextText);
+    setColors(diffColors(oldChars, newChars, colors, previewColor));
+    setText(nextText);
+  }
+
+  function clearPreview() {
+    setText('');
+    setColors([]);
+  }
+
+  function applyColorToAll() {
+    setColors((prev) => prev.map(() => previewColor));
+  }
+
+  const scale = PREVIEW_HEIGHT / glyphSet.meta.pixelsPerEm;
+  const rows = layoutRows(Array.from(text), colors, glyphSet, scale);
+  const sortedGlyphs = Array.from(glyphSet.glyphs.entries()).sort((a, b) => a[0] - b[0]);
 
   return (
     <div className="panel canvas-region-stretch" style={{ background: 'var(--chrome-bg-panel)' }}>
       <strong>Specimen Preview</strong>
-      {glyphSet.kind === 'characters' ? (
-        <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a sample string..." rows={2} style={{ width: '100%', resize: 'vertical' }} />
-      ) : (
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
-          {Array.from(glyphSet.glyphs.entries())
-            .sort((a, b) => (a[1].name ?? '').localeCompare(b[1].name ?? ''))
-            .map(([codepoint, glyph]) => (
-              <button
-                key={codepoint}
-                title={glyph.name}
-                onClick={() => setText((t) => t + String.fromCodePoint(codepoint))}
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: 4 }}
-              >
-                <PreviewGlyph glyph={glyph} height={24} />
-                <span style={{ fontSize: 9 }}>{glyph.name}</span>
-              </button>
-            ))}
-          {glyphSet.glyphs.size === 0 && <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No icons yet.</span>}
-          <IconButton icon={<TrashIcon />} label="Clear preview" disabled={text.length === 0} onClick={() => setText('')} />
-        </div>
-      )}
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, minHeight: PREVIEW_HEIGHT + 8, padding: 4, background: 'var(--chrome-bg-app)', border: '1px solid var(--chrome-border)', overflowX: 'auto' }}>
+      <textarea
+        value={text}
+        onChange={(e) => updateText(e.target.value)}
+        placeholder="Type a sample string..."
+        rows={2}
+        style={{ width: '100%', resize: 'vertical' }}
+      />
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
+        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--chrome-text-muted)' }}>Insert glyph:</span>
+        {sortedGlyphs.map(([codepoint, glyph]) => (
+          <button
+            key={codepoint}
+            title={glyphLabel(glyph, codepoint)}
+            onClick={() => updateText(text + String.fromCodePoint(codepoint))}
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: 4 }}
+          >
+            <PreviewGlyph glyph={glyph} height={SWATCH_HEIGHT} color="var(--chrome-text)" />
+            <span style={{ fontSize: 9 }}>{glyphLabel(glyph, codepoint)}</span>
+          </button>
+        ))}
+        {sortedGlyphs.length === 0 && <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No glyphs yet.</span>}
+        <IconButton icon={<TrashIcon />} label="Clear preview" disabled={text.length === 0} onClick={clearPreview} />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--chrome-text-muted)' }}>Preview color:</span>
+        <ColorAlphaInput value={previewColor} onChange={setPreviewColor} title="Color newly-inserted preview glyphs are stamped with" />
+        <button onClick={applyColorToAll} disabled={colors.length === 0} title="Recolor every glyph already in the preview to the current color">
+          Apply to all
+        </button>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minHeight: PREVIEW_HEIGHT + 8, padding: 4, background: 'var(--chrome-bg-app)', border: '1px solid var(--chrome-border)', overflow: 'auto' }}>
         {text.length === 0 && <span style={{ color: 'var(--chrome-text-faint)' }}>Preview will appear here.</span>}
-        {Array.from(text).map((char, i) => {
-          const glyph = glyphSet.glyphs.get(char.codePointAt(0));
-          return glyph ? (
-            <PreviewGlyph key={i} glyph={glyph} height={PREVIEW_HEIGHT} />
-          ) : (
-            <span key={i} style={{ color: 'var(--chrome-text-faint)', width: PREVIEW_HEIGHT / 2, textAlign: 'center' }}>
-              {char === ' ' ? ' ' : '?'}
-            </span>
-          );
-        })}
+        {text.length > 0 && rows.map((row, i) => (
+          <div key={i} style={{ position: 'relative', height: PREVIEW_HEIGHT, width: Math.max(row.width, 1), flexShrink: 0 }}>
+            {row.items.map((item) =>
+              item.glyph ? (
+                <div key={item.key} style={{ position: 'absolute', left: item.x, bottom: 0 }}>
+                  <PreviewGlyph glyph={item.glyph} height={PREVIEW_HEIGHT} color={item.color} />
+                </div>
+              ) : (
+                <span
+                  key={item.key}
+                  style={{ position: 'absolute', left: item.x, bottom: 0, width: item.width, textAlign: 'center', color: 'var(--chrome-text-faint)' }}
+                >
+                  {item.char === ' ' ? ' ' : '?'}
+                </span>
+              ),
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
