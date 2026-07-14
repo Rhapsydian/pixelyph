@@ -27,11 +27,14 @@ The New Project wizard's first step is **Choose Mode**:
 - **Draw** — pixel art with layers, multi-frame animation, and SVG/raster
   export. Uses standard defaults; there's nothing else to configure up
   front.
-- **Glyph / Font** — pixel fonts or icon sets, one grid per glyph. Continuing
-  from here asks for a family name, a kind (character set or icon set), the
-  grid height in pixels-per-em, a default glyph width, and — for character
-  sets — an optional starter charset (Basic Latin, Latin-1 Supplement, or
-  Symbols).
+- **Glyph / Font** — pixel fonts or icon sets, one grid per glyph, with no
+  locked-in choice between the two (a glyph can freely have a real typed
+  character, a name, both, or neither). Continuing from here asks for a
+  family name, the grid height in pixels-per-em, a default glyph width,
+  and an optional starter charset (Basic Latin, Latin-1 Supplement, or
+  Symbols) — choosing one eagerly creates an empty glyph for every
+  codepoint in it; choosing none seeds a single bare glyph instead of
+  starting empty.
 
 Mode is chosen once at project creation and isn't toggled mid-session.
 File → New Project jumps straight back to this Choose Mode screen (asking

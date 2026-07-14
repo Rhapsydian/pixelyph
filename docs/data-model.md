@@ -4,9 +4,13 @@
 this document. Session 1: model layer. Session 2: export. Session 3: UI.
 Session 4: tests) — see `BACKLOG.md`'s "Layer/Frame/Grid model redesign"
 entry (marked DONE) for the session-by-session breakdown. Everything below
-describes the current model, not a target. See "Pixel/Shape tier rename"
-and "Selection" at the end of this document for two later changes that
-postdate the original Session 0-4 write-up.
+describes the current model, not a target. See "Pixel/Shape tier rename",
+"Selection", and "Glyph model unification" at the end of this document for
+later changes that postdate the original Session 0-4 write-up — the last
+of those in particular means the `Glyph` typedef quoted in "Glyph mode:
+effectively one Grid per glyph" below (which still shows the pre-
+unification `unicode` field) is superseded; see that later section for
+the current shape.
 
 ## Why this model exists
 
@@ -661,6 +665,81 @@ same-color paste with a stale preference. `pasteRaw`/`touched` on
 `floatingGridSelection` let the toggle regenerate the pending clones once,
 right after paste, but lock out once the user has moved or transformed the
 pending selection.
+
+## Glyph model unification (font/icon merge, sessions 33-34)
+
+Glyph mode's own document doesn't use `Layer`/`Frame`/`Grid` (see "Glyph
+mode: effectively one Grid per glyph" above) — this section documents a
+later, independent change to `GlyphSet.js`'s own shape, not a further
+change to the Layer/Frame/Grid model itself. Full rationale in
+`BACKLOG.md`'s "Glyph mode unification" Shipped entry.
+
+**What changed:** the old locked-at-creation split between **character**
+sets (`GlyphSet.kind: 'characters'`, one real Unicode codepoint per glyph)
+and **icon** sets (`kind: 'icons'`, auto-assigned Private-Use-Area
+codepoints plus a decorative `glyph.unicode` annotation) is gone. Both
+`GlyphSet.kind` and `Glyph.unicode` are removed entirely:
+
+```js
+/** @typedef {{ id: string, meta: FontMeta, glyphs: Map<number, Glyph> }} GlyphSet */
+
+/** @typedef {{
+ *   width: number, height: number, pixels: Uint8Array,   // base layer — mandatory, unchanged
+ *   advanceWidth: number, leftSideBearing: number, name: string,
+ *   backgroundPixels?: Uint8Array, foregroundPixels?: Uint8Array,  // optional, model-only (see below)
+ * }} Glyph */
+```
+
+A glyph's Map key (its codepoint) is now the *only* place a real
+character lives — no separate decorative field. `isAutoAssignedCodepoint(
+codepoint)` (`codepoint >= 0xE000 && codepoint <= 0xF8FF`, the PUA range)
+replaces every `kind === 'icons'` check; `isDisplayableChar(codepoint)`
+and `isEmptyGlyph(glyph)` are two further pure predicates added alongside
+it, driving label/badge logic in `GlyphSetPanel.jsx`. Every glyph in every
+pre-unification save already sits correctly on one side of the PUA
+boundary by construction, so migration (`projectFile.js`) is a true
+no-op: old `kind`/`unicode` keys are just never read again, no explicit
+transform, no data loss.
+
+**`glyphMetrics(meta, codepoint, glyph)`** (`GlyphSet.js`) is the one
+shared horizontal-metrics formula, used by both `compileFont.js` (real
+export) and `SpecimenPreviewPanel.jsx` (in-app preview), so the two always
+agree on spacing exactly:
+```js
+export function glyphMetrics(meta, codepoint, glyph) {
+  const padding = meta.horizontalPadding ?? 0;
+  const baseOffsetX = isAutoAssignedCodepoint(codepoint) ? 0 : (glyph.leftSideBearing ?? 0);
+  const baseAdvance = isAutoAssignedCodepoint(codepoint) ? glyph.width : (glyph.advanceWidth ?? glyph.width);
+  return { offsetX: baseOffsetX + padding, advanceWidth: baseAdvance + 2 * padding };
+}
+```
+`meta.horizontalPadding` (renamed from `iconTilePadding`, which only
+applied to auto-assigned glyphs) now applies uniformly to *every* glyph —
+added on top of whichever base bearing/advance applies. Old saves
+carrying the former `iconTilePadding` key get it copied across to
+`horizontalPadding` on load.
+
+**Two optional per-glyph layers, model-only:** `Glyph.backgroundPixels`/
+`Glyph.foregroundPixels` (each a same-sized `Uint8Array`, independently
+present-or-absent) are groundwork for a future two-/three-color CSS
+`::before`/`::after` icon-font export. `addBackgroundLayer`/
+`addForegroundLayer`/`removeBackgroundLayer`/`removeForegroundLayer`
+(`GlyphSet.js`) allocate/drop them; `isEmptyGlyph` considers all
+present layers, not just the base one. They round-trip through
+`projectFile.js` when present, but nothing in the app creates non-empty
+data for them yet — no editing UI, no store actions, no export wiring.
+See `BACKLOG.md`'s corresponding Open entry.
+
+**`GlyphSetPanel.jsx`** is now the single glyph browser/editor: a `+`
+button adds one bare glyph and selects it; one Character/Name field pair
+always edits the active glyph (typing a real character calls
+`reassignGlyphCodepoint`, which moves the Map entry — delete + re-insert,
+not a field patch); a caution badge/alert fires only when a glyph has
+neither a real codepoint nor a name, or independently when its grid is
+empty. `BulkAddGlyphsModal.jsx` (replacing the old always-inline
+`CharacterMapPanel.jsx`) bulk-creates empty-grid glyphs for every
+codepoint in one or more checked charset presets via `addGlyphsFromPreset`
+— skips codepoints that already exist, no per-item collision prompt.
 
 ## Critical files
 

@@ -2,41 +2,9 @@
 
 ## Next session
 
-### Glyph mode unification (font/icon merge) — in progress, 8 of 12 checkpoints shipped
-
-Design spec: [`docs/glyph-mode-unification-plan.md`](docs/glyph-mode-unification-plan.md).
-Checkpoints 1-8 shipped session 33 (see
-[`docs/session-logs/session-33-2026-07-14.md`](docs/session-logs/session-33-2026-07-14.md)
-for full rationale and commit references) — core model, unified store
-actions, a verified selection/transform parity match with Draw mode (no
-code change needed), the `GlyphThumbnail` watermark, the export pipeline,
-save-file migration, the New Project wizard, and the `GlyphSetPanel` merge
-are all done. Suite is green: 489/489.
-
-**Resume here, in order:**
-1. **Finish checkpoint 8's manual verification** — session 33 was
-   interrupted mid-testing. Confirmed: typed+named glyph creation, and the
-   caution-badge/alert lifecycle on that glyph. Still needs: named-only
-   auto-keyed creation, a fully bare glyph, re-keying an existing glyph's
-   character via the edit sub-panel (confirm the Map entry actually moves,
-   undo/redo both work), search, the sort toggle, and remove-glyph.
-2. **Checkpoint 9** — convert `CharacterMapPanel.jsx` into the Bulk-Add
-   modal and wire it to the "Bulk Add…" button already sitting (inert,
-   unwired) in `GlyphSetPanel.jsx`.
-3. **Checkpoints 10-12** — the Glyph-mode-only display-color control
-   (`glyphDisplayColor` store state already exists from checkpoint 2,
-   unwired), the Specimen Preview redesign, and the docs pass. See the
-   plan doc for each.
-
-**One deviation from the plan doc, carried forward:** checkpoint 8's
-selection alert in `GlyphSetPanel.jsx` was widened during its wireframe
-review. The plan doc originally excluded the empty-grid-alone case from
-the alert ("visually self-evident"), showing it only for missing-
-codepoint-or-name — the user corrected this to fire for any of the three
-caution-badge conditions (auto-assigned codepoint, missing name, **or**
-empty grid), with fixed text "Glyph missing codepoint, name, or content."
-Keep this in mind if later checkpoints (Specimen Preview, docs) reference
-the plan's original narrower wording.
+Nothing specifically flagged yet — the Glyph mode unification refactor
+(see Shipped below) closed out its full 12-checkpoint plan this session.
+Pick from Open below, or from whatever the user raises next.
 
 ## Open
 
@@ -48,6 +16,30 @@ is switched off — so restoring them is a small, targeted change once the
 blocking issue is fixed); and open ideas flagged for later discussion
 rather than acted on immediately. Review this list once all
 currently-planned phases are complete.
+
+### Two- or three-color icon-font export — model exists, no UI or export wiring yet
+
+The Glyph mode unification refactor (see Shipped below) added two optional
+per-glyph pixel layers, `Glyph.backgroundPixels`/`Glyph.foregroundPixels`
+(`src/model/GlyphSet.js`'s `addBackgroundLayer`/`addForegroundLayer`/
+`removeBackgroundLayer`/`removeForegroundLayer`), alongside the existing
+base `pixels` — groundwork for a CSS `::before`(background)/`::after`
+(foreground) layered icon-font export, giving two- or three-color icons.
+Deliberately scoped to data-shape only in that pass: both fields persist
+correctly through save/load (`projectFile.js`) when present, but nothing
+in the app creates non-empty data for them, no editing UI exists (no
+paint-target switch, no thumbnail/preview compositing), and
+`compileFont.js`/`iconFontCss.js` only ever read the base `pixels` layer,
+untouched by these fields.
+
+**To resolve, whenever picked up:**
+1. Editing UI — a paint-target toggle (base/background/foreground) in
+   Glyph mode, `GlyphThumbnail.jsx` compositing all present layers.
+2. Export wiring — `compileFont.js`/`iconFontCss.js` emit the extra
+   layer(s) as `::before`/`::after` rules with their own color, only for
+   glyph sets that actually use them.
+3. Specimen Preview: currently renders only the base `pixels` layer per
+   glyph (see its own Shipped entry below) — would need compositing too.
 
 ### Tool-gap backlog, carried over from the retired tool-roadmap doc
 
@@ -122,8 +114,10 @@ in general.
   benefit.
 - WOFF2 export is disabled at the source: `WOFF2_EXPORT_ENABLED = false` in
   `state/store.js`'s `exportFont` action skips calling `toWoff2` at all.
-- The WOFF2 checkbox row is removed from `FontExportPanel.jsx` (character
-  fonts now offer OTF/WOFF/demo HTML; icon fonts add CSS+manifest).
+- The WOFF2 checkbox row is removed from `FontExportPanel.jsx` (every glyph
+  set now offers OTF/WOFF/demo HTML/CSS+JSON manifest unconditionally, per
+  the Glyph mode unification refactor below — there's no longer a
+  project-level kind to gate the CSS+manifest option on).
 - The `woff2Failed` result flag and its UI warning in `FontExportPanel` are
   left in place, dormant — they'll just never trigger while disabled.
 
@@ -294,6 +288,77 @@ its own planning session, not a slice of a larger phase.
 new users have something to open and explore instead of a blank canvas.
 
 ## Shipped
+
+### DONE: Glyph mode unification (font/icon merge, full 12-checkpoint plan)
+
+Shipped across sessions 33 (2026-07-14, checkpoints 1-8) and 34
+(2026-07-14, checkpoints 9-12) — see
+[`docs/session-logs/session-33-2026-07-14.md`](docs/session-logs/session-33-2026-07-14.md)
+and the session 34 log for full rationale and commit references. The
+design spec this executed against, `docs/glyph-mode-unification-plan.md`,
+is retired now that its content has shipped (its "Decisions already made"
+section's substance is folded into this entry and into
+`docs/data-model.md`/`docs/features.md`/`public/manual/glyph-mode.md`).
+
+**What shipped:** the old locked-at-creation character-font/icon-font
+split is gone. `GlyphSet.kind` and `Glyph.unicode` are removed entirely —
+every glyph can freely have a real typed character, a free-form name,
+both, or neither, with no project-level lock. `isAutoAssignedCodepoint`
+(Private-Use-Area range check) and `isDisplayableChar`/`isEmptyGlyph`
+replace the old `kind` branches everywhere they gated behavior:
+`GlyphSetPanel.jsx` (unified glyph browser: one edit-only Character/Name
+field pair, an add-glyph `+` button, codepoint/name sort, a caution badge
++ selection alert for incomplete glyphs), the export pipeline
+(`compileFont.js`/`iconFontCss.js`, unconditional CSS+manifest option),
+save-file migration (old `kind`/`unicode` fields silently ignored on
+load, no data loss), the New Project wizard (eager empty-glyph creation
+for a chosen initial preset, or one bare glyph when none is chosen), a
+Bulk-Add modal (`BulkAddGlyphsModal.jsx`, replacing the old always-inline
+`CharacterMapPanel.jsx`) for bulk-creating preset codepoints, a
+Glyph-mode-only canvas display-color control (`ContextBar.jsx`, updates
+the active glyph's rendering live), and a Specimen Preview redesign
+(`SpecimenPreviewPanel.jsx`: one always-shown multi-line textarea plus a
+click-to-insert swatch per glyph, rows laid out via the shared
+`glyphMetrics()` helper so preview spacing exactly matches real export,
+and a hybrid preview-color model — a picker stamps newly-inserted glyphs,
+already-placed ones keep their locked-in color until "Apply to all").
+Also: two optional per-glyph pixel layers (`backgroundPixels`/
+`foregroundPixels`) exist in the model as groundwork for a future
+two-/three-color icon-font export — model-only, no UI or export wiring
+yet (see its own Open entry above).
+
+**Real deviations from the plan doc, not slips:**
+- Checkpoint 8's selection alert was widened during wireframe review to
+  fire for any of the three caution-badge conditions (auto-assigned
+  codepoint, missing name, or empty grid) rather than just
+  missing-codepoint-or-name, with fixed text "Glyph missing codepoint,
+  name, or content."
+- `GlyphSetPanel.jsx`'s add flow was reworked again after the user
+  reviewed checkpoint 8's shipped UX: the "Create" button and top
+  add-glyph form were scrapped in favor of a `+` button (adds one bare
+  glyph immediately, selecting it) plus a single edit-only Character/Name
+  field pair that always targets the active glyph — replacing the
+  original plan's separate add-form/edit-sub-panel split. A fresh project
+  with no initial preset now seeds one bare glyph (matching what `+`
+  produces) instead of starting empty, and starts with it selected.
+- The caution badge's own logic was corrected further: it now only fires
+  when a glyph has **neither** a real codepoint **nor** a name (not just
+  one of the two), or independently whenever its grid is empty — a real
+  typed character alone is enough identity to clear the badge.
+- `iconTilePadding` was renamed `horizontalPadding` and changed to apply
+  to **every** glyph, not just auto-assigned ones — the original plan
+  scoped it to icon-style glyphs only, which read as broken when tested
+  against a typed Latin glyph. `glyphMetrics()` now adds the padding on
+  top of whichever base bearing/advance applies (auto-assigned glyphs:
+  flush + width-only; typed glyphs: their own stored bearing/advance).
+  Old saves carrying the former key get it copied across on load.
+- Specimen Preview's row-to-row vertical gap (a flat 2px CSS gap,
+  unrelated to any metric) was removed entirely once real testing showed
+  a font with `horizontalPadding`/bearings at 0 tiled seamlessly
+  horizontally but still showed a vertical seam between rows.
+
+Suite is green: 490/490 (`node --test`), all manually verified via the
+Browser pane per checkpoint.
 
 ### DONE: Windows release CI + in-app download link
 

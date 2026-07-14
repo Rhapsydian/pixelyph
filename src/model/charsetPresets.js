@@ -1,6 +1,7 @@
-// Starter codepoint presets for character-kind GlyphSets (CharacterMapPanel).
-// Each preset is a pure function of codepoints — no glyph data, just "which
-// cells should the character-map grid show."
+// Starter codepoint presets for the New Project wizard's initial charset
+// and the Bulk-Add modal (BulkAddGlyphsModal.jsx). Each preset is a pure
+// function of codepoints — no glyph data, just "which codepoints get an
+// empty glyph created for them."
 
 function range(start, end) {
   const codepoints = [];
