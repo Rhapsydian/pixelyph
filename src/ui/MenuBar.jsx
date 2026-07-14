@@ -60,6 +60,58 @@ function MenuDivider() {
   return <div style={{ borderTop: '1px solid var(--chrome-border)', margin: '0.25rem 0' }} />;
 }
 
+/** A nested flyout, opened by hovering its row, positioned to the right of the parent menu. Closing the parent menu (via runAndClose's setOpenMenu(null)) unmounts this along with it. */
+function SubMenu({ label, children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: 'relative' }} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      <button
+        role="menuitem"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="btn"
+        style={{
+          display: 'flex',
+          width: '100%',
+          justifyContent: 'space-between',
+          gap: 16,
+          alignItems: 'center',
+          background: 'transparent',
+          border: 'none',
+          borderRadius: 4,
+          padding: '0.4rem 0.6rem',
+          textAlign: 'left',
+          font: 'inherit',
+        }}
+      >
+        <span>{label}</span>
+        <span style={{ color: 'var(--chrome-text-faint)' }}>›</span>
+      </button>
+      {open && (
+        <div
+          role="menu"
+          style={{
+            position: 'absolute',
+            top: -4,
+            left: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            minWidth: 210,
+            background: 'var(--chrome-bg-panel)',
+            border: '1px solid var(--chrome-border-strong)',
+            borderRadius: 'var(--radius-md)',
+            padding: '0.25rem',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+            zIndex: 11,
+          }}
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Menu({ id, label, openMenu, setOpenMenu, children }) {
   const isOpen = openMenu === id;
   return (
@@ -104,6 +156,7 @@ export function MenuBar() {
   const closeProject = useStore((s) => s.closeProject);
   const saveAnyProject = useStore((s) => s.saveAnyProject);
   const openAnyProject = useStore((s) => s.openAnyProject);
+  const openSampleProject = useStore((s) => s.openSampleProject);
   const copySvg = useStore((s) => s.copySvg);
   const importLospecPalette = useStore((s) => s.importLospecPalette);
   const importPixelyphPalette = useStore((s) => s.importPixelyphPalette);
@@ -270,6 +323,16 @@ export function MenuBar() {
         <MenuItem label="New Project…" onClick={runAndClose(handleNewProject)} />
         <MenuItem label="Open Project…" onClick={runAndClose(openAnyProject)} />
         <MenuItem label="Save Project" onClick={runAndClose(saveAnyProject)} />
+        <SubMenu label="Sample Projects">
+          <MenuItem
+            label="Icon Font (Glyph Mode)"
+            onClick={runAndClose(() => openSampleProject('samples/icon-font.pixelyph', 'Icon Font (Glyph Mode)'))}
+          />
+          <MenuItem
+            label="Shape Mode & Styles"
+            onClick={runAndClose(() => openSampleProject('samples/shape-mode-styles.pixelyph', 'Shape Mode & Styles'))}
+          />
+        </SubMenu>
         {mode === 'draw' && (
           <>
             <MenuDivider />

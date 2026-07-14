@@ -267,6 +267,21 @@ export const useStore = create((set, get) => {
     }
   }
 
+  /** Installs a parsed `.pixelyph` doc as the active project, kind-dispatching. Shared by openAnyProject and openSampleProject. */
+  function installOpenedDoc(doc) {
+    stopPlaybackTimer();
+    set({ isPlaying: false });
+    if (doc.kind === 'glyph') {
+      const restored = deserializeGlyphSetProject(doc);
+      const h = createHistory(glyphContentSnapshot(restored));
+      set({ mode: 'glyph', projectOpen: true, glyphSet: restored, canvas: buildDrawDocument(), glyphCanvas: null, activeCodepoint: null, history: h, canUndo: false, canRedo: false, selection: null, floatingSelection: null, floatingGridSelection: null });
+      return;
+    }
+    const restored = deserializeProject(doc);
+    const h = createHistory(contentSnapshot(restored));
+    set({ mode: 'draw', projectOpen: true, canvas: restored, glyphSet: null, glyphCanvas: null, history: h, canUndo: false, canRedo: false, selection: null, floatingSelection: null, floatingGridSelection: null });
+  }
+
   function scheduleNextPlaybackFrame() {
     const { canvas, isPlaying } = get();
     if (!isPlaying || canvas.frameCount <= 1) {
@@ -1800,18 +1815,14 @@ export const useStore = create((set, get) => {
       const result = await openFile('.pixelyph');
       if (!result) return;
       const text = await result.blob.text();
-      const doc = JSON.parse(text);
-      stopPlaybackTimer();
-      set({ isPlaying: false });
-      if (doc.kind === 'glyph') {
-        const restored = deserializeGlyphSetProject(doc);
-        const h = createHistory(glyphContentSnapshot(restored));
-        set({ mode: 'glyph', projectOpen: true, glyphSet: restored, canvas: buildDrawDocument(), glyphCanvas: null, activeCodepoint: null, history: h, canUndo: false, canRedo: false, selection: null, floatingSelection: null, floatingGridSelection: null });
-        return;
-      }
-      const restored = deserializeProject(doc);
-      const h = createHistory(contentSnapshot(restored));
-      set({ mode: 'draw', projectOpen: true, canvas: restored, glyphSet: null, glyphCanvas: null, history: h, canUndo: false, canRedo: false, selection: null, floatingSelection: null, floatingGridSelection: null });
+      installOpenedDoc(JSON.parse(text));
+    },
+    /** Loads a bundled sample `.pixelyph` file (under public/samples/) as a fresh, unsaved project. */
+    openSampleProject: async (path, label) => {
+      if (get().projectOpen && !(await get().requestConfirm(`Discard the current project and open the sample "${label}"?`))) return;
+      const res = await fetch(path);
+      const text = await res.text();
+      installOpenedDoc(JSON.parse(text));
     },
 
     // --- Autosave recovery (startup screen) ---
