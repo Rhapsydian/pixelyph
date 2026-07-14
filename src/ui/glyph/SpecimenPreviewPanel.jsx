@@ -14,13 +14,33 @@ import { useState } from 'react';
 import { useStore } from '../../state/store.js';
 import { gridToPath } from 'pixelloom';
 import { glyphMetrics } from '../../model/GlyphSet.js';
+import { useResizeDrag } from '../useResizeDrag.js';
 import { IconButton } from '../IconButton.jsx';
 import { ColorAlphaInput } from '../ColorAlphaInput.jsx';
-import { TrashIcon } from '../icons.jsx';
+import { TrashIcon, ChevronDownIcon } from '../icons.jsx';
 
 const PREVIEW_HEIGHT = 48;
 const SWATCH_HEIGHT = 24;
 const DEFAULT_PREVIEW_COLOR = '#eeeeee';
+// Tall enough for the header + a 2-row textarea + one row of the (capped,
+// independently-scrollable) insert-glyph swatches + the color row, with a
+// sliver of the preview box itself still visible — same reasoning as
+// FrameStrip's own MIN_HEIGHT.
+const MIN_HEIGHT = 220;
+const INITIAL_HEIGHT = 280;
+const MAX_HEIGHT = 480;
+// The insert-glyph row scrolls internally past this height instead of
+// pushing the color row/preview box down — matters once a glyph set grows
+// past a handful of entries (a full Basic Latin preset is 95 swatches).
+const INSERT_ROW_MAX_HEIGHT = 140;
+
+function ExpandCaret({ expanded }) {
+  return (
+    <span style={{ display: 'inline-flex', transform: expanded ? undefined : 'rotate(-90deg)' }}>
+      <ChevronDownIcon size={12} />
+    </span>
+  );
+}
 
 function PreviewGlyph({ glyph, height, color = '#eee' }) {
   const scale = height / glyph.height;
@@ -86,6 +106,8 @@ export function SpecimenPreviewPanel() {
   const [text, setText] = useState('');
   const [colors, setColors] = useState(/** @type {string[]} */ ([]));
   const [previewColor, setPreviewColor] = useState(DEFAULT_PREVIEW_COLOR);
+  const [collapsed, setCollapsed] = useState(false);
+  const [height, onHandlePointerDown] = useResizeDrag({ initial: INITIAL_HEIGHT, min: MIN_HEIGHT, max: MAX_HEIGHT, axis: 'y', invert: true });
 
   if (!glyphSet) return null;
 
@@ -110,58 +132,86 @@ export function SpecimenPreviewPanel() {
   const sortedGlyphs = Array.from(glyphSet.glyphs.entries()).sort((a, b) => a[0] - b[0]);
 
   return (
-    <div className="panel canvas-region-stretch" style={{ background: 'var(--chrome-bg-panel)' }}>
-      <strong>Specimen Preview</strong>
-      <textarea
-        value={text}
-        onChange={(e) => updateText(e.target.value)}
-        placeholder="Type a sample string..."
-        rows={2}
-        style={{ width: '100%', resize: 'vertical' }}
-      />
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
-        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--chrome-text-muted)' }}>Insert glyph:</span>
-        {sortedGlyphs.map(([codepoint, glyph]) => (
-          <button
-            key={codepoint}
-            title={glyphLabel(glyph, codepoint)}
-            onClick={() => updateText(text + String.fromCodePoint(codepoint))}
-            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: 4 }}
-          >
-            <PreviewGlyph glyph={glyph} height={SWATCH_HEIGHT} color="var(--chrome-text)" />
-            <span style={{ fontSize: 9 }}>{glyphLabel(glyph, codepoint)}</span>
-          </button>
-        ))}
-        {sortedGlyphs.length === 0 && <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No glyphs yet.</span>}
-        <IconButton icon={<TrashIcon />} label="Clear preview" disabled={text.length === 0} onClick={clearPreview} />
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--chrome-text-muted)' }}>Preview color:</span>
-        <ColorAlphaInput value={previewColor} onChange={setPreviewColor} title="Color newly-inserted preview glyphs are stamped with" />
-        <button onClick={applyColorToAll} disabled={colors.length === 0} title="Recolor every glyph already in the preview to the current color">
-          Apply to all
-        </button>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minHeight: PREVIEW_HEIGHT + 8, padding: 4, background: 'var(--chrome-bg-app)', border: '1px solid var(--chrome-border)', overflow: 'auto' }}>
-        {text.length === 0 && <span style={{ color: 'var(--chrome-text-faint)' }}>Preview will appear here.</span>}
-        {text.length > 0 && rows.map((row, i) => (
-          <div key={i} style={{ position: 'relative', height: PREVIEW_HEIGHT, width: Math.max(row.width, 1), flexShrink: 0 }}>
-            {row.items.map((item) =>
-              item.glyph ? (
-                <div key={item.key} style={{ position: 'absolute', left: item.x, bottom: 0 }}>
-                  <PreviewGlyph glyph={item.glyph} height={PREVIEW_HEIGHT} color={item.color} />
-                </div>
-              ) : (
-                <span
-                  key={item.key}
-                  style={{ position: 'absolute', left: item.x, bottom: 0, width: item.width, textAlign: 'center', color: 'var(--chrome-text-faint)' }}
+    <div className="canvas-region-stretch" style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      {!collapsed && <div className="resize-handle-row" onPointerDown={onHandlePointerDown} title="Drag to resize" />}
+      <div
+        className="panel"
+        style={{
+          height: collapsed ? undefined : height,
+          minHeight: collapsed ? undefined : MIN_HEIGHT,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          minWidth: 0,
+          background: 'var(--chrome-bg-panel)',
+          borderTop: '1px solid var(--chrome-border)',
+          borderLeft: '1px solid var(--chrome-border)',
+          borderRight: '1px solid var(--chrome-border)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <IconButton
+            icon={<ExpandCaret expanded={!collapsed} />}
+            label={collapsed ? 'Expand Specimen Preview' : 'Collapse Specimen Preview'}
+            onClick={() => setCollapsed((c) => !c)}
+          />
+          <strong>Specimen Preview</strong>
+        </div>
+        {!collapsed && (
+          <>
+            <textarea
+              value={text}
+              onChange={(e) => updateText(e.target.value)}
+              placeholder="Type a sample string..."
+              rows={2}
+              style={{ width: '100%', resize: 'vertical', flexShrink: 0 }}
+            />
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', alignContent: 'flex-start', gap: 4, maxHeight: INSERT_ROW_MAX_HEIGHT, overflowY: 'auto', flexShrink: 0 }}>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--chrome-text-muted)' }}>Insert glyph:</span>
+              {sortedGlyphs.map(([codepoint, glyph]) => (
+                <button
+                  key={codepoint}
+                  title={glyphLabel(glyph, codepoint)}
+                  onClick={() => updateText(text + String.fromCodePoint(codepoint))}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: 4 }}
                 >
-                  {item.char === ' ' ? ' ' : '?'}
-                </span>
-              ),
-            )}
-          </div>
-        ))}
+                  <PreviewGlyph glyph={glyph} height={SWATCH_HEIGHT} color="var(--chrome-text)" />
+                  <span style={{ fontSize: 9 }}>{glyphLabel(glyph, codepoint)}</span>
+                </button>
+              ))}
+              {sortedGlyphs.length === 0 && <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No glyphs yet.</span>}
+              <IconButton icon={<TrashIcon />} label="Clear preview" disabled={text.length === 0} onClick={clearPreview} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--chrome-text-muted)' }}>Preview color:</span>
+              <ColorAlphaInput value={previewColor} onChange={setPreviewColor} title="Color newly-inserted preview glyphs are stamped with" />
+              <button onClick={applyColorToAll} disabled={colors.length === 0} title="Recolor every glyph already in the preview to the current color">
+                Apply to all
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: 4, background: 'var(--chrome-bg-app)', border: '1px solid var(--chrome-border)', overflow: 'auto', flex: 1, minHeight: 0 }}>
+              {text.length === 0 && <span style={{ color: 'var(--chrome-text-faint)' }}>Preview will appear here.</span>}
+              {text.length > 0 && rows.map((row, i) => (
+                <div key={i} style={{ position: 'relative', height: PREVIEW_HEIGHT, width: Math.max(row.width, 1), flexShrink: 0 }}>
+                  {row.items.map((item) =>
+                    item.glyph ? (
+                      <div key={item.key} style={{ position: 'absolute', left: item.x, bottom: 0 }}>
+                        <PreviewGlyph glyph={item.glyph} height={PREVIEW_HEIGHT} color={item.color} />
+                      </div>
+                    ) : (
+                      <span
+                        key={item.key}
+                        style={{ position: 'absolute', left: item.x, bottom: 0, width: item.width, textAlign: 'center', color: 'var(--chrome-text-faint)' }}
+                      >
+                        {item.char === ' ' ? ' ' : '?'}
+                      </span>
+                    ),
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
