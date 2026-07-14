@@ -98,7 +98,7 @@ import { copySvgToClipboard } from '../export/clipboard.js';
 import { serializeProject, deserializeProject, saveProjectToString, loadProjectFromString, serializeGlyphSetProject, deserializeGlyphSetProject, saveGlyphProjectToString, loadGlyphProjectFromString } from '../io/projectFile.js';
 import { saveFile, openFile } from '../io/platform.js';
 import { readAutosave, clearAutosave, createAutosaveScheduler } from '../io/autosave.js';
-import { createGlyphSet, createGlyph, setGlyph as setGlyphModel, removeGlyph as removeGlyphModel, nextAutoCodepoint, resizeGlyphSet as resizeGlyphSetModel, glyphToCanvas, canvasToGlyphPixels, flipGlyphH, flipGlyphV, rotateGlyph90 as rotateGlyph90Model } from '../model/GlyphSet.js';
+import { createGlyphSet, createGlyph, setGlyph as setGlyphModel, removeGlyph as removeGlyphModel, nextAutoCodepoint, addGlyphsFromCodepoints as addGlyphsFromCodepointsModel, resizeGlyphSet as resizeGlyphSetModel, glyphToCanvas, canvasToGlyphPixels, flipGlyphH, flipGlyphV, rotateGlyph90 as rotateGlyph90Model } from '../model/GlyphSet.js';
 import { resize as resizeGrid, flipGridH, flipGridV, rotateGrid90 } from '../model/Grid.js';
 import { glyphToSvg } from '../export/svg/glyphSvg.js';
 import { buildDrawDocument, buildGlyphDocument, DEFAULT_INITIAL_CHARSET_PRESET } from '../model/projectFactory.js';
@@ -1193,16 +1193,7 @@ export const useStore = create((set, get) => {
      */
     addGlyphsFromPreset: (codepoints) => {
       const { glyphSet, history } = get();
-      const width = glyphSet.meta.defaultGlyphWidth != null
-        ? glyphSet.meta.defaultGlyphWidth
-        : Math.max(1, Math.round(glyphSet.meta.pixelsPerEm * 0.75));
-      let createdAny = false;
-      for (const codepoint of codepoints) {
-        if (glyphSet.glyphs.has(codepoint)) continue;
-        setGlyphModel(glyphSet, codepoint, createGlyph({ width, height: glyphSet.meta.pixelsPerEm }));
-        createdAny = true;
-      }
-      if (!createdAny) return;
+      if (!addGlyphsFromCodepointsModel(glyphSet, codepoints)) return;
       pushSnapshot(history, glyphContentSnapshot(glyphSet));
       set({ glyphSet: { ...glyphSet }, history: { ...history }, canUndo: historyCanUndo(history), canRedo: historyCanRedo(history) });
       autosaveScheduler(serializeGlyphSetProject(glyphSet));

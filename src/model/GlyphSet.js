@@ -93,6 +93,31 @@ export function wouldCollide(glyphSet, codepoint) {
   return glyphSet.glyphs.has(codepoint);
 }
 
+/**
+ * Bulk-creation core: an empty-grid Glyph at every codepoint in
+ * `codepoints` that doesn't already exist in `glyphSet`, skipping any that
+ * do — no destructive overwrite. Pure mutation of `glyphSet.glyphs`; the
+ * caller (the store's addGlyphsFromPreset action, or buildGlyphDocument at
+ * project-creation time) handles anything beyond that (history, autosave).
+ * Width uses the same "real character" default formula addGlyph's typed
+ * path uses, since every codepoint here is a real preset character, never
+ * auto-assigned.
+ *
+ * @returns {boolean} whether any glyph was actually created
+ */
+export function addGlyphsFromCodepoints(glyphSet, codepoints) {
+  const width = glyphSet.meta.defaultGlyphWidth != null
+    ? glyphSet.meta.defaultGlyphWidth
+    : Math.max(1, Math.round(glyphSet.meta.pixelsPerEm * 0.75));
+  let createdAny = false;
+  for (const codepoint of codepoints) {
+    if (glyphSet.glyphs.has(codepoint)) continue;
+    setGlyph(glyphSet, codepoint, createGlyph({ width, height: glyphSet.meta.pixelsPerEm }));
+    createdAny = true;
+  }
+  return createdAny;
+}
+
 const PUA_START = 0xe000;
 const PUA_END = 0xf8ff;
 

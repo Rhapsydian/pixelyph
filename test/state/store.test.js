@@ -97,7 +97,7 @@ test('cross-glyph copy-paste: selecting in glyph A, switching to glyph B, and pa
 
 test('addGlyph with a character key uses it as the literal codepoint', async () => {
   const store = useStore.getState();
-  await store.newProject('glyph', { familyName: 'addGlyph Test' });
+  await store.newProject('glyph', { familyName: 'addGlyph Test', initialPreset: 'none' });
   store.addGlyph({ character: 65, name: 'Cap A' });
   const { glyphSet, activeCodepoint } = useStore.getState();
   assert.equal(activeCodepoint, 65);
@@ -107,7 +107,7 @@ test('addGlyph with a character key uses it as the literal codepoint', async () 
 
 test('addGlyph with no character auto-assigns a PUA codepoint', async () => {
   const store = useStore.getState();
-  await store.newProject('glyph', { familyName: 'addGlyph Auto Test' });
+  await store.newProject('glyph', { familyName: 'addGlyph Auto Test', initialPreset: 'none' });
   store.addGlyph({ name: 'star' });
   const { glyphSet, activeCodepoint } = useStore.getState();
   assert.equal(activeCodepoint, 0xe000);
@@ -116,7 +116,7 @@ test('addGlyph with no character auto-assigns a PUA codepoint', async () => {
 
 test('addGlyph with neither character nor name creates a completely bare glyph', async () => {
   const store = useStore.getState();
-  await store.newProject('glyph', { familyName: 'addGlyph Bare Test' });
+  await store.newProject('glyph', { familyName: 'addGlyph Bare Test', initialPreset: 'none' });
   store.addGlyph();
   const { glyphSet, activeCodepoint } = useStore.getState();
   assert.equal(activeCodepoint, 0xe000);
@@ -125,7 +125,7 @@ test('addGlyph with neither character nor name creates a completely bare glyph',
 
 test('addGlyphsFromPreset creates one empty glyph per codepoint, skipping ones that already exist', async () => {
   const store = useStore.getState();
-  await store.newProject('glyph', { familyName: 'Preset Test' });
+  await store.newProject('glyph', { familyName: 'Preset Test', initialPreset: 'none' });
   store.addGlyph({ character: 65, name: 'already here' });
   store.addGlyphsFromPreset([65, 66, 67]);
   const { glyphSet } = useStore.getState();
@@ -137,7 +137,7 @@ test('addGlyphsFromPreset creates one empty glyph per codepoint, skipping ones t
 
 test('addGlyphsFromPreset is a no-op when every codepoint already exists', async () => {
   const store = useStore.getState();
-  await store.newProject('glyph', { familyName: 'Preset Noop Test' });
+  await store.newProject('glyph', { familyName: 'Preset Noop Test', initialPreset: 'none' });
   store.addGlyph({ character: 65 });
   const canUndoBefore = useStore.getState().canUndo;
   store.addGlyphsFromPreset([65]);

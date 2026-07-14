@@ -86,9 +86,18 @@ test('buildGlyphDocument defaults initialPreset to basic-latin', () => {
   assert.equal(initialPreset, 'basic-latin');
 });
 
-test('buildGlyphDocument starts with an empty glyphs map', () => {
-  const { glyphSet } = buildGlyphDocument({ familyName: 'Test' });
+test('buildGlyphDocument starts with an empty glyphs map when initialPreset is none', () => {
+  const { glyphSet } = buildGlyphDocument({ familyName: 'Test', initialPreset: 'none' });
   assert.equal(glyphSet.glyphs.size, 0);
+});
+
+test('buildGlyphDocument eagerly creates one empty-grid glyph per codepoint in the chosen initial preset', () => {
+  const { glyphSet } = buildGlyphDocument({ familyName: 'Test', initialPreset: 'symbols' });
+  assert.equal(glyphSet.glyphs.size, 36); // SYMBOLS_CODEPOINTS' length, per charsetPresets.js
+  const heart = glyphSet.glyphs.get(0x2764);
+  assert.ok(heart);
+  assert.equal(heart.name, '');
+  assert.equal(Array.from(heart.pixels).every((v) => v === 0), true, 'eagerly-created glyphs start with an empty grid');
 });
 
 test('buildGlyphDocument preserves default FontMeta fields not in options', () => {

@@ -24,32 +24,29 @@ import { CHARSET_PRESETS, CHARSET_PRESET_IDS } from './model/charsetPresets.js';
 
 // --- New Project wizard ---
 
-function deriveDefaultWidth(pixelsPerEm, kind) {
-  return kind === 'icons'
-    ? Math.max(1, Math.round(pixelsPerEm))
-    : Math.max(1, Math.round(pixelsPerEm * 0.75));
+function deriveDefaultWidth(pixelsPerEm) {
+  return Math.max(1, Math.round(pixelsPerEm * 0.75));
 }
 
 function NewProjectWizard({ onBack }) {
   const newProject = useStore((s) => s.newProject);
   const [step, setStep] = useState('mode'); // 'mode' | 'glyph-options'
-  const [glyphKind, setGlyphKind] = useState('characters');
   const [familyName, setFamilyName] = useState('Untitled');
   const [initialPreset, setInitialPreset] = useState('none');
   const [pixelsPerEm, setPixelsPerEm] = useState(16);
   const [defaultGlyphWidth, setDefaultGlyphWidth] = useState(12); // 75% of 16
 
-  // Keep defaultGlyphWidth in sync with pixelsPerEm/kind unless the user
-  // edited it manually. We track the "auto" value; if the current input matches
+  // Keep defaultGlyphWidth in sync with pixelsPerEm unless the user edited
+  // it manually. We track the "auto" value; if the current input matches
   // the previous auto value, auto-update continues. If the user changed it to
   // something else, we leave it alone.
   const prevAutoRef = useRef(12);
   useEffect(() => {
-    const auto = deriveDefaultWidth(pixelsPerEm, glyphKind);
+    const auto = deriveDefaultWidth(pixelsPerEm);
     // Only auto-update if the field still holds the last auto-computed value
     setDefaultGlyphWidth((prev) => (prev === prevAutoRef.current ? auto : prev));
     prevAutoRef.current = auto;
-  }, [pixelsPerEm, glyphKind]);
+  }, [pixelsPerEm]);
 
   function handleDraw() {
     newProject('draw');
@@ -61,7 +58,7 @@ function NewProjectWizard({ onBack }) {
 
   function handleCreateGlyph(e) {
     e.preventDefault();
-    newProject('glyph', { kind: glyphKind, familyName, initialPreset, pixelsPerEm, defaultGlyphWidth });
+    newProject('glyph', { familyName, initialPreset, pixelsPerEm, defaultGlyphWidth });
   }
 
   const inputStyle = { padding: '0.4rem' };
@@ -92,13 +89,6 @@ function NewProjectWizard({ onBack }) {
       <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>New Glyph Project</h2>
       <form onSubmit={handleCreateGlyph} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: 300 }}>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          Kind
-          <select value={glyphKind} onChange={(e) => setGlyphKind(e.target.value)} style={inputStyle}>
-            <option value="characters">Character font</option>
-            <option value="icons">Icon font (PUA codepoints)</option>
-          </select>
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           Family name
           <input value={familyName} onChange={(e) => setFamilyName(e.target.value)} style={inputStyle} required />
         </label>
@@ -124,19 +114,17 @@ function NewProjectWizard({ onBack }) {
             />
           </label>
         </div>
-        {glyphKind === 'characters' && (
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            Initial charset
-            <select value={initialPreset} onChange={(e) => setInitialPreset(e.target.value)} style={inputStyle}>
-              <option value="none">None</option>
-              {CHARSET_PRESET_IDS.map((id) => (
-                <option key={id} value={id}>
-                  {CHARSET_PRESETS[id].label}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          Initial charset
+          <select value={initialPreset} onChange={(e) => setInitialPreset(e.target.value)} style={inputStyle}>
+            <option value="none">None</option>
+            {CHARSET_PRESET_IDS.map((id) => (
+              <option key={id} value={id}>
+                {CHARSET_PRESETS[id].label}
+              </option>
+            ))}
+          </select>
+        </label>
         <button type="submit" className="btn btn-primary" style={{ marginTop: '0.5rem' }}>Create Glyph Project</button>
       </form>
       <button className="btn btn-secondary" onClick={() => setStep('mode')}>← Back</button>
