@@ -2,21 +2,41 @@
 
 ## Next session
 
-### Glyph mode unification (font/icon merge)
+### Glyph mode unification (font/icon merge) — in progress, 8 of 12 checkpoints shipped
 
-**Flagged as the next `/dev-session` for this project.** Full design spec:
-[`docs/glyph-mode-unification-plan.md`](docs/glyph-mode-unification-plan.md)
-— produced by a dedicated planning/research-only session, not yet
-implemented. Merges Glyph mode's two locked-at-creation sub-modes
-(`kind: 'characters'`/`'icons'`) into one unified glyph type (no `kind`
-field, every glyph can freely have a real typed character, a name, both, or
-neither); also adds a "Bulk Add Glyphs" modal, incomplete-glyph caution
-badges, a Specimen Preview overhaul (multi-line real-font-metrics layout,
-per-glyph color locking), a Glyph-mode-only display-color control, a
-model-only (no UI yet) optional background/foreground layer pair on `Glyph`
-for a future multi-color icon-font export, and a Glyph-mode
-selection/transform parity check against Draw mode. 12 ordered checkpoints,
-sequencing and full rationale in the linked doc.
+Design spec: [`docs/glyph-mode-unification-plan.md`](docs/glyph-mode-unification-plan.md).
+Checkpoints 1-8 shipped session 33 (see
+[`docs/session-logs/session-33-2026-07-14.md`](docs/session-logs/session-33-2026-07-14.md)
+for full rationale and commit references) — core model, unified store
+actions, a verified selection/transform parity match with Draw mode (no
+code change needed), the `GlyphThumbnail` watermark, the export pipeline,
+save-file migration, the New Project wizard, and the `GlyphSetPanel` merge
+are all done. Suite is green: 489/489.
+
+**Resume here, in order:**
+1. **Finish checkpoint 8's manual verification** — session 33 was
+   interrupted mid-testing. Confirmed: typed+named glyph creation, and the
+   caution-badge/alert lifecycle on that glyph. Still needs: named-only
+   auto-keyed creation, a fully bare glyph, re-keying an existing glyph's
+   character via the edit sub-panel (confirm the Map entry actually moves,
+   undo/redo both work), search, the sort toggle, and remove-glyph.
+2. **Checkpoint 9** — convert `CharacterMapPanel.jsx` into the Bulk-Add
+   modal and wire it to the "Bulk Add…" button already sitting (inert,
+   unwired) in `GlyphSetPanel.jsx`.
+3. **Checkpoints 10-12** — the Glyph-mode-only display-color control
+   (`glyphDisplayColor` store state already exists from checkpoint 2,
+   unwired), the Specimen Preview redesign, and the docs pass. See the
+   plan doc for each.
+
+**One deviation from the plan doc, carried forward:** checkpoint 8's
+selection alert in `GlyphSetPanel.jsx` was widened during its wireframe
+review. The plan doc originally excluded the empty-grid-alone case from
+the alert ("visually self-evident"), showing it only for missing-
+codepoint-or-name — the user corrected this to fire for any of the three
+caution-badge conditions (auto-assigned codepoint, missing name, **or**
+empty grid), with fixed text "Glyph missing codepoint, name, or content."
+Keep this in mind if later checkpoints (Specimen Preview, docs) reference
+the plan's original narrower wording.
 
 ## Open
 
