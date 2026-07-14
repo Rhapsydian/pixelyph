@@ -549,7 +549,7 @@ export function SvgPixelEditor() {
           color: 'var(--chrome-text-muted)',
         }}
       >
-        No glyph selected — type a character or click a placeholder in the character map, then click Create.
+        No glyph selected — click a glyph in the Glyphs tab, or + to add a new one, to get started.
       </div>
     );
   }

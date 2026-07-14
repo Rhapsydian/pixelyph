@@ -10,7 +10,7 @@
 // "gapless tiling" is a font-metadata property (horizontalPadding/bearings
 // set to 0), not a separate preview mode.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../../state/store.js';
 import { gridToPath } from 'pixelloom';
 import { glyphMetrics } from '../../model/GlyphSet.js';
@@ -108,6 +108,21 @@ export function SpecimenPreviewPanel() {
   const [previewColor, setPreviewColor] = useState(DEFAULT_PREVIEW_COLOR);
   const [collapsed, setCollapsed] = useState(false);
   const [height, onHandlePointerDown] = useResizeDrag({ initial: INITIAL_HEIGHT, min: MIN_HEIGHT, max: MAX_HEIGHT, axis: 'y', invert: true });
+  const textareaRef = useRef(null);
+  const pendingCursorRef = useRef(null);
+
+  // Restores focus/cursor after a swatch-click inserts at a specific
+  // position — has to run post-render since the textarea's DOM value
+  // only reflects the new `text` once React commits it.
+  useEffect(() => {
+    if (pendingCursorRef.current == null) return;
+    const el = textareaRef.current;
+    if (el) {
+      el.focus();
+      el.setSelectionRange(pendingCursorRef.current, pendingCursorRef.current);
+    }
+    pendingCursorRef.current = null;
+  }, [text]);
 
   if (!glyphSet) return null;
 
@@ -116,6 +131,15 @@ export function SpecimenPreviewPanel() {
     const newChars = Array.from(nextText);
     setColors(diffColors(oldChars, newChars, colors, previewColor));
     setText(nextText);
+  }
+
+  /** Inserts `char` at the textarea's current cursor position (replacing any active selection), rather than always appending at the end. */
+  function insertAtCursor(char) {
+    const el = textareaRef.current;
+    const start = el ? el.selectionStart : text.length;
+    const end = el ? el.selectionEnd : text.length;
+    pendingCursorRef.current = start + char.length;
+    updateText(text.slice(0, start) + char + text.slice(end));
   }
 
   function clearPreview() {
@@ -160,6 +184,7 @@ export function SpecimenPreviewPanel() {
         {!collapsed && (
           <>
             <textarea
+              ref={textareaRef}
               value={text}
               onChange={(e) => updateText(e.target.value)}
               placeholder="Type a sample string..."
@@ -172,7 +197,7 @@ export function SpecimenPreviewPanel() {
                 <button
                   key={codepoint}
                   title={glyphLabel(glyph, codepoint)}
-                  onClick={() => updateText(text + String.fromCodePoint(codepoint))}
+                  onClick={() => insertAtCursor(String.fromCodePoint(codepoint))}
                   style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: 4 }}
                 >
                   <PreviewGlyph glyph={glyph} height={SWATCH_HEIGHT} color="var(--chrome-text)" />
