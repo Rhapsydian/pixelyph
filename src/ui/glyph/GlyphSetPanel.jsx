@@ -1,14 +1,14 @@
-// Shared thumbnail browser for both GlyphSet kinds — sorted by codepoint
-// (character sets) or alphabetically by name (icon sets), with a search
-// box. Clicking a thumbnail makes that glyph active in GlyphGridEditor, the
-// same "click an item in a side panel to make it the active editing
-// target" interaction LayersPanel already uses in Draw mode. Icon-kind sets
-// have no character map (CharacterMapPanel), so their "add a new glyph"
-// affordance — name in, next PUA codepoint derived automatically — lives
-// here instead.
+// The single, unconditional glyph browser/editor entry point — every
+// glyph, typed or auto-assigned, named or not, lives in one list here (no
+// more character-kind/icon-kind split). Clicking a thumbnail makes that
+// glyph active in GlyphGridEditor, the same "click an item in a side panel
+// to make it the active editing target" interaction LayersPanel already
+// uses in Draw mode. Only ever iterates real glyphSet.glyphs Map entries —
+// no phantom/ghost cells for a codepoint that has no Glyph object yet.
 
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../state/store.js';
+import { isAutoAssignedCodepoint, isDisplayableChar, nonDisplayableLabel, isEmptyGlyph, wouldCollide } from '../../model/GlyphSet.js';
 import { GlyphThumbnail } from './GlyphThumbnail.jsx';
 import { CloseIcon } from '../icons.jsx';
 
@@ -41,15 +41,32 @@ function unicodeDisplay(cp) {
   catch { return null; }
 }
 
-function glyphLabel(codepoint, glyph, kind) {
-  if (kind === 'icons') return glyph.name || '(unnamed)';
-  let char;
-  try {
-    char = String.fromCodePoint(codepoint);
-  } catch {
-    char = '?';
+function hex(codepoint) {
+  return `U+${codepoint.toString(16).toUpperCase()}`;
+}
+
+// Prefers the real character over the name, except for non-displayed
+// characters (space, control chars, ...), where it falls back to name (or
+// a hex/placeholder label if there's no name either).
+function glyphLabel(codepoint, glyph) {
+  if (!isAutoAssignedCodepoint(codepoint) && isDisplayableChar(codepoint)) {
+    let char;
+    try { char = String.fromCodePoint(codepoint); } catch { char = '?'; }
+    return `${char} (${hex(codepoint)})`;
   }
-  return `${char} (U+${codepoint.toString(16).toUpperCase()})`;
+  if (glyph.name) return glyph.name;
+  if (!isAutoAssignedCodepoint(codepoint)) {
+    const label = nonDisplayableLabel(codepoint);
+    if (label) return `${label} (${hex(codepoint)})`;
+  }
+  return `(unnamed) (${hex(codepoint)})`;
+}
+
+// Drives both the caution badge and the selection alert — an
+// auto-assigned codepoint, a missing name, or an empty grid all count,
+// independently of each other.
+function hasIssue(codepoint, glyph) {
+  return isAutoAssignedCodepoint(codepoint) || !glyph.name || isEmptyGlyph(glyph);
 }
 
 export function GlyphSetPanel() {
@@ -58,24 +75,29 @@ export function GlyphSetPanel() {
   const selectGlyph = useStore((s) => s.selectGlyph);
   const removeGlyphAction = useStore((s) => s.removeGlyphAction);
   const requestConfirm = useStore((s) => s.requestConfirm);
-  const addIconGlyph = useStore((s) => s.addIconGlyph);
+  const addGlyph = useStore((s) => s.addGlyph);
+  const reassignGlyphCodepoint = useStore((s) => s.reassignGlyphCodepoint);
   const updateGlyphMeta = useStore((s) => s.updateGlyphMeta);
+
   const [query, setQuery] = useState('');
-  const [newIconName, setNewIconName] = useState('');
-  const [newIconUnicode, setNewIconUnicode] = useState('');
-  const [newIconUnicodeError, setNewIconUnicodeError] = useState(false);
+  const [sortMode, setSortMode] = useState('codepoint'); // 'codepoint' | 'name'
   const [hoveredCodepoint, setHoveredCodepoint] = useState(null);
+
+  const [newCharacter, setNewCharacter] = useState('');
+  const [newCharacterError, setNewCharacterError] = useState(false);
+  const [newName, setNewName] = useState('');
+
   const [editName, setEditName] = useState('');
-  const [editUnicode, setEditUnicode] = useState('');
-  const [editUnicodeError, setEditUnicodeError] = useState(false);
+  const [editCharacter, setEditCharacter] = useState('');
+  const [editCharacterError, setEditCharacterError] = useState(false);
 
   useEffect(() => {
-    if (activeCodepoint == null || !glyphSet) { setEditName(''); setEditUnicode(''); setEditUnicodeError(false); return; }
+    if (activeCodepoint == null || !glyphSet) { setEditName(''); setEditCharacter(''); setEditCharacterError(false); return; }
     const g = glyphSet.glyphs.get(activeCodepoint);
     if (!g) return;
     setEditName(g.name ?? '');
-    setEditUnicode(g.unicode != null ? String.fromCodePoint(g.unicode) : '');
-    setEditUnicodeError(false);
+    setEditCharacter(isAutoAssignedCodepoint(activeCodepoint) ? '' : isDisplayableChar(activeCodepoint) ? String.fromCodePoint(activeCodepoint) : hex(activeCodepoint));
+    setEditCharacterError(false);
   }, [activeCodepoint]);
 
   const entries = useMemo(() => {
@@ -83,56 +105,92 @@ export function GlyphSetPanel() {
     const all = Array.from(glyphSet.glyphs.entries()).map(([codepoint, glyph]) => ({ codepoint, glyph }));
     const q = query.trim().toLowerCase();
     const filtered = q
-      ? all.filter(({ codepoint, glyph }) => glyphLabel(codepoint, glyph, glyphSet.kind).toLowerCase().includes(q) || codepoint.toString(16).toLowerCase().includes(q))
+      ? all.filter(({ codepoint, glyph }) => glyphLabel(codepoint, glyph).toLowerCase().includes(q) || codepoint.toString(16).toLowerCase().includes(q))
       : all;
-    return glyphSet.kind === 'icons'
-      ? filtered.sort((a, b) => (a.glyph.name ?? '').localeCompare(b.glyph.name ?? ''))
+    return sortMode === 'name'
+      ? filtered.sort((a, b) => (a.glyph.name ?? '').localeCompare(b.glyph.name ?? '') || a.codepoint - b.codepoint)
       : filtered.sort((a, b) => a.codepoint - b.codepoint);
-  }, [glyphSet, query]);
+  }, [glyphSet, query, sortMode]);
 
   if (!glyphSet) return null;
 
+  async function handleCreate() {
+    const parsed = parseUnicodeInput(newCharacter);
+    if (parsed === undefined) { setNewCharacterError(true); return; }
+    setNewCharacterError(false);
+    if (parsed != null && wouldCollide(glyphSet, parsed)) {
+      const existing = glyphSet.glyphs.get(parsed);
+      if (!(await requestConfirm(`${glyphLabel(parsed, existing)} already has a glyph — replace it?`))) return;
+    }
+    addGlyph({ character: parsed, name: newName.trim() });
+    setNewCharacter('');
+    setNewName('');
+  }
+
+  async function handleEditCharacterChange(text) {
+    setEditCharacter(text);
+    const parsed = parseUnicodeInput(text);
+    if (parsed === undefined) { setEditCharacterError(true); return; }
+    setEditCharacterError(false);
+    if (parsed == null || parsed === activeCodepoint) return; // cleared, or unchanged — no reassignment to make
+    if (wouldCollide(glyphSet, parsed)) {
+      const existing = glyphSet.glyphs.get(parsed);
+      if (!(await requestConfirm(`${glyphLabel(parsed, existing)} already has a glyph — replace it?`))) return;
+    }
+    reassignGlyphCodepoint(activeCodepoint, parsed);
+  }
+
+  const activeGlyph = activeCodepoint != null ? glyphSet.glyphs.get(activeCodepoint) : null;
+
   return (
     <div className="panel">
-      <strong>
-        Glyphs ({glyphSet.glyphs.size}) — {glyphSet.kind}
-      </strong>
-      <input placeholder="Search..." value={query} onChange={(e) => setQuery(e.target.value)} style={{ width: '100%' }} />
-      {glyphSet.kind === 'icons' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div style={{ display: 'flex', gap: 4 }}>
-            <input
-              placeholder="Icon name"
-              value={newIconName}
-              onChange={(e) => setNewIconName(e.target.value)}
-              style={{ flex: 1 }}
-            />
-            <button
-              disabled={!newIconName.trim()}
-              onClick={() => {
-                const parsed = parseUnicodeInput(newIconUnicode);
-                addIconGlyph({ name: newIconName.trim(), unicode: parsed ?? null });
-                setNewIconName('');
-                setNewIconUnicode('');
-                setNewIconUnicodeError(false);
-              }}
-            >
-              + Add Icon
-            </button>
-          </div>
-          <input
-            placeholder="Unicode character (optional) — paste ❤, U+2764, &hearts;, &#x2764;"
-            value={newIconUnicode}
-            onChange={(e) => {
-              setNewIconUnicode(e.target.value);
-              setNewIconUnicodeError(e.target.value.trim() !== '' && parseUnicodeInput(e.target.value) === undefined);
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <strong>Glyphs ({glyphSet.glyphs.size})</strong>
+        <div style={{ display: 'flex', border: '1px solid var(--chrome-border-strong)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+          <button
+            onClick={() => setSortMode('codepoint')}
+            style={{
+              border: 'none', padding: '2px 6px', fontSize: 'var(--text-xs)',
+              background: sortMode === 'codepoint' ? 'var(--chrome-accent-soft)' : 'transparent',
+              color: sortMode === 'codepoint' ? 'var(--chrome-accent)' : 'var(--chrome-text-muted)',
             }}
-            style={{ borderColor: newIconUnicodeError ? 'var(--chrome-danger)' : undefined }}
-          />
-          {newIconUnicodeError && <span style={{ color: 'var(--chrome-danger)', fontSize: 'var(--text-xs)' }}>Not a recognized character, U+xxxx, HTML entity, or &#xNNNN;</span>}
-          {!newIconUnicodeError && (() => { const p = parseUnicodeInput(newIconUnicode); return p != null ? <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>{unicodeDisplay(p)}</span> : null; })()}
+          >
+            Codepoint
+          </button>
+          <button
+            onClick={() => setSortMode('name')}
+            style={{
+              border: 'none', borderLeft: '1px solid var(--chrome-border-strong)', padding: '2px 6px', fontSize: 'var(--text-xs)',
+              background: sortMode === 'name' ? 'var(--chrome-accent-soft)' : 'transparent',
+              color: sortMode === 'name' ? 'var(--chrome-accent)' : 'var(--chrome-text-muted)',
+            }}
+          >
+            Name
+          </button>
         </div>
-      )}
+      </div>
+      <input placeholder="Search..." value={query} onChange={(e) => setQuery(e.target.value)} style={{ width: '100%' }} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <input
+            placeholder="Character"
+            title="Optional — paste a character, or type U+xxxx, &hearts;, or &#x2764;"
+            value={newCharacter}
+            onChange={(e) => {
+              setNewCharacter(e.target.value);
+              setNewCharacterError(e.target.value.trim() !== '' && parseUnicodeInput(e.target.value) === undefined);
+            }}
+            style={{ flex: 1, minWidth: 0, borderColor: newCharacterError ? 'var(--chrome-danger)' : undefined }}
+          />
+          <input placeholder="Name" value={newName} onChange={(e) => setNewName(e.target.value)} style={{ flex: 1, minWidth: 0 }} />
+          <button onClick={handleCreate} style={{ flexShrink: 0 }}>Create</button>
+        </div>
+        {newCharacterError && <span style={{ color: 'var(--chrome-danger)', fontSize: 'var(--text-xs)' }}>Not a recognized character, U+xxxx, HTML entity, or &#xNNNN;</span>}
+        {!newCharacterError && (() => { const p = parseUnicodeInput(newCharacter); return p != null ? <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>{unicodeDisplay(p)}</span> : null; })()}
+        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--chrome-text-faint)' }}>Both optional — leave blank for a bare glyph, an auto-keyed name-only icon, or a plain typed character.</span>
+      </div>
+      {/* Opens the Bulk-Add modal — wired up in the next checkpoint once CharacterMapPanel.jsx becomes that modal. */}
+      <button style={{ alignSelf: 'flex-start' }}>Bulk Add…</button>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxHeight: 320, overflow: 'auto' }}>
         {entries.map(({ codepoint, glyph }) => (
           <div
@@ -141,7 +199,7 @@ export function GlyphSetPanel() {
             onClick={() => selectGlyph(codepoint)}
             onMouseEnter={() => setHoveredCodepoint(codepoint)}
             onMouseLeave={() => setHoveredCodepoint(null)}
-            title={glyphLabel(codepoint, glyph, glyphSet.kind)}
+            title={glyphLabel(codepoint, glyph)}
             style={{
               position: 'relative',
               cursor: 'pointer',
@@ -150,11 +208,21 @@ export function GlyphSetPanel() {
             }}
           >
             <GlyphThumbnail glyph={glyph} codepoint={codepoint} />
+            {hasIssue(codepoint, glyph) && (
+              <div
+                title="Missing codepoint, name, or content"
+                style={{
+                  position: 'absolute', top: -3, left: -3,
+                  width: 9, height: 9, borderRadius: 2,
+                  background: 'var(--chrome-warning)', border: '1.5px solid var(--chrome-bg-raised)',
+                }}
+              />
+            )}
             {hoveredCodepoint === codepoint && (
               <button
                 onClick={async (e) => {
                   e.stopPropagation();
-                  if (await requestConfirm(`Remove glyph ${glyphLabel(codepoint, glyph, glyphSet.kind)}?`)) {
+                  if (await requestConfirm(`Remove glyph ${glyphLabel(codepoint, glyph)}?`)) {
                     removeGlyphAction(codepoint);
                   }
                 }}
@@ -176,11 +244,16 @@ export function GlyphSetPanel() {
         ))}
         {entries.length === 0 && <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No glyphs yet.</span>}
       </div>
-      {glyphSet.kind === 'icons' && activeCodepoint != null && glyphSet.glyphs.has(activeCodepoint) && (
+      {activeGlyph && hasIssue(activeCodepoint, activeGlyph) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--chrome-warning-soft, rgba(245,166,35,0.12))', border: '1px solid var(--chrome-warning)', borderRadius: 'var(--radius-sm)', padding: '4px 8px', fontSize: 'var(--text-xs)', color: 'var(--chrome-warning)' }}>
+          Glyph missing codepoint, name, or content.
+        </div>
+      )}
+      {activeGlyph && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, borderTop: '1px solid var(--chrome-border)', paddingTop: 6 }}>
-          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--chrome-text-muted)' }}>Edit selected icon</span>
+          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--chrome-text-muted)' }}>Edit selected glyph</span>
           <input
-            placeholder="Icon name"
+            placeholder="Name"
             value={editName}
             onChange={(e) => {
               setEditName(e.target.value);
@@ -188,19 +261,13 @@ export function GlyphSetPanel() {
             }}
           />
           <input
-            placeholder="Unicode character (optional) — paste ❤, U+2764, &hearts;, &#x2764;"
-            value={editUnicode}
-            onChange={(e) => {
-              setEditUnicode(e.target.value);
-              const parsed = parseUnicodeInput(e.target.value);
-              if (parsed === undefined) { setEditUnicodeError(true); return; }
-              setEditUnicodeError(false);
-              updateGlyphMeta(activeCodepoint, { unicode: parsed });
-            }}
-            style={{ borderColor: editUnicodeError ? 'var(--chrome-danger)' : undefined }}
+            placeholder="Character"
+            title="Optional — paste a character, or type U+xxxx, &hearts;, or &#x2764;"
+            value={editCharacter}
+            onChange={(e) => handleEditCharacterChange(e.target.value)}
+            style={{ borderColor: editCharacterError ? 'var(--chrome-danger)' : undefined }}
           />
-          {editUnicodeError && <span style={{ color: 'var(--chrome-danger)', fontSize: 'var(--text-xs)' }}>Not a recognized character, U+xxxx, HTML entity, or &#xNNNN;</span>}
-          {!editUnicodeError && (() => { const p = parseUnicodeInput(editUnicode); return p != null ? <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>{unicodeDisplay(p)}</span> : null; })()}
+          {editCharacterError && <span style={{ color: 'var(--chrome-danger)', fontSize: 'var(--text-xs)' }}>Not a recognized character, U+xxxx, HTML entity, or &#xNNNN;</span>}
         </div>
       )}
     </div>
