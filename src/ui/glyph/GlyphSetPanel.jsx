@@ -125,7 +125,7 @@ export function GlyphSetPanel() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <strong>Glyphs ({glyphSet.glyphs.size})</strong>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <button onClick={() => addGlyph()} title="Add glyph" style={{ width: 20, height: 20, padding: 0, lineHeight: '20px', fontSize: 'var(--text-xs)' }}>+</button>
+          <button onClick={() => addGlyph()} title="Add glyph" style={{ width: 34, height: 34, padding: 0, lineHeight: '34px', fontSize: 'var(--text-xs)' }}>+</button>
           <div style={{ display: 'flex', border: '1px solid var(--chrome-border-strong)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
             <button
               onClick={() => setSortMode('codepoint')}

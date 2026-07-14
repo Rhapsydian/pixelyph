@@ -87,15 +87,17 @@ test('buildGlyphDocument defaults initialPreset to basic-latin', () => {
 });
 
 test('buildGlyphDocument seeds one bare glyph when initialPreset is none', () => {
-  const { glyphSet } = buildGlyphDocument({ familyName: 'Test', initialPreset: 'none' });
+  const { glyphSet, seededCodepoint } = buildGlyphDocument({ familyName: 'Test', initialPreset: 'none' });
   assert.equal(glyphSet.glyphs.size, 1);
   const [[codepoint, glyph]] = glyphSet.glyphs.entries();
   assert.equal(codepoint, 0xe000, 'seeded glyph gets the first auto-assigned PUA codepoint');
   assert.equal(glyph.name, '');
+  assert.equal(seededCodepoint, 0xe000, 'caller gets the seeded codepoint back so it can be selected as active');
 });
 
 test('buildGlyphDocument eagerly creates one empty-grid glyph per codepoint in the chosen initial preset', () => {
-  const { glyphSet } = buildGlyphDocument({ familyName: 'Test', initialPreset: 'symbols' });
+  const { glyphSet, seededCodepoint } = buildGlyphDocument({ familyName: 'Test', initialPreset: 'symbols' });
+  assert.equal(seededCodepoint, null, 'no bare glyph is seeded when a real preset was chosen');
   assert.equal(glyphSet.glyphs.size, 36); // SYMBOLS_CODEPOINTS' length, per charsetPresets.js
   const heart = glyphSet.glyphs.get(0x2764);
   assert.ok(heart);

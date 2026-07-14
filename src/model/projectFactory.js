@@ -75,7 +75,7 @@ export function buildDrawDocument() {
  *
  * @param {{ familyName?: string, initialPreset?: string,
  *           pixelsPerEm?: number, defaultGlyphWidth?: number|null }} [options]
- * @returns {{ glyphSet: object, initialPreset: string }}
+ * @returns {{ glyphSet: object, initialPreset: string, seededCodepoint: number|null }}
  */
 export function buildGlyphDocument({
   familyName = 'Untitled',
@@ -88,11 +88,13 @@ export function buildGlyphDocument({
   // createFontMeta default (which assumes pixelsPerEm === 16).
   const baselineRow = Math.max(1, Math.round(pixelsPerEm * 0.75));
   const glyphSet = createGlyphSet({ meta: { familyName, pixelsPerEm, baselineRow, defaultGlyphWidth } });
+  let seededCodepoint = null;
   if (initialPreset && initialPreset !== 'none') {
     addGlyphsFromCodepoints(glyphSet, mergedPresetCodepoints([initialPreset]));
   } else {
     const width = defaultGlyphWidth ?? Math.max(1, Math.round(pixelsPerEm));
-    setGlyph(glyphSet, nextAutoCodepoint(glyphSet), createGlyph({ width, height: pixelsPerEm }));
+    seededCodepoint = nextAutoCodepoint(glyphSet);
+    setGlyph(glyphSet, seededCodepoint, createGlyph({ width, height: pixelsPerEm }));
   }
-  return { glyphSet, initialPreset };
+  return { glyphSet, initialPreset, seededCodepoint };
 }

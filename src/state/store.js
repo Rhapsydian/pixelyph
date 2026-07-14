@@ -1104,16 +1104,17 @@ export const useStore = create((set, get) => {
       stopPlaybackTimer();
       set({ isPlaying: false });
       if (mode === 'glyph') {
-        const { glyphSet, initialPreset } = buildGlyphDocument(options);
+        const { glyphSet, initialPreset, seededCodepoint } = buildGlyphDocument(options);
         const h = createHistory(glyphContentSnapshot(glyphSet));
+        const seededGlyph = seededCodepoint != null ? glyphSet.glyphs.get(seededCodepoint) : null;
         set({
           mode: 'glyph',
           projectOpen: true,
           initialCharsetPreset: initialPreset,
           canvas: buildDrawDocument(),
           glyphSet,
-          glyphCanvas: null,
-          activeCodepoint: null,
+          glyphCanvas: seededGlyph ? glyphToCanvas(seededGlyph) : null,
+          activeCodepoint: seededCodepoint,
           history: h,
           canUndo: false,
           canRedo: false,
