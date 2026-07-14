@@ -2,8 +2,9 @@
 
 ## Next session
 
-Nothing specifically flagged yet — the Glyph mode unification refactor
-(see Shipped below) closed out its full 12-checkpoint plan this session.
+Nothing specifically flagged yet — session 35 shipped the User Manual
+rewrite deferred from session 34, plus a new File → Sample Projects menu
+and two small UI fixes (see `docs/session-logs/session-35-2026-07-14.md`).
 Pick from Open below, or from whatever the user raises next.
 
 ## Open

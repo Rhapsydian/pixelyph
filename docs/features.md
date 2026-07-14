@@ -78,6 +78,7 @@ here first and adjust the README's paragraph if it's now inaccurate.
 - Mode is chosen once at project creation — not toggled mid-session; opening a new project while one is open asks for confirmation first
 - The startup screen and wizard overlay the real editor rather than replacing it outright — the interface underneath stays visible (dimmed, inert) instead of the screen going blank while you decide
 - The header's menu bar (see "Draw mode" above) replaces both the old mode-switcher toggle and, in the Electron build, the native OS menu bar — the same DOM menu renders identically in both, so there's exactly one implementation of "the menu bar" instead of two
+- **File → Sample Projects** — a nested flyout (`MenuBar.jsx`'s `SubMenu`, the first nested-menu component in the app) offering two bundled example `.pixelyph` files (`public/samples/`, fetched with the same relative-path convention the User Manual's markdown uses) that load as a fresh, unsaved project via `openSampleProject`, sharing its doc-install dispatch with `openAnyProject` rather than duplicating it
 
 Behind the UI, `src/model`, `src/export`, and `src/io/projectFile.js` (including `GlyphSet.js` and `charsetPresets.js`) are pure data/functions with no DOM dependency — the same style as pixelloom's own `trace.js`/`index.js` — and are covered by `node --test`.
 
