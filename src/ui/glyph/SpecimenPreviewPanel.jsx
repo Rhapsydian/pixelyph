@@ -167,7 +167,7 @@ export function SpecimenPreviewPanel() {
               style={{ width: '100%', resize: 'vertical', flexShrink: 0 }}
             />
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', alignContent: 'flex-start', gap: 4, maxHeight: INSERT_ROW_MAX_HEIGHT, overflowY: 'auto', flex: '0 1 auto', minHeight: 0 }}>
-              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--chrome-text-muted)' }}>Insert glyph:</span>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--chrome-text-muted)', alignSelf: 'center' }}>Insert glyph:</span>
               {sortedGlyphs.map(([codepoint, glyph]) => (
                 <button
                   key={codepoint}
@@ -180,7 +180,7 @@ export function SpecimenPreviewPanel() {
                 </button>
               ))}
               {sortedGlyphs.length === 0 && <span style={{ color: 'var(--chrome-text-muted)', fontSize: 'var(--text-xs)' }}>No glyphs yet.</span>}
-              <IconButton icon={<TrashIcon />} label="Clear preview" disabled={text.length === 0} onClick={clearPreview} />
+              <IconButton icon={<TrashIcon />} label="Clear preview" disabled={text.length === 0} onClick={clearPreview} style={{ alignSelf: 'center' }} />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
               <span style={{ fontSize: 'var(--text-xs)', color: 'var(--chrome-text-muted)' }}>Preview color:</span>

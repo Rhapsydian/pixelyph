@@ -127,7 +127,7 @@ export function ContextBar() {
         {(!isGlyphMode || glyphCanvas) && (() => {
           const { x: xOn, y: yOn } = symmetryAxes(symmetryMode);
           return (
-            <div style={{ display: 'flex', gap: 4 }}>
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
               <IconButton
                 icon={<HorizontalSymmetryIcon />}
                 label="Horizontal symmetry"
