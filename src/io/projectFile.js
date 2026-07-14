@@ -314,6 +314,10 @@ export function loadProjectFromString(text) {
   return deserializeProject(JSON.parse(text));
 }
 
+// backgroundPixels/foregroundPixels are optional, additive fields (see
+// GlyphSet.js's addBackgroundLayer/addForegroundLayer — model-only for now,
+// no editing UI yet) — present only when a glyph actually has that layer,
+// so old saves need no migration: the key is simply absent, same as today.
 function serializeGlyph(glyph) {
   return {
     width: glyph.width,
@@ -322,19 +326,22 @@ function serializeGlyph(glyph) {
     advanceWidth: glyph.advanceWidth,
     leftSideBearing: glyph.leftSideBearing,
     name: glyph.name,
-    unicode: glyph.unicode ?? null,
+    ...(glyph.backgroundPixels ? { backgroundPixels: bitsToBase64(glyph.backgroundPixels) } : {}),
+    ...(glyph.foregroundPixels ? { foregroundPixels: bitsToBase64(glyph.foregroundPixels) } : {}),
   };
 }
 
 function deserializeGlyph(glyph, pixelyphVersion) {
+  const length = glyph.width * glyph.height;
   return {
     width: glyph.width,
     height: glyph.height,
-    pixels: decodePixels(glyph.pixels, glyph.width * glyph.height, pixelyphVersion),
+    pixels: decodePixels(glyph.pixels, length, pixelyphVersion),
     advanceWidth: glyph.advanceWidth,
     leftSideBearing: glyph.leftSideBearing,
     name: glyph.name,
-    unicode: glyph.unicode ?? null,
+    ...(glyph.backgroundPixels !== undefined ? { backgroundPixels: decodePixels(glyph.backgroundPixels, length, pixelyphVersion) } : {}),
+    ...(glyph.foregroundPixels !== undefined ? { foregroundPixels: decodePixels(glyph.foregroundPixels, length, pixelyphVersion) } : {}),
   };
 }
 
@@ -348,7 +355,6 @@ export function serializeGlyphSetProject(glyphSet) {
     kind: 'glyph',
     glyphSet: {
       id: glyphSet.id,
-      kind: glyphSet.kind,
       meta: glyphSet.meta,
       glyphs: Array.from(glyphSet.glyphs.entries()).map(([codepoint, glyph]) => [codepoint, serializeGlyph(glyph)]),
     },
@@ -362,9 +368,15 @@ export function serializeGlyphSetProject(glyphSet) {
 export function deserializeGlyphSetProject(doc) {
   if (doc.kind !== 'glyph') throw new Error(`deserializeGlyphSetProject: expected kind 'glyph', got '${doc.kind}'`);
   const gs = doc.glyphSet;
+  // Pre-merge saves carry a GlyphSet-level `kind` ('characters'|'icons')
+  // and a per-glyph `unicode` field — both simply ignored on load now.
+  // Every existing glyph in every existing save is already correctly
+  // positioned relative to the Private Use Area boundary by construction
+  // (old icon glyphs were always PUA-keyed; old character glyphs are
+  // real-Unicode-keyed), so isAutoAssignedCodepoint reproduces the same
+  // per-glyph behavior those fields used to gate, with no backfill needed.
   return {
     id: gs.id,
-    kind: gs.kind,
     meta: gs.meta,
     glyphs: new Map(gs.glyphs.map(([codepoint, glyph]) => [codepoint, deserializeGlyph(glyph, doc.pixelyphVersion ?? 1)])),
   };

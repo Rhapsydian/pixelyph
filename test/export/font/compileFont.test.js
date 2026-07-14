@@ -117,3 +117,24 @@ test('compileFont handles a mixed set: typed-named, auto-assigned-named, and bar
   assert.equal(star.advanceWidth, 8 * scale + 2 * 1 * scale); // auto-assigned: tiling formula with padding=1
   assert.equal(star.leftSideBearing, 1 * scale); // auto-assigned: padding
 });
+
+test('compileFont ignores the optional background/foreground layers entirely (scope boundary — model-only, no export wiring yet)', () => {
+  // Two otherwise-identical glyphs, differing only in whether the optional
+  // layers are present — compileFont only ever reads `.pixels`, so both
+  // must compile to the exact same path/advanceWidth.
+  const plain = createGlyphSet({});
+  setGlyph(plain, 65, filledGlyph(8, 16));
+
+  const withLayers = createGlyphSet({});
+  const layered = filledGlyph(8, 16);
+  layered.backgroundPixels = new Uint8Array(layered.pixels.length).fill(1);
+  layered.foregroundPixels = new Uint8Array(layered.pixels.length).fill(1);
+  setGlyph(withLayers, 65, layered);
+
+  const fontA = compileFont(plain);
+  const fontB = compileFont(withLayers);
+  const glyphA = fontA.glyphs.get(1); // .notdef, A
+  const glyphB = fontB.glyphs.get(1);
+  assert.equal(glyphA.path.commands.length, glyphB.path.commands.length);
+  assert.equal(glyphA.advanceWidth, glyphB.advanceWidth);
+});

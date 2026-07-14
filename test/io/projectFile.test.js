@@ -223,10 +223,11 @@ test('round-trips an advanced-tier canvas with a gradient-filled, stroked, effec
 });
 
 test('serializeGlyphSetProject stamps the current pixelyphVersion and kind: glyph', () => {
-  const glyphSet = createGlyphSet({ kind: 'characters' });
+  const glyphSet = createGlyphSet({});
   const doc = serializeGlyphSetProject(glyphSet);
   assert.equal(doc.pixelyphVersion, PIXELYPH_VERSION);
   assert.equal(doc.kind, 'glyph');
+  assert.equal('kind' in doc.glyphSet, false, 'GlyphSet-level kind is no longer written');
 });
 
 test('glyph pixel data is base64-encoded, not a raw JSON array', () => {
@@ -240,8 +241,8 @@ test('glyph pixel data is base64-encoded, not a raw JSON array', () => {
   assert.doesNotMatch(encoded, /^\[/);
 });
 
-test('round-trips a multi-glyph character GlyphSet exactly', () => {
-  const glyphSet = createGlyphSet({ kind: 'characters', meta: { familyName: 'Test Font' } });
+test('round-trips a multi-glyph GlyphSet exactly (typed codepoints)', () => {
+  const glyphSet = createGlyphSet({ meta: { familyName: 'Test Font' } });
   const a = createGlyph({ width: 5, height: 16, name: 'A' });
   a.pixels.set(new Uint8Array(80).fill(1));
   setGlyph(glyphSet, 65, a);
@@ -251,8 +252,8 @@ test('round-trips a multi-glyph character GlyphSet exactly', () => {
   assert.deepStrictEqual(restored, glyphSet);
 });
 
-test('round-trips an icon GlyphSet with PUA codepoints', () => {
-  const glyphSet = createGlyphSet({ kind: 'icons' });
+test('round-trips a GlyphSet with PUA (auto-assigned) codepoints', () => {
+  const glyphSet = createGlyphSet({});
   setGlyph(glyphSet, 0xe000, createGlyph({ width: 16, height: 16, name: 'star' }));
 
   const restored = deserializeGlyphSetProject(serializeGlyphSetProject(glyphSet));
@@ -263,6 +264,71 @@ test('an empty GlyphSet (no glyphs) round-trips too', () => {
   const glyphSet = createGlyphSet({});
   const restored = deserializeGlyphSetProject(serializeGlyphSetProject(glyphSet));
   assert.deepStrictEqual(restored, glyphSet);
+});
+
+test('round-trips a glyph with optional background/foreground layers (model-only, no UI yet)', () => {
+  const glyphSet = createGlyphSet({});
+  const glyph = createGlyph({ width: 4, height: 4, name: 'layered' });
+  glyph.pixels.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  glyph.backgroundPixels = new Uint8Array(16);
+  glyph.backgroundPixels.set([0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0]);
+  glyph.foregroundPixels = new Uint8Array(16);
+  glyph.foregroundPixels.set([1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1]);
+  setGlyph(glyphSet, 65, glyph);
+
+  const restored = deserializeGlyphSetProject(serializeGlyphSetProject(glyphSet));
+  assert.deepStrictEqual(restored, glyphSet);
+});
+
+test('a glyph with only one optional layer (background, no foreground) round-trips with the other absent, not a zeroed buffer', () => {
+  const glyphSet = createGlyphSet({});
+  const glyph = createGlyph({ width: 2, height: 2 });
+  glyph.backgroundPixels = new Uint8Array([1, 0, 0, 1]);
+  setGlyph(glyphSet, 65, glyph);
+
+  const restored = deserializeGlyphSetProject(serializeGlyphSetProject(glyphSet));
+  const restoredGlyph = restored.glyphs.get(65);
+  assert.deepEqual(Array.from(restoredGlyph.backgroundPixels), [1, 0, 0, 1]);
+  assert.equal(restoredGlyph.foregroundPixels, undefined);
+  assert.equal('foregroundPixels' in restoredGlyph, false);
+});
+
+test('deserializeGlyphSetProject loads a pre-merge legacy save (glyphSet.kind + glyph.unicode), silently ignoring both fields', () => {
+  // Hand-authored, mimicking a real save written before the kind/unicode
+  // fields were removed — old character-kind and icon-kind documents both
+  // need to keep loading with no explicit migration transform.
+  const legacyCharacterDoc = {
+    pixelyphVersion: PIXELYPH_VERSION,
+    kind: 'glyph',
+    glyphSet: {
+      id: 'glyphset-1',
+      kind: 'characters',
+      meta: { familyName: 'Legacy Chars', styleName: 'Regular', unitsPerEm: 1000, ascender: 800, descender: -200, pixelsPerEm: 16, baselineRow: 12, iconTilePadding: 0, defaultGlyphWidth: null },
+      glyphs: [[65, { width: 2, height: 2, pixels: bitsToBase64V2([1, 0, 0, 1]), advanceWidth: 2, leftSideBearing: 0, name: 'A', unicode: null }]],
+    },
+  };
+  const restoredChar = deserializeGlyphSetProject(legacyCharacterDoc);
+  assert.equal('kind' in restoredChar, false);
+  const charGlyph = restoredChar.glyphs.get(65);
+  assert.equal('unicode' in charGlyph, false);
+  assert.equal(charGlyph.name, 'A');
+  assert.deepEqual(Array.from(charGlyph.pixels), [1, 0, 0, 1]);
+
+  const legacyIconDoc = {
+    pixelyphVersion: PIXELYPH_VERSION,
+    kind: 'glyph',
+    glyphSet: {
+      id: 'glyphset-2',
+      kind: 'icons',
+      meta: { familyName: 'Legacy Icons', styleName: 'Regular', unitsPerEm: 1000, ascender: 800, descender: -200, pixelsPerEm: 16, baselineRow: 12, iconTilePadding: 2, defaultGlyphWidth: null },
+      glyphs: [[0xe000, { width: 2, height: 2, pixels: bitsToBase64V2([1, 1, 1, 1]), advanceWidth: 2, leftSideBearing: 0, name: 'star', unicode: 0xe000 }]],
+    },
+  };
+  const restoredIcon = deserializeGlyphSetProject(legacyIconDoc);
+  assert.equal('kind' in restoredIcon, false);
+  const iconGlyph = restoredIcon.glyphs.get(0xe000);
+  assert.equal('unicode' in iconGlyph, false);
+  assert.equal(iconGlyph.name, 'star');
 });
 
 test('deserializeGlyphSetProject rejects a non-glyph document', () => {
