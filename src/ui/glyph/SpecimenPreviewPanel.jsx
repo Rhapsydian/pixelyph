@@ -198,7 +198,7 @@ export function SpecimenPreviewPanel() {
                   key={codepoint}
                   title={glyphLabel(glyph, codepoint)}
                   onClick={() => insertAtCursor(String.fromCodePoint(codepoint))}
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: 4 }}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: 4, height: 'auto' }}
                 >
                   <PreviewGlyph glyph={glyph} height={SWATCH_HEIGHT} color="var(--chrome-text)" />
                   <span style={{ fontSize: 9 }}>{glyphLabel(glyph, codepoint)}</span>
