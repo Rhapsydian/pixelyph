@@ -149,7 +149,7 @@ export function GlyphSetPanel() {
               border: activeCodepoint === codepoint ? '1px solid var(--chrome-accent)' : '1px solid var(--chrome-border-strong)',
             }}
           >
-            <GlyphThumbnail glyph={glyph} />
+            <GlyphThumbnail glyph={glyph} codepoint={codepoint} />
             {hoveredCodepoint === codepoint && (
               <button
                 onClick={async (e) => {
