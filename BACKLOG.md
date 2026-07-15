@@ -97,6 +97,54 @@ premise — 90°-only rotation sidesteps this by staying resample-free).
 this is an accounting of what didn't make the original 7 checkpoints,
 not a ready-to-implement spec.
 
+### itch.io HTML5 upload — subdirectories 404 on itch's unpacker
+
+Session 36 added a `build:itch` script (`vite.config.js`'s `mode === 'itch'`
+branch, relative `base: './'`) so the existing web build could be zipped and
+uploaded to itch.io as a browser-playable Tool project. The build itself is
+correct — verified locally by serving `dist/` statically from an arbitrary
+path with zero console errors — but the real itch.io upload
+(`rhapsydian.itch.io/pixelyph`) only ever serves `index.html`; every other
+file in the zip (`assets/`, `manual/`, `samples/`) 404s.
+
+**Isolated with three minimal throwaway test zips** (not part of the repo,
+built ad hoc in a scratch dir), each uploaded fresh to the live project:
+1. A flat 3-file zip (`index.html` + `style.css` + `script.js`, all at zip
+   root) — worked correctly, page rendered styled content.
+2. The same 3 files, but `style.css`/`script.js` moved into an `assets/`
+   subfolder, referenced as `./assets/style.css` — failed, both files
+   404'd, page stayed unstyled.
+3. Identical to #2 but referenced without the leading `./`
+   (`assets/style.css`) — failed identically (confirmed via real Chrome
+   DevTools console: plain `net::ERR_ABORTED 404` on both files, no other
+   errors).
+
+Reproduced across three separate fresh uploads (different itch
+project/folder IDs each time — ruling out a one-off caching/propagation
+glitch) and on both the real `pixelyph-itch.zip` and the trivial test
+zips. All zips were verified structurally sound (correct forward-slash
+internal paths, checked via Python's `zipfile` module to bypass Windows'
+path-separator display quirks). This points to a bug or limitation in
+itch.io's own HTML5 unpacker specifically around subdirectories, not
+anything in Pixelyph's build.
+
+**To resolve:**
+1. File a support ticket with itch.io using the 3-test reproduction above
+   (a draft was prepared this session — ask if it's still needed, or check
+   session log/chat history).
+2. If itch confirms it's a known/permanent limitation rather than a bug
+   they'll fix, the workaround is to stop producing subdirectories in the
+   itch build output entirely: `vite.config.js`'s `build.assetsDir: ''`
+   (removes the JS/CSS `assets/` nesting) plus flattening
+   `public/manual/*.md` → `public/manual-*.md` and
+   `public/samples/*.pixelyph` → `public/samples-*.pixelyph` (with matching
+   updates to the fetch paths in `UserManualModal.jsx` and
+   `MenuBar.jsx`/`openSampleProject`). Scoped out as a full plan already
+   this session — safe to apply universally (not itch-only) since GitHub
+   Pages and Electron don't care about folder nesting either. Not applied
+   yet — deferred at the user's request to avoid burning more upload
+   attempts before hearing back from itch support.
+
 ### WOFF2 font export — disabled, times out in real browsers
 
 `wawoff2`'s WOFF2 compression (`src/export/font/woff.js`'s `toWoff2`) was
