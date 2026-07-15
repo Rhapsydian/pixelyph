@@ -25,10 +25,8 @@
 // requested, not as a fatal export failure.
 
 import * as ttf2woffNamespace from 'ttf2woff';
-import * as wawoff2Namespace from 'wawoff2';
 
 const ttf2woff = ttf2woffNamespace.default ?? ttf2woffNamespace;
-const wawoff2 = wawoff2Namespace.default ?? wawoff2Namespace;
 const WOFF2_TIMEOUT_MS = 8000;
 
 /**
@@ -44,6 +42,15 @@ export function toWoff(otfBuffer) {
  * @returns {Promise<Uint8Array>} rejects if compression fails or exceeds WOFF2_TIMEOUT_MS (see KNOWN ISSUE above)
  */
 export async function toWoff2(otfBuffer) {
+  // Dynamic import rather than a static one (like ttf2woff above): callers
+  // only ever reach this while WOFF2_EXPORT_ENABLED is true (state/store.js),
+  // which is currently always false — a static import would still pull
+  // wawoff2's whole WASM runtime into the main bundle regardless, since
+  // bundlers resolve those at build time, not by whether the code path ever
+  // runs. This way it's its own chunk that's simply never fetched while the
+  // feature stays disabled.
+  const wawoff2Namespace = await import('wawoff2');
+  const wawoff2 = wawoff2Namespace.default ?? wawoff2Namespace;
   let timer;
   const timeout = new Promise((_, reject) => {
     timer = setTimeout(() => reject(new Error(`WOFF2 compression did not complete within ${WOFF2_TIMEOUT_MS}ms`)), WOFF2_TIMEOUT_MS);
