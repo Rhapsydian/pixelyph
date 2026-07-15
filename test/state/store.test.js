@@ -522,6 +522,147 @@ test('paste-in-place, Shape tier: cut then paste lands back at the original posi
   assert.ok(fgs);
   assert.equal(fgs.rect.x0, 2);
   assert.equal(fgs.rect.y0, 5);
+
+  store.dropFloatingSelection();
+  const gridsAfter = useStore.getState().canvas.layers[0].frames[0].grids;
+  assert.equal(gridsAfter.length, 1, 'paste merges back into the collapsed empty shape rather than creating a 2nd grid');
+  assert.equal(gridsAfter[0].id, grids[0].id, 'same shape identity as before the cut, not a new grid');
+  assert.equal(gridsAfter[0].offsetX, 2);
+  assert.equal(gridsAfter[0].offsetY, 5);
+  assert.deepEqual(Array.from(gridsAfter[0].pixels), [1]);
+});
+
+test('clipboard paste (Shape tier) produces a visible floating preview, not an empty box', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  store.setTier('advanced');
+  store.paintCellLive(0, 0, '#00ff00');
+  store.commitStroke();
+  store.startSelection(0, 0);
+  store.updateSelection(0, 0);
+  store.copySelection();
+  store.dropFloatingSelection();
+
+  store.pasteClipboard();
+  const fgs = useStore.getState().floatingGridSelection;
+  assert.equal(fgs.clones[0].grid.visible, true);
+  assert.equal(fgs.clones[0].grid.locked, false);
+});
+
+test('single-shape paste merges into whichever shape is active at paste time, not always the source shape', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  store.setTier('advanced');
+  const layer = useStore.getState().canvas.layers[0];
+
+  store.paintCellLive(0, 0, '#ff0000');
+  store.commitStroke();
+  const shapeA = useStore.getState().canvas.layers[0].frames[0].grids[0];
+
+  store.startSelection(0, 0);
+  store.updateSelection(0, 0);
+  store.copySelection(); // clipboard captured now; leaves its own pending floating duplicate, deliberately never dropped/finalized below
+
+  store.addGrid(layer.id); // shapeB — becomes the new active shape
+  const shapeB = useStore.getState().canvas.layers[0].frames[0].grids.find((g) => g.id !== shapeA.id);
+  const shapeBBefore = { width: shapeB.width, height: shapeB.height, offsetX: shapeB.offsetX, offsetY: shapeB.offsetY };
+  store.setActiveGridId(layer.id, shapeB.id);
+
+  store.pasteClipboard();
+  store.dropFloatingSelection();
+
+  const grids = useStore.getState().canvas.layers[0].frames[0].grids;
+  assert.equal(grids.length, 2, 'merges into the active shape B, no 3rd grid created');
+  const mergedB = grids.find((g) => g.id === shapeB.id);
+  assert.ok(mergedB);
+  assert.ok(
+    mergedB.width !== shapeBBefore.width || mergedB.height !== shapeBBefore.height || mergedB.offsetX !== shapeBBefore.offsetX || mergedB.offsetY !== shapeBBefore.offsetY,
+    'B changed shape/position to include the pasted content, since it started as an empty 1x1 stub elsewhere on the canvas',
+  );
+});
+
+test('single-shape paste falls back to a new shape when the active shape is locked', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  store.setTier('advanced');
+  store.paintCellLive(0, 0, '#ff0000');
+  store.commitStroke();
+
+  store.startSelection(0, 0);
+  store.updateSelection(0, 0);
+  store.copySelection(); // clipboard captured now; leaves its own pending floating duplicate, deliberately never dropped/finalized below
+
+  const activeGrid = useStore.getState().canvas.layers[0].frames[0].grids[0];
+  activeGrid.locked = true;
+
+  store.pasteClipboard();
+  store.dropFloatingSelection();
+
+  const grids = useStore.getState().canvas.layers[0].frames[0].grids;
+  assert.equal(grids.length, 2, 'locked active shape is not a valid merge target, so a new shape is created');
+});
+
+test('multi-shape paste restores each piece into its own original shape when the active layer is unchanged since the cut', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  store.setTier('advanced');
+  store.setSelectionScope('activeLayer');
+  const layer = useStore.getState().canvas.layers[0];
+
+  store.paintCellLive(0, 0, '#ff0000');
+  store.commitStroke();
+  store.addGrid(layer.id);
+  const shapeA = useStore.getState().canvas.layers[0].frames[0].grids[0];
+  const shapeB = useStore.getState().canvas.layers[0].frames[0].grids[1];
+  store.setActiveGridId(layer.id, shapeB.id);
+  store.paintCellLive(1, 1, '#0000ff');
+  store.commitStroke();
+
+  store.startSelection(0, 0);
+  store.updateSelection(1, 1);
+  store.cutSelection();
+
+  store.pasteClipboard();
+  store.dropFloatingSelection();
+
+  const grids = useStore.getState().canvas.layers[0].frames[0].grids;
+  assert.equal(grids.length, 2, 'restores into the 2 original shapes, no new shapes created');
+  assert.ok(grids.some((g) => g.id === shapeA.id));
+  assert.ok(grids.some((g) => g.id === shapeB.id));
+});
+
+test('multi-shape paste creates new shapes when the active layer changed since the cut', async () => {
+  const store = useStore.getState();
+  await store.newProject('draw');
+  store.setTier('advanced');
+  store.setSelectionScope('activeLayer');
+  const layerA = useStore.getState().canvas.layers[0];
+
+  store.paintCellLive(0, 0, '#ff0000');
+  store.commitStroke();
+  store.addGrid(layerA.id);
+  const shapeA = useStore.getState().canvas.layers[0].frames[0].grids[0];
+  const shapeB = useStore.getState().canvas.layers[0].frames[0].grids[1];
+  store.setActiveGridId(layerA.id, shapeB.id);
+  store.paintCellLive(1, 1, '#0000ff');
+  store.commitStroke();
+
+  store.startSelection(0, 0);
+  store.updateSelection(1, 1);
+  store.cutSelection();
+
+  store.addLayer(); // becomes active — different layer than at cut time
+  const layerC = useStore.getState().canvas.layers[useStore.getState().canvas.layers.length - 1];
+
+  store.pasteClipboard();
+  store.dropFloatingSelection();
+
+  const gridsA = useStore.getState().canvas.layers[0].frames[0].grids;
+  assert.ok(gridsA.some((g) => g.id === shapeA.id), 'original shape A untouched in layer A');
+  assert.ok(gridsA.some((g) => g.id === shapeB.id), 'original shape B untouched in layer A');
+  const gridsC = useStore.getState().canvas.layers.find((l) => l.id === layerC.id).frames[0].grids;
+  assert.equal(gridsC.length, 2, 'both pieces became brand-new shapes in the new active layer');
+  assert.ok(gridsC.every((g) => g.id !== shapeA.id && g.id !== shapeB.id));
 });
 
 test('paste-in-place, Pixel tier: copy then paste lands the flat floating selection at the original position', async () => {

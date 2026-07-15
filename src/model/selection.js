@@ -348,7 +348,12 @@ export function transformGridSelection(fgs, kind) {
  * repaints this same grid object right back in the very next step; nothing
  * should observe it as briefly empty. Cut (which never repaints) calls
  * `pruneEmptyGridsForSelection` afterward itself. Copy-sourced clones
- * (`originGridId: null`) are skipped — there's nothing to clear.
+ * (`originGridId: null`) are skipped, as are paste-merge clones — those
+ * from `pasteClipboard`'s single-shape-into-active-shape and multi-shape-
+ * restore-into-originals cases — which carry a real `originGridId` but
+ * `originSnapshot: null`, since their content is arriving fresh from the
+ * clipboard rather than moving from a live position on this canvas; there's
+ * nothing on the canvas to clear for either kind.
  */
 export function clearGridSelectionSource(canvas, fgs) {
   const frameIndex = currentFrameIndex(canvas);
@@ -356,7 +361,7 @@ export function clearGridSelectionSource(canvas, fgs) {
   const frame = layer?.frames[frameIndex];
   if (!frame) return;
   for (const clone of fgs.clones) {
-    if (!clone.originGridId) continue;
+    if (!clone.originGridId || !clone.originSnapshot) continue;
     const realGrid = frame.grids.find((g) => g.id === clone.originGridId);
     if (!realGrid) continue;
     const snap = clone.originSnapshot;
@@ -400,8 +405,14 @@ export function pruneEmptyGridsForSelection(canvas, fgs) {
  * moved/transformed) content back into that exact same Grid object, by
  * id — grid count and every grid's id are unchanged, only geometry/pixels
  * change, matching the "paste-back is strictly per-shape" invariant. A
- * copy-drag/external-paste clone (`originGridId: null`) is inserted as a
- * brand-new Grid instead.
+ * clone with no resolvable merge target — `originGridId: null` (a
+ * copy-drag duplicate, or a clipboard paste with no valid target shape), or
+ * an `originGridId` that no longer resolves to a real grid in this frame —
+ * is inserted as a brand-new Grid instead. This also covers
+ * `pasteClipboard`'s fallback cases: a single-shape paste with no
+ * active/unlocked target shape, and a multi-shape restore-into-originals
+ * paste where a particular original shape was deleted or locked since
+ * copy/cut.
  */
 export function finalizeGridSelection(canvas, fgs) {
   clearGridSelectionSource(canvas, fgs);

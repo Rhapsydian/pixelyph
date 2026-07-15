@@ -192,10 +192,16 @@ function pastePosition(doc, clipboard) {
  * independent deep copies (own `pixels` arrays), so later dragging/
  * transforming the still-live floating selection can never retroactively
  * mutate what's already on the clipboard. `originRect` is the selection's
- * rect at snapshot time, kept for same-canvas paste-in-place.
+ * rect at snapshot time, kept for same-canvas paste-in-place. `originGridId`
+ * per clone and the top-level `originLayerId` are carried through (not live
+ * references, just plain ids) so a later Paste can decide whether to merge
+ * back into the shape(s) this came from — see pasteClipboard. `visible`/
+ * `locked`/`name` are captured too so a pasted clone renders and behaves
+ * like a normal shape instead of an invisible one.
  */
 function snapshotGridClipboard(fgs) {
   const clones = fgs.clones.map((c) => ({
+    originGridId: c.originGridId ?? null,
     offsetX: c.grid.offsetX,
     offsetY: c.grid.offsetY,
     width: c.grid.width,
@@ -203,8 +209,18 @@ function snapshotGridClipboard(fgs) {
     pixels: c.grid.pixels.slice(),
     style: c.grid.style,
     opacity: c.grid.opacity,
+    visible: true,
+    locked: false,
+    name: c.grid.name,
   }));
-  return { kind: 'grid', originRect: { ...fgs.rect }, width: fgs.rect.x1 - fgs.rect.x0 + 1, height: fgs.rect.y1 - fgs.rect.y0 + 1, clones };
+  return {
+    kind: 'grid',
+    originRect: { ...fgs.rect },
+    originLayerId: fgs.layerId,
+    width: fgs.rect.x1 - fgs.rect.x0 + 1,
+    height: fgs.rect.y1 - fgs.rect.y0 + 1,
+    clones,
+  };
 }
 
 /** Clear side of a selection — matches whichever scope did the reading. */
@@ -1607,14 +1623,37 @@ export const useStore = create((set, get) => {
         if (doc.tier !== 'advanced') return; // a Shape-tier clipboard has nothing meaningful to paste into Pixel tier/Glyph mode
         const layer = doc.layers.find((l) => l.id === doc.activeLayerId);
         if (!layer) return;
+        const frame = layer.frames[currentFrameIndex(doc)];
         const { x: targetX, y: targetY } = pastePosition(doc, clipboard);
         const dx = targetX - clipboard.originRect.x0;
         const dy = targetY - clipboard.originRect.y0;
-        const clones = clipboard.clones.map((c) => ({
-          originGridId: null,
-          originSnapshot: null,
-          grid: { ...c, id: makeGridId(), offsetX: c.offsetX + dx, offsetY: c.offsetY + dy, pixels: c.pixels.slice() },
-        }));
+        // Internal (this-app) clipboard paste merges back into an existing
+        // shape when there's an unambiguous target, instead of always
+        // creating a new one: a single-shape source always targets whatever
+        // shape is active right now; a multi-shape source restores each
+        // piece into its own original shape, but only if the active layer
+        // hasn't changed since the copy/cut (otherwise there's no
+        // meaningful "original" in the current layer, so it falls back to
+        // new shapes, same as external image paste already does).
+        const findMergeTarget = (id) => (id ? frame?.grids.find((g) => g.id === id && !g.locked) : null);
+        const singleShapeSource = clipboard.clones.length === 1;
+        const sameLayerAsSnapshot = clipboard.originLayerId === doc.activeLayerId;
+        const clones = clipboard.clones.map((c) => {
+          const { originGridId: srcOriginGridId, ...gridFields } = c; // don't leak the clipboard-only field into the real Grid object
+          const targetId = singleShapeSource ? doc.activeGridId : (sameLayerAsSnapshot ? srcOriginGridId : null);
+          const target = findMergeTarget(targetId);
+          return {
+            originGridId: target ? target.id : null,
+            originSnapshot: null, // nothing on this canvas to clear — content arrives fresh from the clipboard
+            grid: {
+              ...gridFields,
+              id: target ? target.id : makeGridId(),
+              offsetX: gridFields.offsetX + dx,
+              offsetY: gridFields.offsetY + dy,
+              pixels: gridFields.pixels.slice(),
+            },
+          };
+        });
         const fgs = { layerId: layer.id, rect: { x0: targetX, y0: targetY, x1: targetX + clipboard.width - 1, y1: targetY + clipboard.height - 1 }, clones };
         set({ activeTool: 'marqueeSelect', selection: null, floatingSelection: null, floatingGridSelection: fgs });
         return;

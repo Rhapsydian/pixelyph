@@ -14,6 +14,7 @@ import {
   moveGridSelectionBy,
   transformGridSelection,
   finalizeGridSelection,
+  clearGridSelectionSource,
   buildFloatingGridPreviewDoc,
   buildGridClonesByColor,
   buildGridCloneUnioned,
@@ -340,6 +341,21 @@ test('finalizeGridSelection: a non-destructive (copy) clone inserts as a brand-n
   const newGrid = grids.find((g) => g.id === fgs.clones[0].grid.id);
   assert.ok(newGrid);
   assert.equal(newGrid.offsetY, 1, 'the new grid reflects the move applied before finalize');
+});
+
+test('clearGridSelectionSource skips a clone with originGridId set but originSnapshot: null (a paste-merge clone) without throwing or mutating', () => {
+  const canvas = createCanvas({ width: 8, height: 2 });
+  const { layer, gridA } = setUpTwoShapeLayer(canvas);
+  const pixelsBefore = Array.from(gridA.pixels);
+  const fgs = {
+    layerId: layer.id,
+    rect: { x0: 0, y0: 0, x1: 0, y1: 0 },
+    clones: [{ originGridId: gridA.id, originSnapshot: null, grid: { ...gridA, pixels: gridA.pixels.slice() } }],
+  };
+
+  clearGridSelectionSource(canvas, fgs); // should not throw
+
+  assert.deepEqual(Array.from(gridA.pixels), pixelsBefore, 'nothing to clear for a paste-merge clone, so the real grid is untouched');
 });
 
 test('buildFloatingGridPreviewDoc excludes a destructively-lifted clone\'s real grid from render (so it isn\'t shown twice) and includes the clone instead', () => {
