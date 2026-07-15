@@ -2,10 +2,13 @@
 
 ## Next session
 
-Nothing specifically flagged yet — session 35 shipped the User Manual
-rewrite deferred from session 34, plus a new File → Sample Projects menu
-and two small UI fixes (see `docs/session-logs/session-35-2026-07-14.md`).
-Pick from Open below, or from whatever the user raises next.
+Waiting on an itch.io support response (see this file's new "itch.io HTML5
+upload" entry under Open) before deciding whether to implement the
+flat-output workaround already scoped there — check whether the user has
+heard back before picking that up unprompted. Session 36 also shipped a
+Shape-tier persistence fix and a clipboard Copy/Cut → Paste fix (see
+`docs/session-logs/session-36-2026-07-15.md`). Otherwise pick from Open
+below, or from whatever the user raises next.
 
 ## Open
 
