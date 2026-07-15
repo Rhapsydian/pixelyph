@@ -2,13 +2,14 @@
 
 ## Next session
 
-Waiting on an itch.io support response (see this file's new "itch.io HTML5
-upload" entry under Open) before deciding whether to implement the
-flat-output workaround already scoped there — check whether the user has
-heard back before picking that up unprompted. Session 36 also shipped a
-Shape-tier persistence fix and a clipboard Copy/Cut → Paste fix (see
-`docs/session-logs/session-36-2026-07-15.md`). Otherwise pick from Open
-below, or from whatever the user raises next.
+Session 37 resolved the itch.io subdirectory-404 issue via `butler push`
+(see Shipped below) and scoped, but did not complete, two follow-ons: a
+5-shot application screenshot set for marketing/docs use (user is capturing
+these independently — see `docs/session-logs/session-37-2026-07-15.md` for
+the recommended shot list) and wiring real screenshots into the User
+Manual (still has no real app screenshots, gap open since session 31).
+Pick either of those up once the user has screenshots to hand off, or pick
+from Open below, or from whatever the user raises next.
 
 ## Open
 
@@ -99,54 +100,6 @@ premise — 90°-only rotation sidesteps this by staying resample-free).
 **To resolve:** each item needs its own scoping pass when picked up —
 this is an accounting of what didn't make the original 7 checkpoints,
 not a ready-to-implement spec.
-
-### itch.io HTML5 upload — subdirectories 404 on itch's unpacker
-
-Session 36 added a `build:itch` script (`vite.config.js`'s `mode === 'itch'`
-branch, relative `base: './'`) so the existing web build could be zipped and
-uploaded to itch.io as a browser-playable Tool project. The build itself is
-correct — verified locally by serving `dist/` statically from an arbitrary
-path with zero console errors — but the real itch.io upload
-(`rhapsydian.itch.io/pixelyph`) only ever serves `index.html`; every other
-file in the zip (`assets/`, `manual/`, `samples/`) 404s.
-
-**Isolated with three minimal throwaway test zips** (not part of the repo,
-built ad hoc in a scratch dir), each uploaded fresh to the live project:
-1. A flat 3-file zip (`index.html` + `style.css` + `script.js`, all at zip
-   root) — worked correctly, page rendered styled content.
-2. The same 3 files, but `style.css`/`script.js` moved into an `assets/`
-   subfolder, referenced as `./assets/style.css` — failed, both files
-   404'd, page stayed unstyled.
-3. Identical to #2 but referenced without the leading `./`
-   (`assets/style.css`) — failed identically (confirmed via real Chrome
-   DevTools console: plain `net::ERR_ABORTED 404` on both files, no other
-   errors).
-
-Reproduced across three separate fresh uploads (different itch
-project/folder IDs each time — ruling out a one-off caching/propagation
-glitch) and on both the real `pixelyph-itch.zip` and the trivial test
-zips. All zips were verified structurally sound (correct forward-slash
-internal paths, checked via Python's `zipfile` module to bypass Windows'
-path-separator display quirks). This points to a bug or limitation in
-itch.io's own HTML5 unpacker specifically around subdirectories, not
-anything in Pixelyph's build.
-
-**To resolve:**
-1. File a support ticket with itch.io using the 3-test reproduction above
-   (a draft was prepared this session — ask if it's still needed, or check
-   session log/chat history).
-2. If itch confirms it's a known/permanent limitation rather than a bug
-   they'll fix, the workaround is to stop producing subdirectories in the
-   itch build output entirely: `vite.config.js`'s `build.assetsDir: ''`
-   (removes the JS/CSS `assets/` nesting) plus flattening
-   `public/manual/*.md` → `public/manual-*.md` and
-   `public/samples/*.pixelyph` → `public/samples-*.pixelyph` (with matching
-   updates to the fetch paths in `UserManualModal.jsx` and
-   `MenuBar.jsx`/`openSampleProject`). Scoped out as a full plan already
-   this session — safe to apply universally (not itch-only) since GitHub
-   Pages and Electron don't care about folder nesting either. Not applied
-   yet — deferred at the user's request to avoid burning more upload
-   attempts before hearing back from itch support.
 
 ### WOFF2 font export — disabled, times out in real browsers
 
@@ -340,6 +293,31 @@ its own planning session, not a slice of a larger phase.
 new users have something to open and explore instead of a blank canvas.
 
 ## Shipped
+
+### DONE: itch.io HTML5 upload — resolved via `butler push`, not a build fix
+
+Session 36's manual zip-upload path only ever served `index.html` from
+`rhapsydian.itch.io/pixelyph`; every other file (`assets/`, `manual/`,
+`samples/`) 404'd, isolated to itch's own HTML5-zip unpacker mishandling
+subdirectories (three throwaway test-zip reproductions, see git history for
+the removed writeup). This session tried `butler` — itch's own CLI
+push tool — instead of the manual zip-upload UI, on the theory that it
+uploads files directly via itch's API/CDN rather than through the same
+unpacker. Confirmed: pushed the existing `build:itch` output
+(`rhapsydian/pixelyph:html5`, build #1797874) via `butler push`, then loaded
+the live game iframe (`html-classic.itch.zone/html/...`) directly and
+verified `assets/index-*.js`/`assets/index-*.css` both returned `200` with
+no console errors — full app loaded and interactive (toolbar, canvas,
+palette, New Project wizard all rendered correctly).
+
+**Resolution:** `butler push` is now the standing itch.io deploy method —
+no build changes needed, the `assetsDir`/manual/samples-flattening
+workaround scoped in session 36 is unnecessary and was dropped. Butler
+(`butler.exe`) lives at `C:\Users\husbando\tools\butler\butler.exe` on the
+dev machine, authenticated via `butler login` (credentials cached locally).
+**Convention:** whenever asked to push this project to GitHub, also deploy
+to itch.io: `npm run build:itch` then `butler push dist
+rhapsydian/pixelyph:html5` — see `.claude/dev-session.md`'s commit policy.
 
 ### DONE: Glyph mode unification (font/icon merge, full 12-checkpoint plan)
 
