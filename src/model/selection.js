@@ -16,7 +16,7 @@
 // always lands on the active layer (see pasteCells).
 
 import { colorAt, paintCell, eraseFromLayer, topGridAt, currentFrameIndex } from './Canvas.js';
-import { get, set, transformGridRegion, growGridToInclude, shrinkGridToFit, minimalBounds, makeGridId } from './Grid.js';
+import { get, set, transformGridRegion, growGridToInclude, shrinkGridToFit, minimalBounds, makeGridId, collapseToEmptyGrid } from './Grid.js';
 
 /** Used as a floating-selection preview color when a cell's source layer has a non-solid (gradient) fill, which can't be represented per-cell. */
 const NON_SOLID_FILL_PREVIEW_COLOR = '#888888';
@@ -370,13 +370,13 @@ export function clearGridSelectionSource(canvas, fgs) {
 }
 
 /**
- * Removes any of a floatingGridSelection's *source* grids that
- * `clearGridSelectionSource` left fully empty — Cut's own explicit
- * cleanup (mirrors eraseFromLayer's existing auto-delete-when-emptied
- * convention, which `clearGridSelectionSource` deliberately skips; see its
- * own doc comment). Not called by finalizeGridSelection, which always
- * repaints a cleared source grid in the same pass, so it's never actually
- * left empty long enough to prune.
+ * Collapses any of a floatingGridSelection's *source* grids that
+ * `clearGridSelectionSource` left fully empty to a persistent 1x1 empty
+ * shape — Cut's own explicit cleanup, matching paintCell/eraseFromLayer's
+ * own keep-on-empty behavior (which `clearGridSelectionSource` deliberately
+ * skips; see its own doc comment). Not called by finalizeGridSelection,
+ * which always repaints a cleared source grid in the same pass, so it's
+ * never actually left empty long enough to collapse.
  */
 export function pruneEmptyGridsForSelection(canvas, fgs) {
   const frameIndex = currentFrameIndex(canvas);
@@ -387,8 +387,7 @@ export function pruneEmptyGridsForSelection(canvas, fgs) {
     if (!clone.originGridId) continue;
     const realGrid = frame.grids.find((g) => g.id === clone.originGridId);
     if (realGrid && !minimalBounds(realGrid)) {
-      frame.grids = frame.grids.filter((g) => g.id !== realGrid.id);
-      if (canvas.activeGridId === realGrid.id) canvas.activeGridId = frame.grids[0]?.id ?? null;
+      collapseToEmptyGrid(realGrid, realGrid.offsetX, realGrid.offsetY);
     }
   }
 }

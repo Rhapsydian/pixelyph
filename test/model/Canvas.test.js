@@ -603,7 +603,7 @@ test('setFrameDuration overrides one frame\'s duration, clamped to a 1ms floor, 
 
 // --- Session 1: Layer/Frame/Grid redesign (see docs/data-model.md) ---
 
-test('advanced-tier paintCell creates a Grid on first paint, grows it as the stroke extends, and shrinks/removes it on full erase', () => {
+test('advanced-tier paintCell creates a Grid on first paint, grows it as the stroke extends, and collapses it to a persistent empty shape on full erase', () => {
   const canvas = createCanvas({ width: 5, height: 5 });
   canvas.tier = 'advanced';
   const layer = addLayer(canvas);
@@ -633,8 +633,14 @@ test('advanced-tier paintCell creates a Grid on first paint, grows it as the str
   assert.equal(colorAt(canvas, 2, 2), '#ff0000');
 
   paintCell(canvas, 2, 2, null);
-  assert.equal(frame.grids.length, 0); // fully erased -> GC'd
-  assert.equal(canvas.activeGridId, null);
+  assert.equal(frame.grids.length, 1); // fully erased, but kept as a persistent empty shape
+  assert.equal(canvas.activeGridId, grid.id);
+  assert.equal(grid.offsetX, 2);
+  assert.equal(grid.offsetY, 2);
+  assert.equal(grid.width, 1);
+  assert.equal(grid.height, 1);
+  assert.deepEqual(Array.from(grid.pixels), [0]);
+  assert.equal(colorAt(canvas, 2, 2), null);
 });
 
 test('advanced-tier paintCell no-ops (paint and erase) when the active Grid is locked', () => {
@@ -772,14 +778,18 @@ test('duplicateLayer gives each copied shape a fresh id (not preserved, unlike d
   assert.equal(original.frames[0].grids[0].pixels[0], 1);
 });
 
-test('eraseFromLayer clears from whichever unlocked shape in that layer\'s active frame owns the cell, shrinking/removing it, regardless of activeLayerId', () => {
+test('eraseFromLayer clears from whichever unlocked shape in that layer\'s active frame owns the cell, collapsing it to a persistent empty shape, regardless of activeLayerId', () => {
   const canvas = createCanvas({ width: 2, height: 2 });
   canvas.tier = 'advanced';
   const layer = addLayer(canvas, { name: 'A' });
   paintCell(canvas, 0, 0, '#ff0000');
+  const grid = layer.frames[0].grids[0];
   addLayer(canvas, { name: 'B' }); // becomes active; `layer` is no longer canvas.activeLayerId
   eraseFromLayer(canvas, layer, 0, 0);
-  assert.equal(layer.frames[0].grids.length, 0); // fully erased -> GC'd
+  assert.equal(layer.frames[0].grids.length, 1); // fully erased, but kept as a persistent empty shape
+  assert.equal(grid.width, 1);
+  assert.equal(grid.height, 1);
+  assert.deepEqual(Array.from(grid.pixels), [0]);
 
   const layerB = canvas.layers[1];
   paintCell(canvas, 0, 0, '#00ff00');

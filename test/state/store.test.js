@@ -511,7 +511,11 @@ test('paste-in-place, Shape tier: cut then paste lands back at the original posi
   store.startSelection(2, 5);
   store.updateSelection(2, 5);
   store.cutSelection();
-  assert.equal(useStore.getState().canvas.layers[0].frames[0].grids.length, 0, 'the shape is really gone after cut, not just pending');
+  const grids = useStore.getState().canvas.layers[0].frames[0].grids;
+  assert.equal(grids.length, 1, 'the shape is kept as a persistent empty shape after cut, not deleted');
+  assert.equal(grids[0].width, 1);
+  assert.equal(grids[0].height, 1);
+  assert.deepEqual(Array.from(grids[0].pixels), [0]);
 
   store.pasteClipboard();
   const fgs = useStore.getState().floatingGridSelection;

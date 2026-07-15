@@ -348,6 +348,25 @@ export function shrinkGridToFit(grid) {
 }
 
 /**
+ * Collapses a fully-emptied Grid to a 1x1 all-zero shape anchored at
+ * (anchorX, anchorY) — the same representation createShapeGrid's
+ * filled:false path produces (addGrid's "+ Add Shape"). Callers use this
+ * when shrinkGridToFit returns null (grid has no set pixels left) but want
+ * to keep the shape as a persistent empty shape instead of deleting it.
+ *
+ * @param {Grid} grid mutated in place
+ * @param {number} anchorX canvas-space
+ * @param {number} anchorY canvas-space
+ */
+export function collapseToEmptyGrid(grid, anchorX, anchorY) {
+  grid.offsetX = anchorX;
+  grid.offsetY = anchorY;
+  grid.width = 1;
+  grid.height = 1;
+  grid.pixels = new Uint8Array([0]);
+}
+
+/**
  * Pixel-ORs `source` into `target` in place, growing `target`'s bounds to
  * cover both — the shared bounding-box + pixel-OR fusion `mergeGridDown`
  * (below, "bottom wins") and Canvas.js's `dedupeSolidColorGrids` (folding

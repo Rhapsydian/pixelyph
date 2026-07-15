@@ -21,6 +21,7 @@ import {
   createShapeGrid,
   growGridToInclude,
   shrinkGridToFit,
+  collapseToEmptyGrid,
   mergeGridDown as mergeGridInFrame,
   unionGridInto,
   stylesEqual,
@@ -204,10 +205,7 @@ export function paintCell(canvas, x, y, color) {
     if (!grid) return;
     if (!get(grid, x - grid.offsetX, y - grid.offsetY)) return;
     set(grid, x - grid.offsetX, y - grid.offsetY, 0);
-    if (!shrinkGridToFit(grid)) {
-      frame.grids = frame.grids.filter((g) => g.id !== grid.id);
-      if (canvas.activeGridId === grid.id) canvas.activeGridId = frame.grids[0]?.id ?? null;
-    }
+    if (!shrinkGridToFit(grid)) collapseToEmptyGrid(grid, x, y);
     return;
   }
   if (!grid) {
@@ -485,9 +483,10 @@ export function mergeGridDown(canvas, layerId, gridId) {
  * selection cut needs (paintCell's advanced-tier erase only ever targets the
  * active layer+shape; see the "select from all visible layers" cut path in
  * selection.js). Finds whichever (unlocked) shape in the layer's active
- * frame owns the cell, clears it, and shrinks/deletes that shape exactly
- * like paintCell's own erase path. No-ops out-of-bounds, on a locked layer,
- * or if no unlocked shape owns the cell.
+ * frame owns the cell, clears it, and shrinks that shape (or collapses it to
+ * a persistent 1x1 empty shape if now fully cleared) exactly like paintCell's
+ * own erase path. No-ops out-of-bounds, on a locked layer, or if no unlocked
+ * shape owns the cell.
  *
  * @param {object} canvas
  * @param {object} layer
@@ -500,10 +499,7 @@ export function eraseFromLayer(canvas, layer, canvasX, canvasY) {
   const grid = topGridAt(frame, canvasX, canvasY, { skipLocked: true });
   if (!grid) return;
   set(grid, canvasX - grid.offsetX, canvasY - grid.offsetY, 0);
-  if (!shrinkGridToFit(grid)) {
-    frame.grids = frame.grids.filter((g) => g.id !== grid.id);
-    if (canvas.activeGridId === grid.id) canvas.activeGridId = frame.grids[0]?.id ?? null;
-  }
+  if (!shrinkGridToFit(grid)) collapseToEmptyGrid(grid, canvasX, canvasY);
 }
 
 /**
