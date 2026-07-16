@@ -2,6 +2,8 @@
 
 ## Next session
 
+Session 38 migrated the GitHub Pages build to the `pixelyph.com` custom
+domain (see Shipped below) — fully done, no follow-on work needed there.
 Session 37 resolved the itch.io subdirectory-404 issue via `butler push`
 (see Shipped below) and scoped, but did not complete, two follow-ons: a
 5-shot application screenshot set for marketing/docs use (user is capturing
@@ -293,6 +295,44 @@ its own planning session, not a slice of a larger phase.
 new users have something to open and explore instead of a blank canvas.
 
 ## Shipped
+
+### DONE: GitHub Pages migrated to the `pixelyph.com` custom domain
+
+`vite.config.js`'s `base` was hardcoded to `/pixelyph/` for the build,
+matching the old `rhapsydian.github.io/pixelyph` project-page subpath. Now
+that GitHub Pages is configured to serve `pixelyph.com` from the domain
+root, `base` simplified to `mode === 'itch' ? './' : '/'` — build, preview,
+and the dev server all share the root base now (itch's relative `./` base,
+needed for its arbitrary per-project upload path, is unaffected). Added
+`public/CNAME` (`pixelyph.com`) so the custom domain ships inside every
+`dist/` build and persists across Actions-based Pages deploys, since that
+workflow (`deploy-pages.yml`) uploads whatever's in `dist/` directly rather
+than committing to a branch GitHub can auto-manage a CNAME on. Also updated
+the one other hardcoded reference to the old URL,
+`src/export/font/demoHtml.js`'s `PIXELYPH_URL` (used in exported demo
+HTML's "Made with Pixelyph" footer), plus its test assertion and the
+README's live-demo link.
+
+Verified: 497/497 tests; `npm run build`'s `dist/index.html` now has
+root-relative asset paths (`/assets/...`) with `dist/CNAME` present;
+`npm run build:itch` unaffected (still relative `./assets/...`); a local
+`vite preview` serve confirmed both JS/CSS assets load with `200` and no
+console errors under the new base. Committed `fa3d8dd`, pushed to
+`origin/main`, and per this project's "push also deploys to itch.io"
+convention, also ran `build:itch` + `butler push` to
+`rhapsydian/pixelyph:html5`.
+
+After the push, the user reported Chrome's regular profile showing "Not
+secure" for `pixelyph.com` while incognito showed no warning. Diagnosed
+live rather than guessing: `https://pixelyph.com/` loads cleanly (valid
+cert, `200`, no console errors), and typing `http://pixelyph.com/` with no
+scheme auto-upgrades to `https` on its own — confirming GitHub
+Pages/DNS/cert are correctly configured and enforcing HTTPS. Since the
+warning only appeared in one profile, concluded it's local browser
+state (most likely a stale autocomplete/history entry from before the cert
+finished provisioning) rather than a server-side or repo issue — no code
+change needed; advised the user to type the explicit `https://` URL and
+clear the old history entry in that profile.
 
 ### DONE: itch.io HTML5 upload — resolved via `butler push`, not a build fix
 
