@@ -91,6 +91,6 @@ test('generateDemoHtml includes a Pixelyph branding footer linking to the GitHub
 
   assert.ok(html.includes('<footer'));
   assert.ok(html.includes('Made with'));
-  assert.ok(html.includes('href="https://rhapsydian.github.io/pixelyph/"'));
+  assert.ok(html.includes('href="https://pixelyph.com/"'));
   assert.ok(html.includes('>Pixelyph<'));
 });

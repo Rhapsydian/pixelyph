@@ -5,7 +5,7 @@
 
 A pixel-art and pixel-font editor that outputs scalable SVG (and real font files) via [pixelloom](https://github.com/Rhapsydian/pixelloom), instead of raster images.
 
-**Live demo:** [rhapsydian.github.io/pixelyph](https://rhapsydian.github.io/pixelyph/) · also playable on [itch.io](https://rhapsydian.itch.io/pixelyph)
+**Live demo:** [pixelyph.com](https://pixelyph.com/) · also available on [itch.io](https://rhapsydian.itch.io/pixelyph)
 
 ## Status
 

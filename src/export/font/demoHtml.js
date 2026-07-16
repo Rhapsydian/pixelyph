@@ -66,9 +66,8 @@
 
 import { isAutoAssignedCodepoint } from '../../model/GlyphSet.js';
 
-// The one hardcoded URL in this file — update it if Pixelyph ever gets an
-// official domain name, in place of the GitHub Pages project site.
-const PIXELYPH_URL = 'https://rhapsydian.github.io/pixelyph/';
+// The one hardcoded URL in this file.
+const PIXELYPH_URL = 'https://pixelyph.com/';
 
 const BRANDING_FOOTER = `<footer>Made with <a href="${PIXELYPH_URL}">Pixelyph</a></footer>`;
 
