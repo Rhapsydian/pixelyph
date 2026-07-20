@@ -2,16 +2,20 @@
 
 ## Next session
 
-Session 38 migrated the GitHub Pages build to the `pixelyph.com` custom
-domain (see Shipped below) — fully done, no follow-on work needed there.
-Session 37 resolved the itch.io subdirectory-404 issue via `butler push`
-(see Shipped below) and scoped, but did not complete, two follow-ons: a
-5-shot application screenshot set for marketing/docs use (user is capturing
-these independently — see `docs/session-logs/session-37-2026-07-15.md` for
-the recommended shot list) and wiring real screenshots into the User
-Manual (still has no real app screenshots, gap open since session 31).
-Pick either of those up once the user has screenshots to hand off, or pick
-from Open below, or from whatever the user raises next.
+Session 39 expanded the glyph-set JSON manifest export (font meta block,
+full per-glyph metrics, codepoint-keyed entries, decoupled from the
+icon-font CSS checkbox) to match Glyphrogue's font-source import spec (see
+Shipped below) — fully done, no follow-on work needed here. Session 38
+migrated the GitHub Pages build to the `pixelyph.com` custom domain (see
+Shipped below) — fully done, no follow-on work needed there. Session 37
+resolved the itch.io subdirectory-404 issue via `butler push` (see Shipped
+below) and scoped, but did not complete, two follow-ons: a 5-shot
+application screenshot set for marketing/docs use (user is capturing these
+independently — see `docs/session-logs/session-37-2026-07-15.md` for the
+recommended shot list) and wiring real screenshots into the User Manual
+(still has no real app screenshots, gap open since session 31). Pick
+either of those up once the user has screenshots to hand off, or pick from
+Open below, or from whatever the user raises next.
 
 ## Open
 
@@ -295,6 +299,37 @@ its own planning session, not a slice of a larger phase.
 new users have something to open and explore instead of a blank canvas.
 
 ## Shipped
+
+### DONE: Glyph-set JSON manifest expanded for Glyphrogue's font-source import spec
+
+The ⚡ priority Tokenote item pointed at
+`glyphrogue/docs/design/fonts-and-tilesets.md`'s "Pixelyph glyph-set import
+path" section, which specifies exact manifest changes needed before
+Glyphrogue's tileset-import implementation can start (labeled A-D in that
+doc). Implemented all four: a font-level `meta` block (straight passthrough
+of `familyName`/`styleName`/`pixelsPerEm`/`unitsPerEm`/`ascender`/
+`descender`/`baselineRow`/`horizontalPadding`); each glyph entry expanded
+from `slug -> hex` to a full metrics object (`codepoint`, `slug`, `name`,
+`advanceWidth`, `offsetX`, `width`, `height`); entries keyed by codepoint
+(stable across re-exports) instead of slug (regenerated and
+collision-suffixed on every export); and manifest generation decoupled
+from the icon-font CSS option, so `FontExportPanel.jsx` now offers two
+independent checkboxes ("Icon-font CSS" / "JSON manifest (glyph metrics)")
+instead of one combined "CSS + JSON manifest" row.
+
+New `src/export/font/glyphManifest.js` (`generateGlyphManifest`) and
+`src/export/font/glyphSlugs.js` (`assignGlyphSlugs`, extracted so CSS and
+manifest generation agree on slugs despite now being independently
+callable). `iconFontCss.js` no longer generates a manifest at all;
+`store.js`'s `exportFont` gained separate `css`/`manifest` options in place
+of the old combined `cssManifest`.
+
+Verified: 497/497 → 502/502 tests (new `glyphManifest.test.js`, updated
+`iconFontCss.test.js`). Manual, via the Browser pane: confirmed the two
+export checkboxes toggle independently, the "needs a font file" warning
+fires only off the CSS checkbox, a manifest-only export (no OTF/WOFF/CSS)
+completes cleanly, and a combined OTF+CSS+manifest export still zips
+correctly. Committed `8132416`.
 
 ### DONE: GitHub Pages migrated to the `pixelyph.com` custom domain
 
