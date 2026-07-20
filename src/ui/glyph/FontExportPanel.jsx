@@ -1,7 +1,11 @@
-// Every glyph set gets the same export options — OTF/WOFF, demo HTML, and
-// CSS + JSON manifest — since there's no longer a project-level discriminant
-// to gate the CSS/manifest option on (any glyph can freely have a real
-// character, a name, both, or neither). There's no real "TTF" option —
+// Every glyph set gets the same export options — OTF/WOFF, demo HTML, icon-
+// font CSS, and a JSON manifest — since there's no longer a project-level
+// discriminant to gate the CSS/manifest options on (any glyph can freely
+// have a real character, a name, both, or neither). CSS and the manifest
+// are independently checkable: the manifest carries font meta + per-glyph
+// metrics for any downstream consumer (e.g. Glyphrogue's tileset pipeline)
+// and has no dependency on the CSS output existing. There's no real "TTF"
+// option —
 // opentype.js only ever produces CFF-flavored OpenType output when building
 // a font from scratch (see compileFont.js), so OTF is the one binary format
 // offered rather than presenting a second button that would just save the
@@ -19,13 +23,14 @@ const CHECKBOX_ROWS = [
   { key: 'otf', label: 'OTF font file' },
   { key: 'woff', label: 'WOFF' },
   { key: 'demoHtml', label: 'Demo HTML (specimen preview)' },
-  { key: 'cssManifest', label: 'CSS + JSON manifest' },
+  { key: 'css', label: 'Icon-font CSS' },
+  { key: 'manifest', label: 'JSON manifest (glyph metrics)' },
 ];
 
 export function FontExportPanel() {
   const glyphSet = useStore((s) => s.glyphSet);
   const exportFont = useStore((s) => s.exportFont);
-  const [selected, setSelected] = useState({ otf: true, woff: false, demoHtml: true, cssManifest: false });
+  const [selected, setSelected] = useState({ otf: true, woff: false, demoHtml: true, css: false, manifest: false });
   const [exporting, setExporting] = useState(false);
   const [woff2Warning, setWoff2Warning] = useState(false);
 
@@ -34,8 +39,9 @@ export function FontExportPanel() {
   const anySelected = Object.values(selected).some(Boolean);
   // The generated CSS's @font-face only references formats actually
   // included in the export (see iconFontCss.js) — without OTF or WOFF
-  // alongside it, that CSS has nothing to point at.
-  const cssManifestNeedsAFontFile = selected.cssManifest && !selected.otf && !selected.woff;
+  // alongside it, that CSS has nothing to point at. The JSON manifest has
+  // no such dependency (see glyphManifest.js) — it's plain metrics data.
+  const cssNeedsAFontFile = selected.css && !selected.otf && !selected.woff;
 
   function toggle(key) {
     setSelected((s) => ({ ...s, [key]: !s[key] }));
@@ -64,12 +70,12 @@ export function FontExportPanel() {
           </label>
         ))}
       </div>
-      {cssManifestNeedsAFontFile && (
+      {cssNeedsAFontFile && (
         <span style={{ color: 'var(--chrome-warning)', fontSize: 'var(--text-xs)' }}>
           Check OTF or WOFF too — the generated CSS needs a font file to actually point at.
         </span>
       )}
-      <button className="btn btn-primary" onClick={handleExport} disabled={!anySelected || cssManifestNeedsAFontFile || exporting || glyphSet.glyphs.size === 0}>
+      <button className="btn btn-primary" onClick={handleExport} disabled={!anySelected || cssNeedsAFontFile || exporting || glyphSet.glyphs.size === 0}>
         {exporting ? 'Exporting…' : 'Export'}
       </button>
       {woff2Warning && (

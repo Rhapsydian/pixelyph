@@ -105,6 +105,7 @@ import { buildDrawDocument, buildGlyphDocument, DEFAULT_INITIAL_CHARSET_PRESET }
 import { compileFont, fontToArrayBuffer } from '../export/font/compileFont.js';
 import { toWoff, toWoff2 } from '../export/font/woff.js';
 import { generateIconFontCss } from '../export/font/iconFontCss.js';
+import { generateGlyphManifest } from '../export/font/glyphManifest.js';
 import { generateDemoHtml } from '../export/font/demoHtml.js';
 import { slugify } from '../export/slugify.js';
 import { createZip } from '../export/zip.js';
@@ -1371,8 +1372,8 @@ export const useStore = create((set, get) => {
     /**
      * Compiles the current GlyphSet into whichever font file(s) are
      * selected, compiling the font and deriving WOFF/WOFF2 buffers at most
-     * once regardless of how many formats are checked. `demoHtml` and
-     * `cssManifest` are separate boolean options rather than a `format`
+     * once regardless of how many formats are checked. `demoHtml`, `css`,
+     * and `manifest` are separate boolean options rather than a `format`
      * string, since FontExportPanel lets several be exported together in
      * one click.
      *
@@ -1388,10 +1389,10 @@ export const useStore = create((set, get) => {
      * export/zip.js) rather than triggering one save dialog/download per
      * file — a single selected format still saves directly, unzipped.
      *
-     * @param {{otf?: boolean, woff?: boolean, woff2?: boolean, demoHtml?: boolean, cssManifest?: boolean}} options
+     * @param {{otf?: boolean, woff?: boolean, woff2?: boolean, demoHtml?: boolean, css?: boolean, manifest?: boolean}} options
      * @returns {Promise<{woff2Failed: boolean}>}
      */
-    exportFont: async ({ otf = false, woff = false, woff2 = false, demoHtml: wantDemoHtml = false, cssManifest = false } = {}) => {
+    exportFont: async ({ otf = false, woff = false, woff2 = false, demoHtml: wantDemoHtml = false, css: wantCss = false, manifest: wantManifest = false } = {}) => {
       const WOFF2_EXPORT_ENABLED = false; // see BACKLOG.md
       const { glyphSet } = get();
       if (!glyphSet) return { woff2Failed: false };
@@ -1427,13 +1428,16 @@ export const useStore = create((set, get) => {
         const html = generateDemoHtml(glyphSet, woff2Bytes, woffBytes);
         files.push({ name: `${baseName}-demo.html`, data: textEncoder.encode(html), type: 'text/html' });
       }
-      if (cssManifest) {
+      if (wantCss) {
         // Reference only the format(s) actually being exported alongside
         // this CSS (woff2 excluded — see WOFF2_EXPORT_ENABLED above), so
         // the generated @font-face src never points at a file that isn't
         // in the export bundle.
-        const { css, manifest } = generateIconFontCss(glyphSet, { formats: { otf, woff } });
+        const { css } = generateIconFontCss(glyphSet, { formats: { otf, woff } });
         files.push({ name: `${baseName}.css`, data: textEncoder.encode(css), type: 'text/css' });
+      }
+      if (wantManifest) {
+        const manifest = generateGlyphManifest(glyphSet);
         files.push({ name: `${baseName}.json`, data: textEncoder.encode(JSON.stringify(manifest, null, 2)), type: 'application/json' });
       }
 

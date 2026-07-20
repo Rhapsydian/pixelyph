@@ -9,19 +9,18 @@ function iconGlyph(name) {
   return glyph;
 }
 
-test('generateIconFontCss emits a @font-face and one rule + manifest entry per glyph', () => {
+test('generateIconFontCss emits a @font-face and one rule per glyph', () => {
   const glyphSet = createGlyphSet({ meta: { familyName: 'My Icons' } });
   setGlyph(glyphSet, 0xe000, iconGlyph('Star'));
   setGlyph(glyphSet, 0xe001, iconGlyph('Heart'));
 
-  const { css, manifest } = generateIconFontCss(glyphSet, { formats: { woff2: true, woff: true } });
+  const { css } = generateIconFontCss(glyphSet, { formats: { woff2: true, woff: true } });
 
   assert.ok(css.includes('@font-face'));
   assert.ok(css.includes('font-family: "My Icons"'));
   assert.ok(css.includes('url("my-icons.woff2")'));
   assert.ok(css.includes('.icon-star::before {\n  content: "\\e000";\n}'));
   assert.ok(css.includes('.icon-heart::before {\n  content: "\\e001";\n}'));
-  assert.deepEqual(manifest, { star: 'e000', heart: 'e001' });
 });
 
 test('generateIconFontCss slugifies names and de-duplicates collisions', () => {
@@ -30,10 +29,12 @@ test('generateIconFontCss slugifies names and de-duplicates collisions', () => {
   setGlyph(glyphSet, 0xe001, iconGlyph('My Star!'));
   setGlyph(glyphSet, 0xe002, iconGlyph(''));
 
-  const { manifest } = generateIconFontCss(glyphSet);
+  const { css } = generateIconFontCss(glyphSet);
   // An empty/unslugifiable name falls back to the glyph's own hex codepoint
   // (not a generic 'icon') so bulk-generated classes stay distinguishable.
-  assert.deepEqual(manifest, { 'my-star': 'e000', 'my-star-2': 'e001', e002: 'e002' });
+  assert.ok(css.includes('.icon-my-star::before {\n  content: "\\e000";\n}'));
+  assert.ok(css.includes('.icon-my-star-2::before {\n  content: "\\e001";\n}'));
+  assert.ok(css.includes('.icon-e002::before {\n  content: "\\e002";\n}'));
 });
 
 test('generateIconFontCss works across a mixed set of typed, auto-assigned, and unnamed glyphs', () => {
@@ -42,8 +43,7 @@ test('generateIconFontCss works across a mixed set of typed, auto-assigned, and 
   setGlyph(glyphSet, 0xe000, iconGlyph('Star')); // auto-assigned, named
   setGlyph(glyphSet, 66, iconGlyph('')); // typed, unnamed -> hex fallback
 
-  const { css, manifest } = generateIconFontCss(glyphSet);
-  assert.deepEqual(manifest, { 'cap-a': '41', star: 'e000', '42': '42' });
+  const { css } = generateIconFontCss(glyphSet);
   assert.ok(css.includes('.icon-cap-a::before'));
   assert.ok(css.includes('.icon-star::before'));
   assert.ok(css.includes('.icon-42::before'));

@@ -1,35 +1,24 @@
 // Icon-font-specific export: a @font-face + one `.icon-{name}::before`
-// rule per glyph, plus a JSON manifest ({ "star": "e001", ... }) for
-// programmatic consumption — the IcoMoon/Fontello convention. `src` points
-// at sibling font files (this is a plain, hostable CSS file, unlike
+// rule per glyph — the IcoMoon/Fontello CSS convention. `src` points at
+// sibling font files (this is a plain, hostable CSS file, unlike
 // demoHtml.js's fully self-contained base64-embedded specimen) — so the
 // `formats` option must match whichever binary format(s) the caller is
 // actually exporting alongside this CSS. Referencing a format that wasn't
 // also exported produces CSS that can't ever load the font (found via
-// manual icon-font testing: FontExportPanel lets "CSS + JSON manifest" be
-// checked independently of OTF/WOFF, and this used to hardcode woff2/woff
+// manual icon-font testing: FontExportPanel lets CSS be checked
+// independently of OTF/WOFF, and this used to hardcode woff2/woff
 // regardless of what was actually selected).
 //
-// Glyph `name` is a free-form user label, so it needs slugifying before
-// it's safe to emit as a CSS class name — that conversion lives here, not
-// on the Glyph model itself.
+// The JSON manifest used to be generated here too, but moved to its own
+// glyphManifest.js — Glyphrogue needs the manifest regardless of whether
+// this CSS is also being exported (see glyphManifest.js's header), so the
+// two are independently callable. Slug assignment (glyph `name` is a
+// free-form user label, so it needs slugifying before it's safe to emit
+// as a CSS class name) is shared via glyphSlugs.js so both stay in
+// agreement on which glyph gets which slug.
 
 import { slugify } from '../slugify.js';
-
-function uniqueSlugFactory() {
-  const used = new Set();
-  // Falls back to the glyph's own hex codepoint (not a generic 'icon')
-  // when the name is empty or entirely unslugifiable, so bulk-generated
-  // CSS classes stay distinguishable from each other.
-  return (name, codepoint) => {
-    const base = slugify(name ?? '') || codepoint.toString(16);
-    let candidate = base;
-    let n = 2;
-    while (used.has(candidate)) candidate = `${base}-${n++}`;
-    used.add(candidate);
-    return candidate;
-  };
-}
+import { assignGlyphSlugs } from './glyphSlugs.js';
 
 // Priority order for the @font-face `src` list — browsers use the first
 // source they can load, so list the most efficient formats first.
@@ -46,20 +35,18 @@ const FORMAT_SOURCES = [
  *   CSS — only those appear in the `src` list. Defaults to `{otf: true}`,
  *   since a compiled OTF always exists whenever this is called from the
  *   normal export flow.
- * @returns {{css: string, manifest: Record<string, string>}} manifest maps each icon's slug to its codepoint in lowercase hex
+ * @returns {{css: string}}
  */
 export function generateIconFontCss(glyphSet, { formats = { otf: true } } = {}) {
   const { familyName } = glyphSet.meta;
   const fontFileBase = slugify(familyName) || 'icon-font';
-  const nextSlug = uniqueSlugFactory();
-  const manifest = {};
+  const slugs = assignGlyphSlugs(glyphSet);
   const rules = [];
 
   const sortedEntries = Array.from(glyphSet.glyphs.entries()).sort((a, b) => a[0] - b[0]);
-  for (const [codepoint, glyph] of sortedEntries) {
-    const slug = nextSlug(glyph.name, codepoint);
+  for (const [codepoint] of sortedEntries) {
+    const slug = slugs.get(codepoint);
     const hex = codepoint.toString(16);
-    manifest[slug] = hex;
     rules.push(`.icon-${slug}::before {\n  content: "\\${hex}";\n}`);
   }
 
@@ -84,5 +71,5 @@ export function generateIconFontCss(glyphSet, { formats = { otf: true } } = {}) 
     ...rules,
   ].join('\n');
 
-  return { css, manifest };
+  return { css };
 }
